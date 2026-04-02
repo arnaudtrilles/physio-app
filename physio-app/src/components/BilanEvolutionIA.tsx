@@ -2,11 +2,13 @@ import { useState } from 'react'
 import type { EvolutionIA } from '../types'
 import { buildEvolutionPrompt, parseEvolutionIA } from '../utils/clinicalPrompt'
 import type { EvolutionContext } from '../utils/clinicalPrompt'
+import { callGemini, GeminiAuthError } from '../utils/geminiClient'
 
 interface BilanEvolutionIAProps {
   apiKey: string
   context: EvolutionContext
   onBack: () => void
+  onClose?: () => void
   onGoToProfile: () => void
 }
 
@@ -21,7 +23,7 @@ const TENDANCE_CONFIG = {
   mixte:         { label: 'Évolution mixte', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: '~' },
 }
 
-export function BilanEvolutionIA({ apiKey, context, onBack, onGoToProfile }: BilanEvolutionIAProps) {
+export function BilanEvolutionIA({ apiKey, context, onBack, onClose, onGoToProfile }: BilanEvolutionIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
@@ -33,35 +35,12 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onGoToProfile }: Bil
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/groq/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 2000,
-          messages: [
-            {
-              role: 'system',
-              content: 'Agis comme un physiothérapeute expert. Rédige le rapport d\'évolution clinique impérativement en français médical professionnel.',
-            },
-            { role: 'user', content: buildEvolutionPrompt(context) },
-          ],
-        }),
-      })
-
-      if (res.status === 401) throw new Error('auth')
-      if (res.status === 429) throw new Error('quota')
-      if (!res.ok) {
-        let detail = ''
-        try { const e = await res.json(); detail = e?.error?.message ?? '' } catch { /* ignore */ }
-        throw new Error(`Erreur serveur (${res.status})${detail ? ` : ${detail}` : ''}`)
-      }
-
-      const data = await res.json()
-      const raw: string = data.choices?.[0]?.message?.content ?? ''
+      const raw = await callGemini(
+        apiKey,
+        "Agis comme un physiothérapeute expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.",
+        buildEvolutionPrompt(context),
+        8192
+      )
       const parsed = parseEvolutionIA(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
       setEvolution(parsed)
@@ -71,13 +50,15 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onGoToProfile }: Bil
         setTimeout(() => runAnalysis(attempt + 1), 1200)
         return
       }
-      const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-      if (msg === 'quota' || msg.includes('rate') || msg.includes('429')) {
-        setError('quota')
-      } else if (msg === 'auth' || msg.includes('401') || msg.includes('api_key')) {
+      if (err instanceof GeminiAuthError) {
         setError('auth')
       } else {
-        setError(msg)
+        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+        if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
+          setError('quota')
+        } else {
+          setError(msg)
+        }
       }
     } finally {
       if (attempt >= 2) setLoading(false)
@@ -100,7 +81,16 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onGoToProfile }: Bil
           <h2 className="title-section" style={{ marginBottom: 0 }}>Rapport d'évolution</h2>
           <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{patientLabel}</p>
         </div>
-        <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>IA</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>IA</div>
+          {onClose && (
+            <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
@@ -121,8 +111,8 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onGoToProfile }: Bil
         {/* No API key */}
         {!apiKey && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Clé API Groq requise</div>
-            <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Configurez votre clé API Groq dans votre profil.</p>
+            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Clé API Gemini requise</div>
+            <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Configurez votre clé API Gemini dans votre profil.</p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer dans le Profil
@@ -134,16 +124,16 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onGoToProfile }: Bil
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Vérifiez votre compte Groq.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Vérifiez votre compte Google AI Studio.</p>
           </div>
         )}
         {error === 'auth' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Clé API Groq invalide</div>
-            <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Renseignez une clé valide (gsk_…) dans votre profil.</p>
+            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Clé API Gemini invalide</div>
+            <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Renseignez une clé valide (AIza...) dans votre profil.</p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
-              Configurer ma clé Groq
+              Configurer ma clé Gemini
             </button>
           </div>
         )}

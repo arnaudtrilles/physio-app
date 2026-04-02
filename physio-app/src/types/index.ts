@@ -1,5 +1,18 @@
 export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique'
 
+export interface FicheExercice {
+  generatedAt: string
+  markdown: string
+  notesSeance: string
+}
+
+export interface BilanDocument {
+  name: string
+  mimeType: string   // 'image/jpeg' | 'image/png' | 'application/pdf' | etc.
+  data: string       // base64 encoded
+  addedAt: string    // ISO date
+}
+
 export interface BilanRecord {
   id: number
   nom: string
@@ -14,7 +27,11 @@ export interface BilanRecord {
   status?: 'incomplet' | 'complet'
   bilanType?: BilanType
   bilanData?: Record<string, unknown>
+  notes?: string
+  silhouetteData?: Record<string, unknown>
+  documents?: BilanDocument[]
   analyseIA?: AnalyseIA
+  ficheExercice?: FicheExercice
 }
 
 export interface AnalyseIA {

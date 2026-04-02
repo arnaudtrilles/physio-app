@@ -21,13 +21,16 @@ import { BilanGenerique } from './components/bilans/BilanGenerique'
 import type { BilanGeneriqueHandle } from './components/bilans/BilanGenerique'
 import { BilanAnalyseIA } from './components/BilanAnalyseIA'
 import { BilanEvolutionIA } from './components/BilanEvolutionIA'
-import { generatePDF } from './utils/pdfGenerator'
+import { generatePDF, generateAIPDF } from './utils/pdfGenerator'
 import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
-import type { BilanRecord, ProfileData, AnalyseIA } from './types'
+import { buildPDFReportPrompt } from './utils/clinicalPrompt'
+import { callGemini } from './utils/geminiClient'
+import type { BilanRecord, ProfileData, AnalyseIA, FicheExercice, BilanDocument } from './types'
+import { FicheExerciceIA } from './components/FicheExerciceIA'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'silhouette' | 'bilan_zone' | 'analyse_ia' | 'evolution_ia'
+type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'silhouette' | 'bilan_zone' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice'
 
 const DEMO_DB: BilanRecord[] = [
   { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
@@ -62,6 +65,9 @@ function App() {
   const [currentBilanId, setCurrentBilanId] = useState<number | null>(null)
   const [currentAnalyseIA, setCurrentAnalyseIA] = useState<AnalyseIA | null>(null)
   const [currentBilanDataOverride, setCurrentBilanDataOverride] = useState<Record<string, unknown> | null>(null)
+  const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
+  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database'>('general_info')
+  const [deletingBilanId, setDeletingBilanId] = useState<number | null>(null)
   const [editingProfile, setEditingProfile] = useState(false)
   const [testingApiKey, setTestingApiKey] = useState(false)
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'ok' | 'error'>('idle')
@@ -69,6 +75,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [patientMode, setPatientMode] = useState<'new' | 'existing'>('new')
   const [silhouetteData, setSilhouetteData] = useState<Record<string, unknown>>({})
+  const [bilanDocuments, setBilanDocuments] = useState<BilanDocument[]>([])
   const [selectedBodyZone, setSelectedBodyZone] = useState<string | null>(null)
   const [showZonePopup, setShowZonePopup] = useState(false)
   const [profileEditDraft, setProfileEditDraft] = useState<ProfileData>(profile)
@@ -104,12 +111,33 @@ function App() {
     })
   }
 
+  const goToPatientRecord = () => {
+    const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+    setSelectedPatient(key)
+    setStep('database')
+  }
+
+  const handleQuitBilan = () => {
+    if ((formData.nom || currentBilanId !== null) && selectedBodyZone) {
+      saveBilan('incomplet')
+    }
+    const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+    resetForm()
+    setSelectedBodyZone(null)
+    setSelectedPatient(key)
+    setStep('database')
+  }
+
   const resetForm = () => {
     setFormData({ nom: '', prenom: '', dateNaissance: '', profession: '', sport: '', famille: '', chirurgie: '', notes: '' })
     setSilhouetteData({})
+    setBilanDocuments([])
     setPatientMode('new')
     setCurrentAnalyseIA(null)
     setBilanNotes('')
+    setCurrentBilanId(null)
+    setCurrentBilanDataOverride(null)
+    setBilanZoneBackStep('general_info')
   }
 
   const getPatientBilans = (key: string) =>
@@ -156,10 +184,10 @@ function App() {
 
     if (currentBilanId !== null) {
       setDb(prev => prev.map(r => r.id === currentBilanId
-        ? { ...r, status, bilanData: bilanData ?? undefined, bilanType, evn: evnValue ?? r.evn }
+        ? { ...r, status, bilanData: bilanData ?? undefined, bilanType, evn: evnValue ?? r.evn, notes: bilanNotes || r.notes, silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : r.silhouetteData, documents: bilanDocuments.length > 0 ? bilanDocuments : r.documents }
         : r))
       showToast(status === 'complet' ? 'Bilan complété' : 'Brouillon enregistré', 'success')
-      setCurrentBilanId(null)
+      // Do NOT clear currentBilanId here — analyse_ia needs it to save the analysis result
     } else {
       const newId = Math.max(0, ...db.map(r => r.id)) + 1
       const record: BilanRecord = {
@@ -176,6 +204,9 @@ function App() {
         bilanType,
         bilanData: bilanData ?? undefined,
         evn: evnValue,
+        notes: bilanNotes || undefined,
+        silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : undefined,
+        documents: bilanDocuments.length > 0 ? bilanDocuments : undefined,
       }
       setDb(prev => [...prev, record])
       setCurrentBilanId(newId)
@@ -191,19 +222,101 @@ function App() {
     setStep('analyse_ia')
   }
 
-  const handleExportPDF = () => {
+  const [exportingPDF, setExportingPDF] = useState(false)
+
+  const handleExportPDF = async () => {
     const bilanData = getBilanData()
+
+    // If we have an API key, generate an AI-written medical report
+    if (apiKey && bilanData) {
+      setExportingPDF(true)
+      showToast('Génération du rapport en cours…', 'success')
+      try {
+        const systemPrompt = `Tu es un physiothérapeute/kinésithérapeute expert chargé de rédiger un rapport de Bilan Diagnostic Physiothérapique destiné au dossier patient.
+
+RÈGLES STRICTES DE FIDÉLITÉ :
+- Tu n'utilises QUE les informations présentes dans le message utilisateur. Aucune invention, aucune supposition.
+- Si une information est absente, tu ne la mentionnes pas (pas d'"à évaluer", pas de "probablement", pas d'"il convient de").
+- Tu n'inventes AUCUN résultat d'inspection, de palpation, d'examen neurologique, de bilan musculaire ou de test qui n'est pas explicitement fourni.
+- Tu ne déduis pas de symptômes ou de signes cliniques non mentionnés.
+- Les seuls résultats de tests, scores et observations que tu peux écrire sont ceux fournis mot pour mot dans les données.
+- Tu ne mentionnes jamais que ce texte a été généré par une IA.
+
+MISE EN PAGE — RÈGLES STRICTES :
+- Titres de section : ### (ex: ### 3. Bilan Clinique)
+- Sous-titres internes : **Titre :** (gras suivi de deux-points)
+- Listes de données factuelles : puces "- **Label :** valeur" (une info par ligne)
+- Les paragraphes de prose (anamnèse, diagnostic, conclusion) restent en texte fluide SANS puces
+- Aère le contenu : sépare chaque sous-section par une ligne vide
+- Maximum 2-3 phrases par paragraphe de prose — préfère les listes pour les données objectives
+
+STRUCTURE EXIGÉE (n'inclure une section que si elle a des données) :
+### 1. Informations Générales et Profil du Patient
+### 2. Anamnèse et Histoire de la Maladie
+### 3. Bilan Clinique (Subjectif et Objectif)
+### 4. Diagnostic Physiothérapique
+### 5. Plan de Traitement et Démarche Thérapeutique
+
+RÈGLES SPÉCIFIQUES PAR SECTION :
+
+Section 3 — Bilan Clinique :
+- Données EVN en puces "- **EVN pire :** X/10"
+- Flags positifs en puces séparées
+- Tests positifs en puces
+- Scores en puces
+
+Section 4 — Diagnostic Physiothérapique :
+- 1 paragraphe de prose pour le diagnostic principal (H1) avec ses mécanismes physiopathologiques
+- Puis un paragraphe séparé introduit par "**Hypothèses différentielles à ne pas écarter :**" mentionnant H2 et H3 en prose concise, comme possibilités à réévaluer selon l'évolution
+
+Section 5 — Plan de Traitement :
+- Chaque phase sur sa propre sous-section "**Phase X :**" suivie de puces avec les techniques et objectifs`
+
+        const userPrompt = buildPDFReportPrompt({
+          patient: formData,
+          zone: selectedBodyZone ?? '',
+          bilanType: getBilanType(selectedBodyZone ?? '') ?? '',
+          bilanData,
+          notesLibres: bilanNotes || undefined,
+          analyseIA: currentAnalyseIA ?? null,
+        })
+
+        const report = await callGemini(apiKey, systemPrompt, userPrompt, 8192, false, 'gemini-2.5-flash', bilanDocuments.length > 0 ? bilanDocuments : undefined)
+        generateAIPDF(formData, report)
+        showToast('Rapport PDF généré', 'success')
+      } catch {
+        showToast('Erreur génération rapport — export classique', 'error')
+        // Fallback to classic PDF
+        const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+        const patBilans = getPatientBilans(patKey).filter(r => r.evn != null)
+        const entries: ImprovementEntry[] = patBilans.map((r, i) => ({
+          num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
+          delta: i === 0 ? null : improvDelta(patBilans[i - 1].evn!, r.evn!),
+        }))
+        generatePDF(
+          formData, formData, silhouetteData,
+          bilanData ? { sectionTitle: selectedBodyZone ?? '', data: bilanData } : null,
+          entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
+          currentAnalyseIA ?? undefined,
+          bilanNotes || undefined,
+        )
+      } finally {
+        setExportingPDF(false)
+      }
+      return
+    }
+
+    // No API key — classic PDF
     const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
     const patBilans = getPatientBilans(patKey).filter(r => r.evn != null)
     const entries: ImprovementEntry[] = patBilans.map((r, i) => ({
       num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
       delta: i === 0 ? null : improvDelta(patBilans[i - 1].evn!, r.evn!),
     }))
-    const generalScore = patientGeneralScore(patKey)
     generatePDF(
       formData, formData, silhouetteData,
       bilanData ? { sectionTitle: selectedBodyZone ?? '', data: bilanData } : null,
-      entries.length > 0 ? { generalScore, bilans: entries } : null,
+      entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
       currentAnalyseIA ?? undefined,
       bilanNotes || undefined,
     )
@@ -254,33 +367,20 @@ function App() {
     setTestingApiKey(true)
     setApiKeyStatus('idle')
     try {
-      const res = await fetch('/groq/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKeyDraft.trim()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 1,
-          messages: [{ role: 'user', content: 'ping' }],
-        }),
-      })
-      if (res.ok || res.status === 200) {
-        setApiKeyStatus('ok')
-        showToast('Connexion Groq réussie', 'success')
-      } else if (res.status === 401) {
+      const { callGemini } = await import('./utils/geminiClient')
+      await callGemini(apiKeyDraft.trim(), 'You are a test assistant.', 'ping', 1)
+      setApiKeyStatus('ok')
+      showToast('Connexion Gemini réussie', 'success')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('API_KEY_INVALID') || msg.includes('401') || msg.includes('403') || msg.includes('API key') || msg.includes('UNAUTHENTICATED') || msg.includes('"code":401') || msg.includes('"code":403')) {
         setApiKeyStatus('error')
-        showToast('Clé API invalide (401)', 'error')
+        showToast('Clé API invalide', 'error')
       } else {
-        // 429 quota, etc. — la clé est valide
+        // Quota ou modèle indispo — clé structurellement valide
         setApiKeyStatus('ok')
         showToast('Clé API acceptée', 'success')
       }
-    } catch {
-      // CORS — on accepte quand même
-      setApiKeyStatus('ok')
-      showToast('Clé sauvegardée (connexion non vérifiable depuis ce navigateur)', 'info')
     } finally {
       setTestingApiKey(false)
     }
@@ -333,7 +433,7 @@ function App() {
           <p className="subtitle">Bienvenue sur votre espace Physio</p>
           <div className="spacer" />
           <div style={{ width: '100%', marginBottom: '5.5rem' }}>
-            <button className="btn-primary-luxe" onClick={() => { setSelectedBodyZone(null); setPatientMode('new'); setShowZonePopup(true) }} style={{marginBottom: 0}}>
+            <button className="btn-primary-luxe" onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }} style={{marginBottom: 0}}>
               Nouveau Patient
             </button>
           </div>
@@ -446,15 +546,12 @@ function App() {
                           const dBg     = delta === null ? '' : delta > 0 ? '#dcfce7' : delta < 0 ? '#fee2e2' : '#f1f5f9'
                           const incomplet = record.status === 'incomplet'
                           return (
-                            <div key={record.id} style={{ background: incomplet ? '#fffbeb' : 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: `1px solid ${incomplet ? '#fcd34d' : 'var(--border-color)'}`, boxShadow: 'var(--shadow-sm)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div key={record.id} style={{ background: 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem' }}>
                                     <span style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem' }}>Bilan N°{index + 1}</span>
-                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.5rem', borderRadius: 'var(--radius-full)', background: incomplet ? '#fef3c7' : '#dcfce7', color: incomplet ? '#92400e' : '#166534' }}>
-                                      {incomplet ? 'Incomplet' : 'Complet'}
-                                    </span>
-                                    {record.analyseIA && (
+                                    {!incomplet && record.analyseIA && (
                                       <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>IA</span>
                                     )}
                                   </div>
@@ -462,41 +559,107 @@ function App() {
                                     {record.dateBilan}{currEvn != null ? ` · EVN : ${currEvn}` : ''}{record.zone ? ` · ${record.zone}` : ''}
                                   </div>
                                 </div>
-                                {delta !== null && (
+                                {incomplet ? (
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#991b1b', flexShrink: 0, paddingTop: 2 }}>Incomplet</span>
+                                ) : delta !== null ? (
                                   <span style={{ fontWeight: 700, fontSize: '0.88rem', color: dColor, background: dBg, padding: '0.3rem 0.7rem', borderRadius: 'var(--radius-full)', flexShrink: 0 }}>
                                     {delta > 0 ? '▲' : delta < 0 ? '▼' : '='} {Math.abs(delta)}%
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                               {incomplet && (
-                                <button className="btn-primary-luxe"
-                                  style={{ marginTop: '0.75rem', marginBottom: 0, fontSize: '0.88rem', padding: '0.65rem 1rem' }}
-                                  onClick={() => {
-                                    setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
-                                    setSelectedBodyZone(record.zone ?? null)
-                                    setCurrentBilanId(record.id)
-                                    setStep('bilan_zone')
-                                  }}>
-                                  Continuer le bilan →
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: '0.75rem' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: 0.38, pointerEvents: 'none' }}>
+                                    <button disabled style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/></svg>
+                                      Analyse IA
+                                    </button>
+                                    <button disabled style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, #059669, #047857)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                      Fiche exercices
+                                    </button>
+                                  </div>
+                                  <button
+                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                                    onClick={() => {
+                                      setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
+                                      setSelectedBodyZone(record.zone ?? null)
+                                      setCurrentBilanId(record.id)
+                                      setCurrentBilanDataOverride(record.bilanData ?? null)
+                                      setBilanNotes(record.notes ?? '')
+                                      setSilhouetteData(record.silhouetteData ?? {})
+                                      setBilanDocuments(record.documents ?? [])
+                                      setBilanZoneBackStep('database')
+                                      setStep('bilan_zone')
+                                    }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 13 20 8 15 3"/><path d="M4 20v-3a5 5 0 0 1 5-5h11"/></svg>
+                                    Reprendre le bilan
+                                  </button>
+                                </div>
                               )}
                               {!incomplet && (
-                                <button
-                                  style={{ marginTop: '0.75rem', width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: record.analyseIA ? '#eff6ff' : 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: record.analyseIA ? '1.5px solid #bfdbfe' : 'none', color: record.analyseIA ? '#1d4ed8' : 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                  onClick={() => {
-                                    setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
-                                    setSelectedBodyZone(record.zone ?? null)
-                                    setCurrentBilanId(record.id)
-                                    setCurrentAnalyseIA(record.analyseIA ?? null)
-                                    setCurrentBilanDataOverride(record.bilanData ?? null)
-                                    setStep('analyse_ia')
-                                  }}>
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
-                                    <circle cx="9" cy="20" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="20" r="1" fill="currentColor" stroke="none"/>
-                                  </svg>
-                                  {record.analyseIA ? 'Voir l\'analyse IA' : 'Lancer l\'analyse IA'}
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: '0.75rem' }}>
+                                  <button
+                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: record.analyseIA ? '#eff6ff' : 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: record.analyseIA ? '1.5px solid #bfdbfe' : 'none', color: record.analyseIA ? '#1d4ed8' : 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                                    onClick={() => {
+                                      setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
+                                      setSelectedBodyZone(record.zone ?? null)
+                                      setCurrentBilanId(record.id)
+                                      setCurrentAnalyseIA(record.analyseIA ?? null)
+                                      setCurrentBilanDataOverride(record.bilanData ?? null)
+                                      setStep('analyse_ia')
+                                    }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
+                                      <circle cx="9" cy="20" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="20" r="1" fill="currentColor" stroke="none"/>
+                                    </svg>
+                                    {record.analyseIA ? 'Voir l\'analyse IA' : 'Lancer l\'analyse IA'}
+                                  </button>
+                                  <button
+                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: record.ficheExercice ? '#f0fdf4' : 'linear-gradient(135deg, #059669, #047857)', border: record.ficheExercice ? '1.5px solid #86efac' : 'none', color: record.ficheExercice ? '#16a34a' : 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                                    onClick={() => {
+                                      setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
+                                      setSelectedBodyZone(record.zone ?? null)
+                                      setCurrentBilanId(record.id)
+                                      setCurrentAnalyseIA(record.analyseIA ?? null)
+                                      setCurrentBilanDataOverride(record.bilanData ?? null)
+                                      setFicheBackStep('database')
+                                      setStep('fiche_exercice')
+                                    }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                    {record.ficheExercice ? 'Voir la fiche d\'exercices' : 'Générer la fiche d\'exercices'}
+                                  </button>
+                                  <button
+                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                                    onClick={() => {
+                                      setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
+                                      setSelectedBodyZone(record.zone ?? null)
+                                      setCurrentBilanId(record.id)
+                                      setCurrentBilanDataOverride(record.bilanData ?? null)
+                                      setBilanNotes(record.notes ?? '')
+                                      setSilhouetteData(record.silhouetteData ?? {})
+                                      setBilanDocuments(record.documents ?? [])
+                                      setBilanZoneBackStep('database')
+                                      setStep('bilan_zone')
+                                    }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                    Reprendre le bilan
+                                  </button>
+                                  <button
+                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                                    onClick={() => setDeletingBilanId(record.id)}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                    </svg>
+                                    Supprimer ce bilan
+                                  </button>
+                                </div>
                               )}
                             </div>
                           )
@@ -521,7 +684,8 @@ function App() {
                             setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
                             setPatientMode('existing')
                             setSelectedBodyZone(null)
-                            setShowZonePopup(true)
+                            setBilanZoneBackStep('identity')
+                            setStep('identity')
                           }}
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border-color)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}>
                           <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>+</span> Nouveau bilan
@@ -598,10 +762,10 @@ function App() {
                     <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 12 }}>Intelligence Artificielle</div>
                     <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid var(--border-color)' }}>
                       <div className="form-group" style={{ marginBottom: 8 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Clé API Groq</label>
+                        <label style={{ fontSize: '0.82rem' }}>Clé API Gemini</label>
                         <input type="password" className={`input-luxe api-key-field`}
                           value={apiKeyDraft} onChange={e => { setApiKeyDraft(e.target.value); setApiKeyStatus('idle') }}
-                          placeholder="gsk_…" />
+                          placeholder="AIza…" />
                       </div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <button onClick={testApiKey} disabled={testingApiKey || !apiKeyDraft.trim()}
@@ -769,6 +933,32 @@ function App() {
         </nav>
       )}
 
+      {/* ── Delete confirmation dialog ─────────────────────────────────────────── */}
+      {deletingBilanId !== null && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '1.5rem' }}>
+          <div style={{ background: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius-xl)', width: '100%', maxWidth: '360px', boxShadow: 'var(--shadow-2xl)' }}>
+            <div style={{ fontWeight: 700, color: '#dc2626', fontSize: '1rem', marginBottom: '0.5rem' }}>Supprimer ce bilan ?</div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
+              Cette action est irréversible. L'analyse IA et la fiche d'exercices associées seront également supprimées.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setDeletingBilanId(null)}
+                style={{ flex: 1, padding: '0.7rem', borderRadius: 10, background: 'var(--secondary)', border: '1px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button onClick={() => {
+                  setDb(prev => prev.filter(r => r.id !== deletingBilanId))
+                  setDeletingBilanId(null)
+                  showToast('Bilan supprimé', 'success')
+                }}
+                style={{ flex: 1, padding: '0.7rem', borderRadius: 10, background: '#dc2626', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Zone popup ─────────────────────────────────────────────────────────── */}
       {showZonePopup && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000, padding: '0' }}>
@@ -789,11 +979,7 @@ function App() {
             </div>
             <button className="btn-primary-luxe" style={{ marginBottom: 0, opacity: selectedBodyZone ? 1 : 0.5 }}
               disabled={!selectedBodyZone}
-              onClick={() => {
-                setShowZonePopup(false)
-                if (patientMode === 'existing') setStep('silhouette')
-                else { resetForm(); setStep('identity') }
-              }}>
+              onClick={() => setShowZonePopup(false)}>
               Confirmer
             </button>
           </div>
@@ -808,7 +994,9 @@ function App() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <h2 className="title-section">Identité du patient</h2>
-            <div style={{width: '24px'}} />
+            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area">
@@ -850,9 +1038,24 @@ function App() {
                 </div>
               </>
             )}
+            <div style={{ marginTop: '1.5rem' }}>
+              <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
+              <button
+                onClick={() => setShowZonePopup(true)}
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: selectedBodyZone ? '1.5px solid var(--primary)' : '1.5px dashed var(--border-color)', background: selectedBodyZone ? 'var(--secondary)' : 'transparent', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>{selectedBodyZone ?? 'Sélectionner une zone…'}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
           </div>
           <div className="fixed-bottom">
-            <button className="btn-primary-luxe" onClick={() => setStep(patientMode === 'existing' ? 'silhouette' : 'general_info')}>
+            <button className="btn-primary-luxe"
+              disabled={!selectedBodyZone}
+              style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
+              onClick={() => {
+                if (patientMode === 'existing') { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
+                else setStep('general_info')
+              }}>
               Étape suivante
             </button>
           </div>
@@ -867,7 +1070,9 @@ function App() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <h2 className="title-section">Infos générales</h2>
-            <div style={{width: '24px'}} />
+            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area">
@@ -879,7 +1084,7 @@ function App() {
           </div>
           <div className="fixed-bottom">
             <button className="btn-primary-luxe" onClick={() => setStep('silhouette')}>
-              Passer au bilan corporel
+              Bilan corporel →
             </button>
           </div>
         </div>
@@ -895,11 +1100,13 @@ function App() {
       {step === 'silhouette' && (
         <div className="silhouette-screen fade-in">
           <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep(patientMode === 'existing' ? 'identity' : 'general_info')}>
+            <button className="btn-back" onClick={() => setStep('general_info')}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <h2 className="title-section">Bilan corporel</h2>
-            <div style={{width: '24px'}} />
+            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area flex-center" style={{ paddingBottom: '16rem' }}>
@@ -907,14 +1114,14 @@ function App() {
           </div>
           <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {selectedBodyZone && (
-              <button className="btn-primary-luxe" style={{ marginBottom: 0 }} onClick={() => setStep('bilan_zone')}>
-                Continuer → {BILAN_ZONE_LABELS[getBilanType(selectedBodyZone)]}
+              <button className="btn-primary-luxe" style={{ marginBottom: 0 }} onClick={() => { setBilanZoneBackStep('silhouette'); setStep('bilan_zone') }}>
+                Commencer le bilan → {BILAN_ZONE_LABELS[getBilanType(selectedBodyZone)]}
               </button>
             )}
             <button className="btn-primary-luxe" style={{background: 'var(--primary-dark)', marginBottom: 0}}
               onClick={() => {
                 saveBilan('incomplet')
-                setStep('dashboard')
+                goToPatientRecord()
               }}>
               Enregistrer brouillon
             </button>
@@ -926,25 +1133,27 @@ function App() {
       {selectedBodyZone && (
         <div className="general-info-screen" style={{ display: step === 'bilan_zone' ? 'flex' : 'none', flexDirection: 'column' }}>
           <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('silhouette')}>
+            <button className="btn-back" onClick={() => { if (bilanZoneBackStep === 'database') { setCurrentBilanId(null); setCurrentBilanDataOverride(null) } setStep(bilanZoneBackStep) }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <div style={{ flex: 1 }}>
               <h2 className="title-section" style={{ marginBottom: 0 }}>{BILAN_ZONE_LABELS[getBilanType(selectedBodyZone ?? '')]}</h2>
               <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{selectedBodyZone} · {formData.prenom} {formData.nom}</p>
             </div>
-            <div style={{width: '24px'}} />
+            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
 
           <div className="scroll-area" style={{ paddingBottom: '13rem' }}>
-            {getBilanType(selectedBodyZone ?? '') === 'epaule'   && <BilanEpaule   ref={bilanEpauleRef} />}
-            {getBilanType(selectedBodyZone ?? '') === 'cheville' && <BilanCheville ref={bilanChevilleRef} />}
-            {getBilanType(selectedBodyZone ?? '') === 'genou'    && <BilanGenou    ref={bilanGenouRef} />}
-            {getBilanType(selectedBodyZone ?? '') === 'hanche'   && <BilanHanche   ref={bilanHancheRef} />}
-            {getBilanType(selectedBodyZone ?? '') === 'cervical' && <BilanCervical ref={bilanCervicalRef} />}
-            {getBilanType(selectedBodyZone ?? '') === 'lombaire' && <BilanLombaire ref={bilanLombaireRef} />}
-            {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique ref={bilanGeneriqueRef} />}
+            {getBilanType(selectedBodyZone ?? '') === 'epaule'   && <BilanEpaule   key={currentBilanId ?? 'new'} ref={bilanEpauleRef}   initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'cheville' && <BilanCheville key={currentBilanId ?? 'new'} ref={bilanChevilleRef} initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'genou'    && <BilanGenou    key={currentBilanId ?? 'new'} ref={bilanGenouRef}    initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'hanche'   && <BilanHanche   key={currentBilanId ?? 'new'} ref={bilanHancheRef}   initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'cervical' && <BilanCervical key={currentBilanId ?? 'new'} ref={bilanCervicalRef} initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'lombaire' && <BilanLombaire key={currentBilanId ?? 'new'} ref={bilanLombaireRef} initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique key={currentBilanId ?? 'new'} ref={bilanGeneriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
 
             {/* ── Note de fin de bilan ── */}
             <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
@@ -962,6 +1171,54 @@ function App() {
                 style={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
+
+            {/* ── Documents joints ── */}
+            <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+              <label style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 4 }}>
+                Documents joints
+              </label>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                Radios, comptes rendus médicaux, IRM… L'analyse IA en tiendra compte.
+              </p>
+              {bilanDocuments.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                  {bilanDocuments.map((doc, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--secondary)', borderRadius: 8, padding: '6px 10px' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      <span style={{ flex: 1, fontSize: '0.8rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</span>
+                      <button onClick={() => setBilanDocuments(prev => prev.filter((_, i) => i !== idx))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-md)', border: '1.5px dashed var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Ajouter un document
+                <input type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }}
+                  onChange={e => {
+                    const files = Array.from(e.target.files ?? [])
+                    files.forEach(file => {
+                      const reader = new FileReader()
+                      reader.onload = ev => {
+                        const dataUrl = ev.target?.result as string
+                        const base64 = dataUrl.split(',')[1]
+                        setBilanDocuments(prev => [...prev, { name: file.name, mimeType: file.type || 'application/octet-stream', data: base64, addedAt: new Date().toISOString() }])
+                      }
+                      reader.readAsDataURL(file)
+                    })
+                    e.target.value = ''
+                  }} />
+              </label>
+            </div>
           </div>
 
           <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -977,18 +1234,21 @@ function App() {
             </button>
             <button className="btn-primary-luxe"
               style={{ marginBottom: 0, background: 'var(--primary-dark)' }}
-              onClick={() => { saveBilan('complet'); setStep('dashboard') }}>
+              onClick={() => { saveBilan('complet'); setCurrentBilanId(null); setCurrentBilanDataOverride(null); setBilanZoneBackStep('general_info'); goToPatientRecord() }}>
               Enregistrer sans IA
             </button>
             <button className="btn-primary-luxe"
-              style={{ marginBottom: 0, background: 'linear-gradient(to right, #059669, #047857)' }}
-              onClick={handleExportPDF}>
+              style={{ marginBottom: 0, background: 'linear-gradient(to right, #059669, #047857)', opacity: exportingPDF ? 0.7 : 1 }}
+              onClick={handleExportPDF}
+              disabled={exportingPDF}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-                Télécharger le PDF
+                {exportingPDF ? <div className="spinner" /> : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                )}
+                {exportingPDF ? 'Génération du rapport…' : 'Télécharger le PDF'}
               </div>
             </button>
           </div>
@@ -1014,6 +1274,7 @@ function App() {
               bilans: evolutionBilans,
             }}
             onBack={() => setStep('database')}
+            onClose={() => setStep('database')}
             onGoToProfile={() => setStep('profile')}
           />
         )
@@ -1030,6 +1291,7 @@ function App() {
             bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
             notesLibres: bilanNotes,
           }}
+          documents={bilanDocuments.length > 0 ? bilanDocuments : undefined}
           cached={currentAnalyseIA}
           onResult={(analyse) => {
             setCurrentAnalyseIA(analyse)
@@ -1039,14 +1301,48 @@ function App() {
             showToast('Analyse IA générée', 'success')
           }}
           onBack={() => {
-            if (currentBilanDataOverride !== null) {
+            if (bilanZoneBackStep === 'database') {
+              setCurrentBilanId(null)
               setCurrentBilanDataOverride(null)
+              setBilanZoneBackStep('general_info')
               setStep('database')
             } else {
               setStep('bilan_zone')
             }
           }}
+          onClose={() => {
+            setCurrentBilanId(null)
+            setCurrentBilanDataOverride(null)
+            setBilanZoneBackStep('general_info')
+            goToPatientRecord()
+          }}
           onExport={handleExportPDF}
+          onGoToProfile={() => setStep('profile')}
+          onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
+        />
+      )}
+
+      {/* ── Fiche Exercice IA step ────────────────────────────────────────────── */}
+      {step === 'fiche_exercice' && (
+        <FicheExerciceIA
+          apiKey={apiKey}
+          context={{
+            patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
+            zone: selectedBodyZone ?? '',
+            bilanType: getBilanType(selectedBodyZone ?? ''),
+            bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
+            notesLibres: bilanNotes,
+          }}
+          analyseIA={currentAnalyseIA}
+          cached={currentBilanId !== null ? (db.find(r => r.id === currentBilanId)?.ficheExercice ?? null) : null}
+          onResult={(fiche: FicheExercice) => {
+            if (currentBilanId !== null) {
+              setDb(prev => prev.map(r => r.id === currentBilanId ? { ...r, ficheExercice: fiche } : r))
+            }
+            showToast('Fiche d\'exercices générée', 'success')
+          }}
+          onBack={() => setStep(ficheBackStep)}
+          onClose={() => { setCurrentBilanDataOverride(null); goToPatientRecord() }}
           onGoToProfile={() => setStep('profile')}
         />
       )}

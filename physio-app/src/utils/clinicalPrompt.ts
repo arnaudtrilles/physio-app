@@ -111,7 +111,7 @@ SCORES : ${scoresStr}
 ${notesLibresStr ? `\nNOTES CLINIQUES COMPLÉMENTAIRES : ${notesLibresStr}` : ''}
 
 INSTRUCTIONS STRICTES :
-1. Les 3 hypothèses doivent avoir des probabilités RÉELLES calculées à partir des données cliniques (EVN, tests, scores, flags). Les probabilités ne doivent PAS être fixes (pas de 75/45/20 par défaut). Elles doivent refléter la réalité clinique du cas et être cohérentes entre elles (ex : si H1 est très probable, H2 et H3 doivent être nettement inférieures). La somme n'a pas à faire 100%.
+1. Les 3 hypothèses doivent avoir des probabilités RÉELLES calculées à partir des données cliniques (EVN, tests, scores, flags). Les probabilités ne doivent PAS être fixes (pas de 75/45/20 par défaut). Elles doivent refléter la réalité clinique du cas. La somme des 3 probabilités DOIT être exactement égale à 100 (ex: 65+25+10=100, ou 50+30+20=100).
 2. La prise en charge doit être SPÉCIFIQUE à ce patient : cite les techniques précises (ex: mobilisations passives tibio-fémorales, renforcement quadriceps en chaîne fermée, dry needling, TENS…), les exercices adaptés au niveau et à la profession du patient, la durée et fréquence réalistes.
 3. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
 
@@ -132,6 +132,36 @@ INSTRUCTIONS STRICTES :
   ],
   "alertes": ["Alerte uniquement si red flag critique nécessitant orientation urgente, sinon tableau vide"]
 }`
+}
+
+// ── Fiche d'exercices prompt ──────────────────────────────────────────────────
+
+export function buildFicheExercicePrompt(
+  ctx: BilanContext,
+  notesSeance: string,
+  analyseIA?: { diagnostic: { titre: string }; priseEnCharge: Array<{ titre: string }> } | null
+): string {
+  const { patient, zone, bilanData } = ctx
+  const { age, sexe, scrub } = anonymizePatientData(patient)
+
+  const douleur = bilanData.douleur as Record<string, unknown> | undefined
+  const evn = douleur?.evnMoy ?? douleur?.evnPire ?? 'N/R'
+  const profession = scrub(patient.profession || 'Non renseignée')
+  const sport = scrub(patient.sport || 'Non renseignée')
+  const antecedents = scrub(patient.antecedents || 'Non renseignés')
+  const scrubbedNotes = scrub(notesSeance)
+
+  return `<notes_seance_actuelle>
+Zone traitée : ${zone}
+Patient : ${age !== null ? `${age} ans` : 'Âge N/R'}${sexe ? ` — Sexe : ${sexe}` : ''}
+EVN actuel : ${evn} / 10
+Profession : ${profession}
+Activité sportive : ${sport}
+Antécédents : ${antecedents}
+${analyseIA ? `\nDiagnostic retenu : ${analyseIA.diagnostic.titre}\nObjectifs thérapeutiques : ${analyseIA.priseEnCharge.map(p => p.titre).join(' | ')}` : ''}
+Notes du thérapeute pour cette séance :
+${scrubbedNotes || '(Non renseignées — générer un programme adapté au diagnostic et à la zone traitée)'}
+</notes_seance_actuelle>`
 }
 
 // ── Evolution prompt ──────────────────────────────────────────────────────────
@@ -231,8 +261,108 @@ export function parseAnalyseIA(raw: string): AnalyseIA | null {
     if (!jsonMatch) return null
     const parsed = JSON.parse(jsonMatch[0]) as AnalyseIA
     if (!parsed.diagnostic || !parsed.hypotheses || !parsed.priseEnCharge) return null
+
+    // Normaliser les probabilités pour que la somme = 100
+    if (parsed.hypotheses.length > 0) {
+      const total = parsed.hypotheses.reduce((s, h) => s + (h.probabilite ?? 0), 0)
+      if (total > 0 && total !== 100) {
+        let remaining = 100
+        parsed.hypotheses.forEach((h, i) => {
+          if (i < parsed.hypotheses.length - 1) {
+            h.probabilite = Math.round((h.probabilite / total) * 100)
+            remaining -= h.probabilite
+          } else {
+            h.probabilite = remaining
+          }
+        })
+      }
+    }
+
     return { ...parsed, generatedAt: new Date().toISOString(), alertes: parsed.alertes ?? [] }
   } catch {
     return null
   }
+}
+
+// ── PDF Report prompt ─────────────────────────────────────────────────────────
+
+export interface PDFReportContext {
+  patient: BilanContext['patient']
+  zone: string
+  bilanType: string
+  bilanData: Record<string, unknown>
+  notesLibres?: string
+  analyseIA?: {
+    diagnostic: { titre: string; description: string }
+    hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>
+    priseEnCharge: Array<{ phase: string; titre: string; detail: string }>
+    alertes: string[]
+  } | null
+}
+
+export function buildPDFReportPrompt(ctx: PDFReportContext): string {
+  const { patient, zone, bilanType, bilanData, notesLibres, analyseIA } = ctx
+  const { age, sexe, scrub } = anonymizePatientData(patient)
+
+  const douleur = bilanData.douleur as Record<string, unknown> | undefined
+  const redFlags = bilanData.redFlags as Record<string, unknown> | undefined
+  const yellowFlags = bilanData.yellowFlags as Record<string, unknown> | undefined
+  const scores = bilanData.scores as Record<string, unknown> | undefined
+  const tests = bilanData.tests as Record<string, unknown> | undefined
+
+  // Only include fields that have a real value — never send undefined/null/empty to the AI
+  const defined = (v: unknown): string | null => {
+    if (v === null || v === undefined) return null
+    const s = String(v).trim()
+    return s !== '' && s !== 'N/R' && s !== 'undefined' ? s : null
+  }
+  const line = (label: string, v: unknown) => { const s = defined(v); return s ? `- ${label} : ${s}` : null }
+  const flagsPositifs = (obj: Record<string, unknown> | undefined) =>
+    obj ? Object.entries(obj).filter(([, v]) => v === 'oui' || v === true).map(([k]) => k).join(', ') || null : null
+
+  const douleurLines = [
+    line('EVN pire', douleur?.evnPire), line('EVN mieux', douleur?.evnMieux), line('EVN moyen', douleur?.evnMoy),
+    line('Type de douleur', douleur?.douleurType), line('Évolution', douleur?.situation),
+    line('Douleur nocturne', douleur?.douleurNocturne), line('Dérouillage matinal', douleur?.derouillageMatinal),
+    line('Début des symptômes', douleur?.debutSymptomes), line('Facteur déclenchant', douleur?.facteurDeclenchant),
+    line('Mouvements qui empirent', douleur?.mouvementsEmpirent), line('Mouvements qui soulagent', douleur?.mouvementsSoulagent),
+  ].filter(Boolean).join('\n')
+
+  const rfStr = flagsPositifs(redFlags)
+  const yfStr = flagsPositifs(yellowFlags)
+  const testsStr = tests && Object.keys(tests).length > 0 ? scrub(JSON.stringify(tests, null, 0)) : null
+  const scoresStr = scores && Object.keys(scores).length > 0 ? scrub(JSON.stringify(scores, null, 0)) : null
+
+  const analyseSection = analyseIA ? `
+ANALYSE CLINIQUE (données issues du bilan — à intégrer au diagnostic, SANS rien ajouter) :
+- Diagnostic retenu : ${analyseIA.diagnostic.titre}
+- Justification : ${scrub(analyseIA.diagnostic.description)}
+- Hypothèses : ${analyseIA.hypotheses.map(h => `H${h.rang} (${h.probabilite}%) ${h.titre} — ${scrub(h.justification)}`).join(' | ')}
+- Plan de traitement : ${analyseIA.priseEnCharge.map(p => `${p.phase} : ${p.titre} — ${scrub(p.detail)}`).join(' | ')}
+${analyseIA.alertes.length > 0 ? `- Alertes cliniques : ${analyseIA.alertes.join(', ')}` : ''}` : ''
+
+  const ageLine = age !== null ? `${age} ans` : null
+  const sexeLine = sexe ?? null
+  const profession = defined(patient.profession)
+  const sport = defined(patient.sport)
+  const antecedents = defined(patient.antecedents)
+
+  return `RÈGLES ABSOLUES :
+1. Tu ne peux utiliser QUE les informations présentes dans ce document. Zéro invention, zéro supposition.
+2. Si une donnée est absente (non renseignée), tu NE la mentionnes PAS dans le rapport. Tu n'écris pas "non évalué" ni "à évaluer" — tu omets simplement la ligne.
+3. Tu n'inventes aucun résultat d'inspection, de palpation, de bilan neurologique ou de test qui n'est pas explicitement dans les données.
+4. Tu n'utilises pas le nom ni le prénom du patient (données confidentielles non transmises).
+5. Le rapport doit être fluide et professionnel, mais rigoureusement fidèle aux données.
+
+DONNÉES DU BILAN (source unique — ne rien ajouter) :
+
+PATIENT : ${[ageLine, sexeLine ? `Sexe : ${sexeLine}` : null, profession ? `Profession : ${profession}` : null, sport ? `Sport : ${sport}` : null, antecedents ? `Antécédents : ${antecedents}` : null].filter(Boolean).join(' | ')}
+Zone traitée : ${zone} — Type bilan : ${bilanType}
+${douleurLines ? `\nDOULEUR :\n${douleurLines}` : ''}
+${rfStr ? `\nRED FLAGS positifs : ${rfStr}` : ''}
+${yfStr ? `\nYELLOW FLAGS positifs : ${yfStr}` : ''}
+${testsStr ? `\nTESTS CLINIQUES : ${testsStr}` : ''}
+${scoresStr ? `\nSCORES : ${scoresStr}` : ''}
+${notesLibres ? `\nNOTES DU THÉRAPEUTE (texte libre, source primaire) :\n${scrub(notesLibres)}` : ''}
+${analyseSection}`
 }

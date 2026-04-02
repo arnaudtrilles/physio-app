@@ -357,3 +357,157 @@ export const generatePDF = async (
 
   doc.save(`${safeTitle}.pdf`);
 };
+
+// ── AI-generated PDF report ────────────────────────────────────────────────────
+
+export const generateAIPDF = (
+  patientId: { nom?: string; prenom?: string; dateNaissance?: string },
+  markdownReport: string
+) => {
+  const doc = new jsPDF();
+  const pageW = 210;
+  const marginL = 18;
+  const marginR = 18;
+  const maxW = pageW - marginL - marginR;
+  let y = 20;
+
+  const today = new Date();
+  const dateStrFileName = today.toISOString().split('T')[0];
+  const dateStrDocument = today.toLocaleDateString('fr-FR');
+
+  const checkPage = (needed = 10) => {
+    if (y + needed > 282) { doc.addPage(); y = 20; }
+  };
+
+  const addText = (text: string, size: number, style: 'normal' | 'bold' | 'italic', indent = 0, lineGap = 5) => {
+    checkPage(size * 0.5 + lineGap);
+    doc.setFontSize(size);
+    doc.setFont('helvetica', style);
+    const lines = doc.splitTextToSize(text, maxW - indent);
+    for (const line of lines) {
+      checkPage(size * 0.5 + 2);
+      doc.text(line, marginL + indent, y);
+      y += size * 0.45;
+    }
+    y += lineGap;
+  };
+
+  // ── Header ──
+  doc.setFillColor(30, 58, 138);
+  doc.rect(0, 0, pageW, 28, 'F');
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('BILAN DIAGNOSTIC PHYSIOTHÉRAPIQUE', marginL, 13);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${patientId.prenom ?? ''} ${patientId.nom ?? ''}  —  ${dateStrDocument}`, marginL, 22);
+  doc.setTextColor(0, 0, 0);
+  y = 38;
+
+  // ── Parse and render markdown ──
+  const lines = markdownReport.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith('### ')) {
+      y += 4;
+      // Section title bar
+      checkPage(14);
+      doc.setFillColor(239, 246, 255);
+      doc.rect(marginL - 2, y - 7, maxW + 4, 10, 'F');
+      doc.setDrawColor(30, 58, 138);
+      doc.setLineWidth(0.5);
+      doc.rect(marginL - 2, y - 7, 3, 10, 'F');
+      doc.setDrawColor(200, 200, 200);
+      doc.setFillColor(30, 58, 138);
+      doc.rect(marginL - 2, y - 7, 3, 10, 'F');
+      addText(line.replace(/^### /, ''), 12, 'bold', 4, 6);
+    } else if (line.startsWith('## ')) {
+      y += 3;
+      addText(line.replace(/^## /, ''), 13, 'bold', 0, 5);
+    } else if (line.startsWith('# ')) {
+      y += 3;
+      addText(line.replace(/^# /, ''), 15, 'bold', 0, 6);
+    } else if (line.match(/^- \*\*H\d/)) {
+      // Hypothesis line: "- **H1 (70%) Titre** — Justification" or "- **H1 (70%)** Titre — Justification"
+      // Strip outer bullet and bold markers to get full text
+      const full = line.replace(/^- \*\*/, '').replace(/\*\*/, '')
+      // Split on " — " to separate title from justification
+      const dashIdx = full.indexOf(' — ')
+      const title = dashIdx !== -1 ? full.slice(0, dashIdx).trim() : full.trim()
+      const justification = dashIdx !== -1 ? full.slice(dashIdx + 3).trim() : ''
+      checkPage(14);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      const titleLines = doc.splitTextToSize(`• ${title}`, maxW - 4);
+      for (const tl of titleLines) { checkPage(6); doc.text(tl, marginL + 4, y); y += 5.5; }
+      if (justification) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        const justLines = doc.splitTextToSize(justification, maxW - 8);
+        for (const jl of justLines) { checkPage(5); doc.text(jl, marginL + 8, y); y += 4.5; }
+      }
+      y += 2;
+    } else if (line.match(/^- \*\*(.+?)\*\*(.*)$/)) {
+      // Bullet with bold label: "- **Label** text"
+      const m = line.match(/^- \*\*(.+?)\*\*(.*)$/)!;
+      checkPage(8);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      const bullet = `• ${m[1]}`;
+      const bulletW = doc.getTextWidth(bullet);
+      doc.text(bullet, marginL + 4, y);
+      if (m[2].trim()) {
+        doc.setFont('helvetica', 'normal');
+        const rest = doc.splitTextToSize(m[2].trimStart(), maxW - 4 - bulletW - 2);
+        doc.text(rest[0] ?? '', marginL + 4 + bulletW + 1, y);
+        y += 5.5;
+        for (let r = 1; r < rest.length; r++) {
+          checkPage(6);
+          doc.text(rest[r], marginL + 4 + bulletW + 1, y);
+          y += 5;
+        }
+      } else {
+        y += 5.5;
+      }
+    } else if (line.startsWith('- ')) {
+      // Strip inline bold markers for plain bullets
+      const text = line.replace(/^- /, '').replace(/\*\*(.+?)\*\*/g, '$1');
+      checkPage(7);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const bulletLines = doc.splitTextToSize(`• ${text}`, maxW - 6);
+      for (const bl of bulletLines) {
+        checkPage(6);
+        doc.text(bl, marginL + 4, y);
+        y += 5;
+      }
+      y += 1;
+    } else if (line.trim() === '') {
+      y += 3;
+    } else if (line.startsWith('**') && line.endsWith('**')) {
+      addText(line.replace(/\*\*/g, ''), 10, 'bold', 0, 4);
+    } else {
+      // Normal paragraph — strip remaining bold markers
+      const text = line.replace(/\*\*(.+?)\*\*/g, '$1');
+      if (text.trim()) addText(text, 10, 'normal', 0, 4);
+    }
+  }
+
+  // ── Footer on each page ──
+  const totalPages = (doc as any).internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(150, 150, 150);
+    doc.text('Document confidentiel — usage médical uniquement', marginL, 292);
+    doc.text(`Page ${p} / ${totalPages}`, pageW - marginR - 20, 292);
+    doc.setTextColor(0, 0, 0);
+  }
+
+  const safeName = (patientId.nom || 'Anonyme').replace(/\s+/g, '_');
+  const safeFirst = (patientId.prenom || '').replace(/\s+/g, '_');
+  doc.save(`Rapport_${safeName}_${safeFirst}_${dateStrFileName}.pdf`);
+};

@@ -8,10 +8,10 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      '/groq': {
-        target: 'https://api.groq.com',
+      '/gemini': {
+        target: 'https://generativelanguage.googleapis.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/groq/, ''),
+        rewrite: (path) => path.replace(/^\/gemini/, ''),
         secure: true,
       },
     },

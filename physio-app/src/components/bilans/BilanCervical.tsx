@@ -1,18 +1,26 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { AmplitudeInput } from './shared'
 
 export interface BilanCervicalHandle {
   getData: () => Record<string, unknown>
+  setData: (d: Record<string, unknown>) => void
 }
 
-function OuiNon({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function OuiNon({ label, value, onChange, detail, onDetailChange }: { label: string; value: string; onChange: (v: string) => void; detail?: string; onDetailChange?: (v: string) => void }) {
   return (
-    <div className="oui-non-group">
-      <span className="oui-non-label">{label}</span>
-      <div className="oui-non-btns">
-        {['Oui', 'Non'].map(v => (
-          <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-        ))}
+    <div className="oui-non-group" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="oui-non-label">{label}</span>
+        <div className="oui-non-btns">
+          {['Oui', 'Non'].map(v => (
+            <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+          ))}
+        </div>
       </div>
+      {value === 'oui' && onDetailChange && (
+        <textarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
+          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
+      )}
     </div>
   )
 }
@@ -41,7 +49,19 @@ function ScoreRow({ label, value, onChange }: { label: string; value: string; on
   )
 }
 
-export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
+export const BilanCervical = forwardRef<BilanCervicalHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+  const _d   = (initialData?.douleur           as Record<string, unknown>) ?? {}
+  const _c3n = (initialData?.cinqD3N           as Record<string, unknown>) ?? {}
+  const _rf  = (initialData?.redFlags          as Record<string, unknown>) ?? {}
+  const _yf  = (initialData?.yellowFlags       as Record<string, unknown>) ?? {}
+  const _bb  = (initialData?.blueBlackFlags    as Record<string, unknown>) ?? {}
+  const _ec  = (initialData?.examClinique      as Record<string, unknown>) ?? {}
+  const _ne  = (initialData?.neurologique      as Record<string, unknown>) ?? {}
+  const _me  = (initialData?.mecanosensibilite as Record<string, unknown>) ?? {}
+  const _t   = (initialData?.tests            as Record<string, unknown>) ?? {}
+  const _sc  = (initialData?.scores           as Record<string, unknown>) ?? {}
+  const _ct  = (initialData?.contrat          as Record<string, unknown>) ?? {}
+
   const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
@@ -51,56 +71,63 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
     border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
   }
 
-  const [evnPire, setEvnPire] = useState('')
-  const [evnMieux, setEvnMieux] = useState('')
-  const [evnMoy, setEvnMoy] = useState('')
-  const [douleurType, setDouleurType] = useState('')
-  const [nocturne, setNocturne] = useState('')
+  const [evnPire, setEvnPire] = useState((_d.evnPire as string) ?? '')
+  const [evnMieux, setEvnMieux] = useState((_d.evnMieux as string) ?? '')
+  const [evnMoy, setEvnMoy] = useState((_d.evnMoy as string) ?? '')
+  const [douleurType, setDouleurType] = useState((_d.douleurType as string) ?? '')
+  const [nocturne, setNocturne] = useState((_d.nocturne as string) ?? '')
 
   // 5D 3N — critical red flags cervicales
   const [cinqD3N, setCinqD3N] = useState<Record<string, string>>({
     dizziness: '', dropAttacks: '', diplopie: '', dysarthrie: '', dysphagie: '',
     nystagmus: '', nausees: '', numbness: '',
+    ...(_c3n as Record<string, string>),
   })
   const update5D3N = (k: string, v: string) => setCinqD3N(p => ({ ...p, [k]: v }))
 
   const [rf, setRf] = useState<Record<string, string>>({
     tttMedical: '', antecedents: '', comorbidites: '', imageries: '', traumatisme: '', fievre: '', pertePoids: '', atcdCancer: '',
+    ...(_rf as Record<string, string>),
   })
-  const [yf, setYf] = useState<Record<string, string>>({ croyances: '', catastrophisme: '', fearAvoidance: '', coping: '', had: '' })
-  const [bbf, setBbf] = useState<Record<string, string>>({ at: '', stressTravail: '', conditionsSocio: '' })
+  const [yf, setYf] = useState<Record<string, string>>({ croyances: '', catastrophisme: '', fearAvoidance: '', coping: '', had: '', ...(_yf as Record<string, string>) })
+  const [bbf, setBbf] = useState<Record<string, string>>({ at: '', stressTravail: '', conditionsSocio: '', ...(_bb as Record<string, string>) })
 
-  const [morfho, setMorfho] = useState('')
+  const [morfho, setMorfho] = useState((_ec.morfho as string) ?? '')
   const [mob, setMob] = useState<Record<string, string>>({
     flexion: '', extension: '', protrusion: '', retraction: '', retractionExtension: '',
     rotationD: '', rotationG: '', inclinaisonD: '', inclinaisonG: '', lateral: '',
+    ...(_ec.mobilite as Record<string, string> ?? {}),
   })
   const updateMob = (k: string, v: string) => setMob(p => ({ ...p, [k]: v }))
 
   const [neuro, setNeuro] = useState<Record<string, string>>({
     reflexeBicipital: '', reflexeBrachioRadial: '', reflexeTricipital: '',
     deficitMoteur: '', sensibilite: '', hoffman: '',
+    ...(_ne as Record<string, string>),
   })
   const updateNeuro = (k: string, v: string) => setNeuro(p => ({ ...p, [k]: v }))
 
   const [mecano, setMecano] = useState<Record<string, string>>({
     ultt1: '', ultt2: '', ultt3: '', ultt4: '',
+    ...(_me as Record<string, string>),
   })
   const updateMecano = (k: string, v: string) => setMecano(p => ({ ...p, [k]: v }))
 
   const [tests, setTests] = useState<Record<string, string>>({
     spurling: '', distraction: '', adson: '', roos: '', ta: '',
+    ...(_t as Record<string, string>),
   })
   const updateTest = (k: string, v: string) => setTests(p => ({ ...p, [k]: v }))
 
   const [scores, setScores] = useState<Record<string, string>>({
     ndi: '', psfs: '', had: '', dn4: '', painDetect: '', isc: '',
+    ...(_sc as Record<string, string>),
   })
   const updateScore = (k: string, v: string) => setScores(p => ({ ...p, [k]: v }))
 
-  const [objectifs, setObjectifs] = useState('')
-  const [autoReedo, setAutoReedo] = useState('')
-  const [conseils, setConseils] = useState('')
+  const [objectifs, setObjectifs] = useState((_ct.objectifs as string) ?? '')
+  const [autoReedo, setAutoReedo] = useState((_ct.autoReedo as string) ?? '')
+  const [conseils, setConseils] = useState((_ct.conseils as string) ?? '')
 
   useImperativeHandle(ref, () => ({
     getData: () => ({
@@ -112,6 +139,37 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
       tests, scores,
       contrat: { objectifs, autoReedo, conseils },
     }),
+    setData: (data: Record<string, unknown>) => {
+      const d   = (data.douleur           as Record<string, unknown>) ?? {}
+      const c3n = (data.cinqD3N           as Record<string, unknown>) ?? {}
+      const rf  = (data.redFlags          as Record<string, unknown>) ?? {}
+      const yf  = (data.yellowFlags       as Record<string, unknown>) ?? {}
+      const bb  = (data.blueBlackFlags    as Record<string, unknown>) ?? {}
+      const ec  = (data.examClinique      as Record<string, unknown>) ?? {}
+      const ne  = (data.neurologique      as Record<string, unknown>) ?? {}
+      const me  = (data.mecanosensibilite as Record<string, unknown>) ?? {}
+      const t   = (data.tests            as Record<string, unknown>) ?? {}
+      const sc  = (data.scores           as Record<string, unknown>) ?? {}
+      const ct  = (data.contrat          as Record<string, unknown>) ?? {}
+      if (d.evnPire !== undefined)      setEvnPire(d.evnPire as string)
+      if (d.evnMieux !== undefined)     setEvnMieux(d.evnMieux as string)
+      if (d.evnMoy !== undefined)       setEvnMoy(d.evnMoy as string)
+      if (d.douleurType !== undefined)  setDouleurType(d.douleurType as string)
+      if (d.nocturne !== undefined)     setNocturne(d.nocturne as string)
+      if (Object.keys(c3n).length > 0)  setCinqD3N(p => ({ ...p, ...c3n as Record<string, string> }))
+      if (Object.keys(rf).length > 0)   setRf(p => ({ ...p, ...rf as Record<string, string> }))
+      if (Object.keys(yf).length > 0)   setYf(p => ({ ...p, ...yf as Record<string, string> }))
+      if (Object.keys(bb).length > 0)   setBbf(p => ({ ...p, ...bb as Record<string, string> }))
+      if (ec.morfho !== undefined)      setMorfho(ec.morfho as string)
+      if (ec.mobilite !== undefined)    setMob(ec.mobilite as Record<string, string>)
+      if (Object.keys(ne).length > 0)   setNeuro(p => ({ ...p, ...ne as Record<string, string> }))
+      if (Object.keys(me).length > 0)   setMecano(p => ({ ...p, ...me as Record<string, string> }))
+      if (Object.keys(t).length > 0)    setTests(p => ({ ...p, ...t as Record<string, string> }))
+      if (Object.keys(sc).length > 0)   setScores(p => ({ ...p, ...sc as Record<string, string> }))
+      if (ct.objectifs !== undefined)   setObjectifs(ct.objectifs as string)
+      if (ct.autoReedo !== undefined)   setAutoReedo(ct.autoReedo as string)
+      if (ct.conseils !== undefined)    setConseils(ct.conseils as string)
+    },
   }))
 
   const MOB_LABELS: Record<string, string> = {
@@ -177,7 +235,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                     ['dizziness','Dizziness (vertiges)'],['dropAttacks','Drop attacks (chutes soudaines)'],
                     ['diplopie','Diplopie (vision double)'],['dysarthrie','Dysarthrie'],['dysphagie','Dysphagie'],
                     ['nystagmus','Nystagmus'],['nausees','Nausées'],['numbness','Numbness (engourdissement facial)'],
-                  ].map(([k, lbl]) => <OuiNon key={k} label={lbl} value={cinqD3N[k]} onChange={v => update5D3N(k, v)} />)}
+                  ].map(([k, lbl]) => <OuiNon key={k} label={lbl} value={cinqD3N[k]} onChange={v => update5D3N(k, v)} detail={cinqD3N[k + '_detail']} onDetailChange={v => setCinqD3N(p => ({ ...p, [k + '_detail']: v }))} />)}
                 </>
               )}
 
@@ -186,7 +244,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                   {[['tttMedical','TTT médical actuel'],['antecedents','Antécédents'],['comorbidites','Comorbidités'],
                     ['imageries','Imagerie(s)'],['traumatisme','Traumatisme récent (whiplash)'],['fievre','Fièvre inexpliquée'],
                     ['pertePoids','Perte de poids inexpliquée'],['atcdCancer','ATCD de cancer']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={rf[k]} onChange={v => setRf(p => ({ ...p, [k]: v }))} />
+                    <OuiNon key={k} label={lbl} value={rf[k]} onChange={v => setRf(p => ({ ...p, [k]: v }))} detail={rf[k + '_detail']} onDetailChange={v => setRf(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -195,7 +253,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                 <>
                   {[['croyances','Croyances maladaptatives'],['catastrophisme','Catastrophisme'],
                     ['fearAvoidance','Fear-avoidance'],['coping','Coping passif'],['had','Score HAD pathologique']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
+                    <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} detail={yf[k + '_detail']} onDetailChange={v => setYf(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -203,7 +261,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
               {sec.id === 'blueBlackFlags' && (
                 <>
                   {[['at','Accident de travail'],['stressTravail','Stress au travail'],['conditionsSocio','Conditions socio-économiques précaires']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={bbf[k]} onChange={v => setBbf(p => ({ ...p, [k]: v }))} />
+                    <OuiNon key={k} label={lbl} value={bbf[k]} onChange={v => setBbf(p => ({ ...p, [k]: v }))} detail={bbf[k + '_detail']} onDetailChange={v => setBbf(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -218,7 +276,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                     <tbody>
                       {Object.entries(MOB_LABELS).map(([k, lbl]) => (
                         <tr key={k}><td>{lbl}</td>
-                          <td><input value={mob[k]} onChange={e => updateMob(k, e.target.value)} placeholder="—" /></td>
+                          <td><AmplitudeInput value={mob[k]} onChange={v => updateMob(k, v)} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -230,7 +288,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                 <>
                   {[['reflexeBicipital','Réflexe bicipital'],['reflexeBrachioRadial','Réflexe brachio-radial'],
                     ['reflexeTricipital','Réflexe tricipital'],['hoffman','Signe de Hoffman']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={neuro[k]} onChange={v => updateNeuro(k, v)} />
+                    <OuiNon key={k} label={lbl} value={neuro[k]} onChange={v => updateNeuro(k, v)} detail={neuro[k + '_detail']} onDetailChange={v => setNeuro(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', margin: '8px 0 4px' }}>Déficit moteur C4-T1</label>
                   <textarea value={neuro.deficitMoteur} onChange={e => updateNeuro('deficitMoteur', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={2} placeholder="C5: épaule, C6: poignet ext, C7: doigts ext, C8: doigts fléch, T1: intrinsèques" />
@@ -243,7 +301,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                 <>
                   {[['ultt1','ULTT 1 — Nerf médian'],['ultt2','ULTT 2 — Nerf médian'],
                     ['ultt3','ULTT 3 — Nerf radial'],['ultt4','ULTT 4 — Nerf ulnaire']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={mecano[k]} onChange={v => updateMecano(k, v)} />
+                    <OuiNon key={k} label={lbl} value={mecano[k]} onChange={v => updateMecano(k, v)} detail={mecano[k + '_detail']} onDetailChange={v => setMecano(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -252,7 +310,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle>((_, ref) => {
                 <>
                   {[['spurling','Spurling'],['distraction','Distraction cervicale'],
                     ['adson','Adson'],['roos','Roos (EAST)'],['ta','TA']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} />
+                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}

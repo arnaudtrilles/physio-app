@@ -20,6 +20,7 @@ export const ZONE_TO_BILAN: Record<string, BilanType> = {
   'Rachis Cervical': 'cervical',
   'Lombaires':       'lombaire',
   'Rachis Lombaire': 'lombaire',
+  'Lombaire':        'lombaire',
 }
 
 export const BODY_ZONES = [
@@ -28,7 +29,7 @@ export const BODY_ZONES = [
   'Hanche',
   'Cheville',
   'Cervicales',
-  'Rachis Lombaire',
+  'Lombaire',
   'Autre',
 ]
 

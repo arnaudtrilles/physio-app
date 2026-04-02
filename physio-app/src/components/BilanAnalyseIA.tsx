@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import type { AnalyseIA } from '../types'
+import type { AnalyseIA, BilanDocument } from '../types'
 import { buildClinicalPrompt, parseAnalyseIA } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
+import { callGemini, GeminiAuthError } from '../utils/geminiClient'
 
 interface BilanAnalyseIAProps {
   apiKey: string
   context: BilanContext
+  documents?: BilanDocument[]
   cached?: AnalyseIA | null
   onResult: (analyse: AnalyseIA) => void
   onBack: () => void
+  onClose?: () => void
   onExport: () => void
   onGoToProfile: () => void
+  onFicheExercice?: () => void
 }
 
 function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
@@ -32,7 +36,7 @@ function NeuralIcon() {
   )
 }
 
-export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onExport, onGoToProfile }: BilanAnalyseIAProps) {
+export function BilanAnalyseIA({ apiKey, context, documents, cached, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [analyse, setAnalyse] = useState<AnalyseIA | null>(cached ?? null)
@@ -42,35 +46,15 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/groq/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 1500,
-          messages: [
-            {
-              role: 'system',
-              content: 'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel.',
-            },
-            { role: 'user', content: buildClinicalPrompt(context) },
-          ],
-        }),
-      })
-
-      if (res.status === 401) throw new Error('auth')
-      if (res.status === 429) throw new Error('quota')
-      if (!res.ok) {
-        let detail = ''
-        try { const e = await res.json(); detail = e?.error?.message ?? '' } catch { /* ignore */ }
-        throw new Error(`Erreur serveur (${res.status})${detail ? ` : ${detail}` : ''}`)
-      }
-
-      const data = await res.json()
-      const raw: string = data.choices?.[0]?.message?.content ?? ''
+      const raw = await callGemini(
+        apiKey,
+        'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel.',
+        buildClinicalPrompt(context),
+        8192,
+        true,
+        'gemini-2.5-pro',
+        documents
+      )
       const parsed = parseAnalyseIA(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
       setAnalyse(parsed)
@@ -81,13 +65,15 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
         setTimeout(() => runAnalysis(attempt + 1), 1200)
         return
       }
-      const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-      if (msg === 'quota' || msg.includes('rate') || msg.includes('429')) {
-        setError('quota')
-      } else if (msg === 'auth' || msg.includes('401') || msg.includes('invalid') || msg.includes('api_key')) {
+      if (err instanceof GeminiAuthError) {
         setError('auth')
       } else {
-        setError(msg)
+        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+        if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
+          setError('quota')
+        } else {
+          setError(msg)
+        }
       }
     } finally {
       if (attempt >= 2) setLoading(false)
@@ -109,7 +95,16 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
           <h2 className="title-section" style={{ marginBottom: 0 }}>Analyse IA</h2>
           <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{context.zone} · {context.patient.prenom} {context.patient.nom}</p>
         </div>
-        <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>IA</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>IA</div>
+          {onClose && (
+            <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
@@ -133,10 +128,10 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
               </div>
-              <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem' }}>Clé API Groq requise</div>
+              <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem' }}>Clé API Gemini requise</div>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px', lineHeight: 1.5 }}>
-              Pour accéder à l'analyse clinique, configurez votre clé API Groq dans votre profil.
+              Pour accéder à l'analyse clinique, configurez votre clé API Gemini dans votre profil.
             </p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -153,7 +148,7 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Quota de requêtes dépassé. Vérifiez votre compte Groq.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Quota de requêtes dépassé. Vérifiez votre compte Google AI Studio.</p>
           </div>
         )}
         {error && error !== 'quota' && error !== 'auth' && (
@@ -172,10 +167,10 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
               </div>
-              <div style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.95rem' }}>Clé API Groq invalide</div>
+              <div style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.95rem' }}>Clé API Gemini invalide</div>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px', lineHeight: 1.5 }}>
-              Votre clé API Groq est absente ou incorrecte. Rendez-vous dans votre profil et renseignez une clé valide commençant par <strong>gsk_</strong>.
+              Votre clé API Gemini est absente ou incorrecte. Rendez-vous dans votre profil et renseignez une clé valide commençant par <strong>AIza</strong>.
             </p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -183,7 +178,7 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
-              Configurer ma clé Groq
+              Configurer ma clé Gemini
             </button>
           </div>
         )}
@@ -347,6 +342,18 @@ export function BilanAnalyseIA({ apiKey, context, cached, onResult, onBack, onEx
                 <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
               </svg>
               Exporter le bilan + analyse IA
+            </button>
+          )}
+          {analyse && onFicheExercice && (
+            <button
+              onClick={onFicheExercice}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', border: 'none', background: 'linear-gradient(135deg, #059669, #047857)', color: 'white', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Générer la fiche d'exercices
             </button>
           )}
           {analyse && !loading && (

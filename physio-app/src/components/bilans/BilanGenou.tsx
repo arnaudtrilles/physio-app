@@ -1,18 +1,26 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { AmplitudeInput, ForceInput, MRCInfo } from './shared'
 
 export interface BilanGenouHandle {
   getData: () => Record<string, unknown>
+  setData: (d: Record<string, unknown>) => void
 }
 
-function OuiNon({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function OuiNon({ label, value, onChange, detail, onDetailChange }: { label: string; value: string; onChange: (v: string) => void; detail?: string; onDetailChange?: (v: string) => void }) {
   return (
-    <div className="oui-non-group">
-      <span className="oui-non-label">{label}</span>
-      <div className="oui-non-btns">
-        {['Oui', 'Non'].map(v => (
-          <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-        ))}
+    <div className="oui-non-group" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="oui-non-label">{label}</span>
+        <div className="oui-non-btns">
+          {['Oui', 'Non'].map(v => (
+            <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+          ))}
+        </div>
       </div>
+      {value === 'oui' && onDetailChange && (
+        <textarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
+          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
+      )}
     </div>
   )
 }
@@ -41,7 +49,16 @@ function ScoreRow({ label, value, onChange }: { label: string; value: string; on
   )
 }
 
-export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
+export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+  const _d  = (initialData?.douleur        as Record<string, unknown>) ?? {}
+  const _rf = (initialData?.redFlags       as Record<string, unknown>) ?? {}
+  const _yf = (initialData?.yellowFlags    as Record<string, unknown>) ?? {}
+  const _bb = (initialData?.blueBlackFlags as Record<string, unknown>) ?? {}
+  const _ec = (initialData?.examClinique   as Record<string, unknown>) ?? {}
+  const _t  = (initialData?.tests         as Record<string, unknown>) ?? {}
+  const _sc = (initialData?.scores        as Record<string, unknown>) ?? {}
+  const _ct = (initialData?.contrat       as Record<string, unknown>) ?? {}
+
   const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
@@ -51,28 +68,31 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
     border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
   }
 
-  const [evnPire, setEvnPire] = useState('')
-  const [evnMieux, setEvnMieux] = useState('')
-  const [evnMoy, setEvnMoy] = useState('')
-  const [douleurType, setDouleurType] = useState('')
-  const [nocturne, setNocturne] = useState('')
+  const [evnPire, setEvnPire] = useState((_d.evnPire as string) ?? '')
+  const [evnMieux, setEvnMieux] = useState((_d.evnMieux as string) ?? '')
+  const [evnMoy, setEvnMoy] = useState((_d.evnMoy as string) ?? '')
+  const [douleurType, setDouleurType] = useState((_d.douleurType as string) ?? '')
+  const [nocturne, setNocturne] = useState((_d.nocturne as string) ?? '')
 
   const [rf, setRf] = useState<Record<string, string>>({
     tttMedical: '', antecedents: '', comorbidites: '', imageries: '', traumatisme: '', fievre: '', pertePoids: '', atcdCancer: '',
+    ...(_rf as Record<string, string>),
   })
 
   const [yf, setYf] = useState<Record<string, string>>({
     croyances: '', catastrophisme: '', fearAvoidance: '', coping: '', had: '',
+    ...(_yf as Record<string, string>),
   })
 
-  const [bbf, setBbf] = useState<Record<string, string>>({ at: '', stressTravail: '', conditionsSocio: '' })
+  const [bbf, setBbf] = useState<Record<string, string>>({ at: '', stressTravail: '', conditionsSocio: '', ...(_bb as Record<string, string>) })
 
-  const [morfho, setMorfho] = useState('')
+  const [morfho, setMorfho] = useState((_ec.morfho as string) ?? '')
   const [mob, setMob] = useState<Record<string, { gauche: string; droite: string }>>({
     flexionGenou: { gauche: '', droite: '' },
     extensionGenou: { gauche: '', droite: '' },
     flexionHanche: { gauche: '', droite: '' },
     extensionHanche: { gauche: '', droite: '' },
+    ...(_ec.mobilite as Record<string, { gauche: string; droite: string }> ?? {}),
   })
   const updateMob = (mvt: string, side: 'gauche' | 'droite', v: string) => setMob(p => ({ ...p, [mvt]: { ...p[mvt], [side]: v } }))
 
@@ -81,6 +101,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
     ischios:    { gauche: '', droite: '' },
     abducteurs: { gauche: '', droite: '' },
     adducteurs: { gauche: '', droite: '' },
+    ...(_ec.force as Record<string, { gauche: string; droite: string }> ?? {}),
   })
   const updateForce = (m: string, side: 'gauche' | 'droite', v: string) => setForce(p => ({ ...p, [m]: { ...p[m], [side]: v } }))
 
@@ -88,17 +109,19 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
     lachman: '', tiroir: '', lcl: '', lcm: '',
     thessaly: '', renne: '', noble: '', vague: '', hoffa: '',
     lasegue: '', pkb: '', slump: '',
+    ...(_t as Record<string, string>),
   })
   const updateTest = (k: string, v: string) => setTests(p => ({ ...p, [k]: v }))
 
   const [scores, setScores] = useState<Record<string, string>>({
     koos: '', fakps: '', ikdc: '', aclRsi: '', psfs: '', had: '', dn4: '',
+    ...(_sc as Record<string, string>),
   })
   const updateScore = (k: string, v: string) => setScores(p => ({ ...p, [k]: v }))
 
-  const [objectifs, setObjectifs] = useState('')
-  const [autoReedo, setAutoReedo] = useState('')
-  const [conseils, setConseils] = useState('')
+  const [objectifs, setObjectifs] = useState((_ct.objectifs as string) ?? '')
+  const [autoReedo, setAutoReedo] = useState((_ct.autoReedo as string) ?? '')
+  const [conseils, setConseils] = useState((_ct.conseils as string) ?? '')
 
   useImperativeHandle(ref, () => ({
     getData: () => ({
@@ -108,6 +131,32 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
       tests, scores,
       contrat: { objectifs, autoReedo, conseils },
     }),
+    setData: (data: Record<string, unknown>) => {
+      const d  = (data.douleur        as Record<string, unknown>) ?? {}
+      const rf = (data.redFlags       as Record<string, unknown>) ?? {}
+      const yf = (data.yellowFlags    as Record<string, unknown>) ?? {}
+      const bb = (data.blueBlackFlags as Record<string, unknown>) ?? {}
+      const ec = (data.examClinique   as Record<string, unknown>) ?? {}
+      const t  = (data.tests         as Record<string, unknown>) ?? {}
+      const sc = (data.scores        as Record<string, unknown>) ?? {}
+      const ct = (data.contrat       as Record<string, unknown>) ?? {}
+      if (d.evnPire !== undefined)     setEvnPire(d.evnPire as string)
+      if (d.evnMieux !== undefined)    setEvnMieux(d.evnMieux as string)
+      if (d.evnMoy !== undefined)      setEvnMoy(d.evnMoy as string)
+      if (d.douleurType !== undefined) setDouleurType(d.douleurType as string)
+      if (d.nocturne !== undefined)    setNocturne(d.nocturne as string)
+      if (Object.keys(rf).length > 0)  setRf(p => ({ ...p, ...rf as Record<string, string> }))
+      if (Object.keys(yf).length > 0)  setYf(p => ({ ...p, ...yf as Record<string, string> }))
+      if (Object.keys(bb).length > 0)  setBbf(p => ({ ...p, ...bb as Record<string, string> }))
+      if (ec.morfho !== undefined)     setMorfho(ec.morfho as string)
+      if (ec.mobilite !== undefined)   setMob(ec.mobilite as Record<string, { gauche: string; droite: string }>)
+      if (ec.force !== undefined)      setForce(ec.force as Record<string, { gauche: string; droite: string }>)
+      if (Object.keys(t).length > 0)   setTests(p => ({ ...p, ...t as Record<string, string> }))
+      if (Object.keys(sc).length > 0)  setScores(p => ({ ...p, ...sc as Record<string, string> }))
+      if (ct.objectifs !== undefined)  setObjectifs(ct.objectifs as string)
+      if (ct.autoReedo !== undefined)  setAutoReedo(ct.autoReedo as string)
+      if (ct.conseils !== undefined)   setConseils(ct.conseils as string)
+    },
   }))
 
   const FORCE_LABELS: Record<string, string> = {
@@ -157,7 +206,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
                   {[['tttMedical','TTT médical actuel'],['antecedents','Antécédents'],['comorbidites','Comorbidités'],
                     ['imageries','Imagerie(s)'],['traumatisme','Traumatisme récent'],['fievre','Fièvre inexpliquée'],
                     ['pertePoids','Perte de poids inexpliquée'],['atcdCancer','ATCD de cancer']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={rf[k]} onChange={v => setRf(p => ({ ...p, [k]: v }))} />
+                    <OuiNon key={k} label={lbl} value={rf[k]} onChange={v => setRf(p => ({ ...p, [k]: v }))} detail={rf[k + '_detail']} onDetailChange={v => setRf(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -166,7 +215,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
                 <>
                   {[['croyances','Croyances maladaptatives'],['catastrophisme','Catastrophisme'],
                     ['fearAvoidance','Fear-avoidance'],['coping','Coping passif'],['had','Score HAD pathologique']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
+                    <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} detail={yf[k + '_detail']} onDetailChange={v => setYf(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -174,7 +223,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
               {sec.id === 'blueBlackFlags' && (
                 <>
                   {[['at','Accident de travail'],['stressTravail','Stress au travail'],['conditionsSocio','Conditions socio-économiques précaires']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={bbf[k]} onChange={v => setBbf(p => ({ ...p, [k]: v }))} />
+                    <OuiNon key={k} label={lbl} value={bbf[k]} onChange={v => setBbf(p => ({ ...p, [k]: v }))} detail={bbf[k + '_detail']} onDetailChange={v => setBbf(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}
@@ -189,20 +238,22 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
                     <tbody>
                       {[['flexionGenou','Flexion genou'],['extensionGenou','Extension genou'],['flexionHanche','Flexion hanche'],['extensionHanche','Extension hanche']].map(([k, lbl]) => (
                         <tr key={k}><td>{lbl}</td>
-                          <td><input value={mob[k].gauche} onChange={e => updateMob(k, 'gauche', e.target.value)} placeholder="—" /></td>
-                          <td><input value={mob[k].droite} onChange={e => updateMob(k, 'droite', e.target.value)} placeholder="—" /></td>
+                          <td><AmplitudeInput value={mob[k].gauche} onChange={v => updateMob(k, 'gauche', v)} /></td>
+                          <td><AmplitudeInput value={mob[k].droite} onChange={v => updateMob(k, 'droite', v)} /></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'block', margin: '12px 0 6px' }}>Force musculaire (MRC /5)</label>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', margin: '12px 0 6px' }}>
+                    Force musculaire <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>(échelle MRC)</span><MRCInfo />
+                  </label>
                   <table className="mobility-table">
                     <thead><tr><th>Muscle</th><th>Gauche</th><th>Droite</th></tr></thead>
                     <tbody>
                       {Object.entries(FORCE_LABELS).map(([k, lbl]) => (
                         <tr key={k}><td>{lbl}</td>
-                          <td><input value={force[k].gauche} onChange={e => updateForce(k, 'gauche', e.target.value)} placeholder="—" /></td>
-                          <td><input value={force[k].droite} onChange={e => updateForce(k, 'droite', e.target.value)} placeholder="—" /></td>
+                          <td><ForceInput value={force[k].gauche} onChange={v => updateForce(k, 'gauche', v)} /></td>
+                          <td><ForceInput value={force[k].droite} onChange={v => updateForce(k, 'droite', v)} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -214,15 +265,15 @@ export const BilanGenou = forwardRef<BilanGenouHandle>((_, ref) => {
                 <>
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Tests ligamentaires</p>
                   {[['lachman','Lachman'],['tiroir','Tiroir antérieur/postérieur'],['lcl','Test LCL'],['lcm','Test LCM']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} />
+                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 8px' }}>Tests méniscaux / tendinopathies</p>
                   {[['thessaly','Thessaly'],['renne','Renne'],['noble','Noble'],['vague','Vague rotulien'],['hoffa','Hoffa']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} />
+                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 8px' }}>Mécanosensibilité</p>
                   {[['lasegue','Lasègue'],['pkb','PKB'],['slump','Slump']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} />
+                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
                   ))}
                 </>
               )}

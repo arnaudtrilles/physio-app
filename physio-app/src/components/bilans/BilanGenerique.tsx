@@ -2,43 +2,58 @@ import { useState, useImperativeHandle, forwardRef } from 'react'
 
 export interface BilanGeneriqueHandle {
   getData: () => Record<string, unknown>
+  setData: (d: Record<string, unknown>) => void
 }
 
-function OuiNon({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function OuiNon({ label, value, onChange, detail, onDetailChange }: { label: string; value: string; onChange: (v: string) => void; detail?: string; onDetailChange?: (v: string) => void }) {
   return (
-    <div className="oui-non-group">
-      <span className="oui-non-label">{label}</span>
-      <div className="oui-non-btns">
-        {['Oui', 'Non'].map(v => (
-          <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-        ))}
+    <div className="oui-non-group" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="oui-non-label">{label}</span>
+        <div className="oui-non-btns">
+          {['Oui', 'Non'].map(v => (
+            <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+          ))}
+        </div>
       </div>
+      {value === 'oui' && onDetailChange && (
+        <textarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
+          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
+      )}
     </div>
   )
 }
 
-export const BilanGenerique = forwardRef<BilanGeneriqueHandle>((_, ref) => {
+export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+  const _d  = (initialData?.douleur     as Record<string, unknown>) ?? {}
+  const _rf = (initialData?.redFlags    as Record<string, unknown>) ?? {}
+  const _ec = (initialData?.examClinique as Record<string, unknown>) ?? {}
+  const _t  = (initialData?.tests      as Record<string, unknown>) ?? {}
+  const _sc = (initialData?.scores     as Record<string, unknown>) ?? {}
+  const _ct = (initialData?.contrat    as Record<string, unknown>) ?? {}
+
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.92rem',
     color: 'var(--text-main)', background: 'var(--secondary)',
     border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
   }
 
-  const [evnPire, setEvnPire] = useState('')
-  const [evnMieux, setEvnMieux] = useState('')
-  const [evnMoy, setEvnMoy] = useState('')
-  const [douleurType, setDouleurType] = useState('')
-  const [nocturne, setNocturne] = useState('')
+  const [evnPire, setEvnPire] = useState((_d.evnPire as string) ?? '')
+  const [evnMieux, setEvnMieux] = useState((_d.evnMieux as string) ?? '')
+  const [evnMoy, setEvnMoy] = useState((_d.evnMoy as string) ?? '')
+  const [douleurType, setDouleurType] = useState((_d.douleurType as string) ?? '')
+  const [nocturne, setNocturne] = useState((_d.nocturne as string) ?? '')
 
   const [rf, setRf] = useState<Record<string, string>>({
     tttMedical: '', antecedents: '', comorbidites: '', imageries: '', traumatisme: '', fievre: '', pertePoids: '', atcdCancer: '',
+    ...(_rf as Record<string, string>),
   })
 
-  const [examNotes, setExamNotes] = useState('')
-  const [testsNotes, setTestsNotes] = useState('')
-  const [scoresNotes, setScoresNotes] = useState('')
-  const [objectifs, setObjectifs] = useState('')
-  const [conseils, setConseils] = useState('')
+  const [examNotes, setExamNotes] = useState((_ec.notes as string) ?? '')
+  const [testsNotes, setTestsNotes] = useState((_t.notes as string) ?? '')
+  const [scoresNotes, setScoresNotes] = useState((_sc.notes as string) ?? '')
+  const [objectifs, setObjectifs] = useState((_ct.objectifs as string) ?? '')
+  const [conseils, setConseils] = useState((_ct.conseils as string) ?? '')
 
   useImperativeHandle(ref, () => ({
     getData: () => ({
@@ -49,6 +64,25 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle>((_, ref) => {
       scores: { notes: scoresNotes },
       contrat: { objectifs, conseils },
     }),
+    setData: (data: Record<string, unknown>) => {
+      const d  = (data.douleur      as Record<string, unknown>) ?? {}
+      const rf = (data.redFlags     as Record<string, unknown>) ?? {}
+      const ec = (data.examClinique as Record<string, unknown>) ?? {}
+      const t  = (data.tests       as Record<string, unknown>) ?? {}
+      const sc = (data.scores      as Record<string, unknown>) ?? {}
+      const ct = (data.contrat     as Record<string, unknown>) ?? {}
+      if (d.evnPire !== undefined)     setEvnPire(d.evnPire as string)
+      if (d.evnMieux !== undefined)    setEvnMieux(d.evnMieux as string)
+      if (d.evnMoy !== undefined)      setEvnMoy(d.evnMoy as string)
+      if (d.douleurType !== undefined) setDouleurType(d.douleurType as string)
+      if (d.nocturne !== undefined)    setNocturne(d.nocturne as string)
+      if (Object.keys(rf).length > 0)  setRf(p => ({ ...p, ...rf as Record<string, string> }))
+      if (ec.notes !== undefined)      setExamNotes(ec.notes as string)
+      if (t.notes !== undefined)       setTestsNotes(t.notes as string)
+      if (sc.notes !== undefined)      setScoresNotes(sc.notes as string)
+      if (ct.objectifs !== undefined)  setObjectifs(ct.objectifs as string)
+      if (ct.conseils !== undefined)   setConseils(ct.conseils as string)
+    },
   }))
 
   return (
