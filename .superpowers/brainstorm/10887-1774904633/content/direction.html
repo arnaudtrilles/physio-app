@@ -1,0 +1,114 @@
+<h2>Quelle direction pour l'amélioration ?</h2>
+<p class="subtitle">L'app est déjà belle et fonctionnelle — dans quel sens veux-tu qu'on l'élève ?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #3b82f6 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="background:rgba(255,255,255,0.15); border-radius:12px; padding:12px; backdrop-filter:blur(10px);">
+          <div style="color:white; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; opacity:0.7; margin-bottom:4px;">Bilan #47</div>
+          <div style="color:white; font-size:16px; font-weight:700;">Thomas BERGER</div>
+          <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+            <div style="background:#22c55e; color:white; font-size:10px; padding:3px 8px; border-radius:20px; font-weight:600;">↑ 72%</div>
+            <div style="color:rgba(255,255,255,0.6); font-size:11px;">Épaule Droite</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <div style="flex:1; background:rgba(255,255,255,0.08); border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#60a5fa; font-size:18px; font-weight:800;">3.2</div>
+            <div style="color:rgba(255,255,255,0.5); font-size:10px;">EVN actuel</div>
+          </div>
+          <div style="flex:1; background:rgba(255,255,255,0.08); border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#a78bfa; font-size:18px; font-weight:800;">8</div>
+            <div style="color:rgba(255,255,255,0.5); font-size:10px;">Séances</div>
+          </div>
+          <div style="flex:1; background:rgba(255,255,255,0.08); border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#34d399; font-size:18px; font-weight:800;">OSS</div>
+            <div style="color:rgba(255,255,255,0.5); font-size:10px;">Score</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Premium Dark / Glassmorphism</h3>
+      <p>Effets de verre, gradients profonds, animations fluides. Look d'une app médicale haut de gamme. Micro-interactions sur chaque action, transitions cinématiques.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #f8fafc; padding: 20px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e2e8f0;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="background:white; border-radius:12px; padding:12px; border:1.5px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="font-size:13px; font-weight:700; color:#0f172a;">Thomas BERGER</div>
+            <div style="background:#dcfce7; color:#16a34a; font-size:10px; padding:3px 8px; border-radius:20px; font-weight:600;">Actif</div>
+          </div>
+          <div style="height:4px; background:#f1f5f9; border-radius:4px; overflow:hidden; margin-bottom:4px;">
+            <div style="width:72%; height:100%; background:linear-gradient(90deg, #3b82f6, #22c55e); border-radius:4px;"></div>
+          </div>
+          <div style="font-size:10px; color:#64748b;">Amélioration : 72% — Épaule Droite</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <div style="flex:1; background:white; border:1px solid #e2e8f0; border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#1e3a8a; font-size:18px; font-weight:800;">3.2</div>
+            <div style="color:#94a3b8; font-size:10px;">EVN</div>
+          </div>
+          <div style="flex:1; background:white; border:1px solid #e2e8f0; border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#1e3a8a; font-size:18px; font-weight:800;">8</div>
+            <div style="color:#94a3b8; font-size:10px;">Séances</div>
+          </div>
+          <div style="flex:1; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#1d4ed8; font-size:14px; font-weight:800;">OSS</div>
+            <div style="color:#64748b; font-size:10px;">Score</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Clean Medical / Light Mode</h3>
+      <p>Design clinique, clair et professionnel. Blanc dominant, bleu médical, typographie nette. Priorité à la lisibilité en contexte de consultation.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #0f172a, #1e1b4b); padding: 20px; border-radius: 8px 8px 0 0;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="background:rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.4); border-radius:12px; padding:12px; backdrop-filter:blur(20px);">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <div style="color:rgba(255,255,255,0.5); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:1px;">Patient</div>
+              <div style="color:white; font-size:15px; font-weight:700; margin-top:2px;">Thomas BERGER</div>
+            </div>
+            <div style="width:40px; height:40px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:10px; display:flex; align-items:center; justify-content:center; color:white; font-weight:800; font-size:14px;">TB</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+            <div style="flex:1; height:3px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+              <div style="width:72%; height:100%; background:linear-gradient(90deg,#6366f1,#06b6d4); border-radius:3px;"></div>
+            </div>
+            <div style="color:#06b6d4; font-size:12px; font-weight:700;">72%</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <div style="flex:1; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#a5b4fc; font-size:18px; font-weight:800;">3.2</div>
+            <div style="color:rgba(255,255,255,0.4); font-size:10px;">EVN</div>
+          </div>
+          <div style="flex:1; background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.3); border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#67e8f9; font-size:18px; font-weight:800;">8</div>
+            <div style="color:rgba(255,255,255,0.4); font-size:10px;">Séances</div>
+          </div>
+          <div style="flex:1; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:8px; text-align:center;">
+            <div style="color:#d8b4fe; font-size:14px; font-weight:800;">OSS</div>
+            <div style="color:rgba(255,255,255,0.4); font-size:10px;">Score</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Neon Dark / Cyberpunk Medical</h3>
+      <p>Violet-indigo-cyan. Dark mode total avec accents néon. Ultra moderne, tech-forward. Pour kiné qui veut se démarquer avec une app unique en France.</p>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,290 @@
+<h2>Module Analyse IA — Design</h2>
+<p class="subtitle">Interface affichée après validation d'un bilan complet. Voici la maquette.</p>
+
+<style>
+.phone-frame {
+  width: 390px;
+  margin: 0 auto;
+  background: #f8fafc;
+  border-radius: 24px;
+  border: 2px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+.phone-header {
+  background: white;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.phone-header-back {
+  width: 32px; height: 32px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #64748b; font-size: 16px; cursor: pointer;
+}
+.phone-header-title { flex: 1; }
+.phone-header-title h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
+.phone-header-title p { margin: 0; font-size: 11px; color: #64748b; }
+.phone-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.ai-hero {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ai-hero-icon {
+  width: 52px; height: 52px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.ai-hero-text h4 { margin: 0 0 4px; color: white; font-size: 15px; font-weight: 700; }
+.ai-hero-text p { margin: 0; color: rgba(255,255,255,0.75); font-size: 12px; line-height: 1.4; }
+
+.section-card {
+  background: white;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  overflow: hidden;
+}
+.section-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.section-icon {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.section-header h4 { margin: 0; font-size: 13px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
+.section-body { padding: 14px 16px; }
+
+/* Diagnostic principal */
+.diagnostic-main {
+  background: #eff6ff;
+  border-radius: 10px;
+  padding: 14px;
+  border: 1.5px solid #bfdbfe;
+}
+.diagnostic-main .label { font-size: 10px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.diagnostic-main .value { font-size: 15px; font-weight: 700; color: #1e3a8a; margin: 0 0 8px; }
+.diagnostic-main .desc { font-size: 12px; color: #3b82f6; line-height: 1.5; margin: 0; }
+
+/* Hypothèses */
+.hypo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+.hypo-item:last-child { border-bottom: none; padding-bottom: 0; }
+.hypo-rank {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+  flex-shrink: 0;
+}
+.hypo-rank.h1 { background: #dcfce7; color: #16a34a; }
+.hypo-rank.h2 { background: #fef9c3; color: #ca8a04; }
+.hypo-rank.h3 { background: #fee2e2; color: #dc2626; }
+.hypo-content { flex: 1; }
+.hypo-content .title { font-size: 13px; font-weight: 600; color: #0f172a; margin: 0 0 3px; }
+.hypo-content .prob { font-size: 11px; color: #64748b; margin: 0 0 5px; }
+.hypo-bar-wrap { height: 4px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.hypo-bar { height: 100%; border-radius: 4px; }
+.h1 .hypo-bar { background: #22c55e; width: 78%; }
+.h2 .hypo-bar { background: #eab308; width: 55%; }
+.h3 .hypo-bar { background: #ef4444; width: 32%; }
+.hypo-bar-h1 { background: #22c55e; width: 78%; height: 100%; border-radius: 4px; }
+.hypo-bar-h2 { background: #eab308; width: 55%; height: 100%; border-radius: 4px; }
+.hypo-bar-h3 { background: #ef4444; width: 32%; height: 100%; border-radius: 4px; }
+
+/* Plan de traitement */
+.treatment-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+.treatment-item:last-child { border-bottom: none; padding-bottom: 0; }
+.treatment-num {
+  width: 22px; height: 22px;
+  background: #1e3a8a;
+  color: white;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.treatment-content .title { font-size: 13px; font-weight: 600; color: #0f172a; margin: 0 0 2px; }
+.treatment-content .detail { font-size: 11px; color: #64748b; margin: 0; line-height: 1.4; }
+
+.ai-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.ai-footer p { margin: 0; font-size: 10px; color: #94a3b8; line-height: 1.4; }
+.ai-footer .dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; flex-shrink: 0; }
+
+.action-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+</style>
+
+<div class="phone-frame">
+  <div class="phone-header">
+    <div class="phone-header-back">←</div>
+    <div class="phone-header-title">
+      <h3>Analyse IA</h3>
+      <p>Bilan Entorse de Cheville · Thomas BERGER</p>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:700;color:#1d4ed8;">Claude</div>
+  </div>
+
+  <div class="phone-body">
+
+    <!-- Hero -->
+    <div class="ai-hero">
+      <div class="ai-hero-icon">🧠</div>
+      <div class="ai-hero-text">
+        <h4>Analyse générée par IA</h4>
+        <p>Basée sur l'ensemble des données du bilan. À titre indicatif — le diagnostic clinique reste du ressort du thérapeute.</p>
+      </div>
+    </div>
+
+    <!-- Diagnostic principal -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-icon" style="background:#eff6ff;">🎯</div>
+        <h4 style="color:#1e3a8a;">Diagnostic principal</h4>
+      </div>
+      <div class="section-body">
+        <div class="diagnostic-main">
+          <div class="label">Hypothèse retenue</div>
+          <div class="value">Entorse latérale de cheville Grade II</div>
+          <p class="desc">Atteinte partielle du ligament talo-fibulaire antérieur avec probable atteinte du ligament calcanéo-fibulaire, sur fond de laxité chronique (antécédents d'entorses ipsilatérales).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 hypothèses cliniques -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-icon" style="background:#f0fdf4;">📊</div>
+        <h4 style="color:#166534;">Hypothèses cliniques</h4>
+      </div>
+      <div class="section-body">
+
+        <div class="hypo-item">
+          <div class="hypo-rank h1">H1</div>
+          <div class="hypo-content">
+            <div class="title">Entorse latérale Grade II (LTFA + LCF)</div>
+            <div class="prob">Probabilité estimée : 78%</div>
+            <div class="hypo-bar-wrap"><div class="hypo-bar-h1"></div></div>
+          </div>
+        </div>
+
+        <div class="hypo-item">
+          <div class="hypo-rank h2">H2</div>
+          <div class="hypo-content">
+            <div class="title">Fracture de fatigue 5e métatarse</div>
+            <div class="prob">Probabilité estimée : 55% — à écarter par imagerie</div>
+            <div class="hypo-bar-wrap"><div class="hypo-bar-h2"></div></div>
+          </div>
+        </div>
+
+        <div class="hypo-item">
+          <div class="hypo-rank h3">H3</div>
+          <div class="hypo-content">
+            <div class="title">Instabilité chronique de cheville</div>
+            <div class="prob">Probabilité estimée : 32%</div>
+            <div class="hypo-bar-wrap"><div class="hypo-bar-h3"></div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Plan de traitement -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-icon" style="background:#fef3c7;">💊</div>
+        <h4 style="color:#92400e;">Prise en charge suggérée</h4>
+      </div>
+      <div class="section-body">
+        <div class="treatment-item">
+          <div class="treatment-num">1</div>
+          <div class="treatment-content">
+            <div class="title">Phase aiguë J1–J5 : PRICE + décharge partielle</div>
+            <div class="detail">Cryothérapie 15 min/3×j, contention semi-rigide, travail de proprioception en décharge, mobilisation douce en talonnement.</div>
+          </div>
+        </div>
+        <div class="treatment-item">
+          <div class="treatment-num">2</div>
+          <div class="treatment-content">
+            <div class="title">Phase subaiguë J5–J21 : Rééducation fonctionnelle</div>
+            <div class="detail">Renforcement fibulaires, proprioception en charge progressive, travail du contrôle neuro-musculaire (plateau de Freeman).</div>
+          </div>
+        </div>
+        <div class="treatment-item">
+          <div class="treatment-num">3</div>
+          <div class="treatment-content">
+            <div class="title">Phase de retour au sport J21–J42</div>
+            <div class="detail">Plyométrie progressive, course en ligne puis courbes, exercices spécifiques sport (changements de direction, réception de sauts).</div>
+          </div>
+        </div>
+        <div class="treatment-item">
+          <div class="treatment-num">4</div>
+          <div class="treatment-content">
+            <div class="title">Bilan imagerie recommandé si H2 non écartée</div>
+            <div class="detail">Radiographie en mise en charge (critères d'Ottawa positifs sur naviculaire et base 5e métatarse).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="ai-footer">
+      <div class="dot"></div>
+      <p>Analyse générée par Claude (Anthropic) à partir des données saisies. Cette analyse ne remplace pas le jugement clinique du professionnel de santé.</p>
+    </div>
+
+    <!-- CTA -->
+    <button class="action-btn">
+      📄 Exporter le bilan + analyse IA
+    </button>
+
+  </div>
+</div>
