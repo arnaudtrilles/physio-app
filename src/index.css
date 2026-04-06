@@ -92,11 +92,13 @@ input, textarea, select {
   width: 100%;
   max-width: 430px; /* iPhone Pro Max approximate width */
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh; /* dynamic viewport — accounts for mobile browser chrome */
   background-color: var(--surface);
   box-shadow: var(--shadow-2xl); /* Make it pop on desktop */
   padding: 2rem 1.5rem;
   position: relative;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }

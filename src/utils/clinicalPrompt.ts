@@ -132,7 +132,7 @@ ${therapistSection}
 
 INSTRUCTIONS STRICTES :
 1. Les 3 hypothèses doivent avoir des probabilités RÉELLES calculées à partir des données cliniques (EVN, tests, scores, flags). Les probabilités ne doivent PAS être fixes (pas de 75/45/20 par défaut). Elles doivent refléter la réalité clinique du cas. La somme des 3 probabilités DOIT être exactement égale à 100 (ex: 65+25+10=100, ou 50+30+20=100).
-2. La prise en charge doit être SPÉCIFIQUE à ce patient : cite les techniques précises que le thérapeute maîtrise et les équipements dont il dispose. Ne propose PAS de techniques ou appareils que le thérapeute n'a pas listés. Si aucun profil thérapeute n'est fourni, reste générique.
+2. La prise en charge doit être SPÉCIFIQUE à ce patient : cite les techniques précises que le thérapeute maîtrise et les équipements dont il dispose. Ne propose PAS de techniques ou appareils que le thérapeute n'a pas listés. Si aucun profil thérapeute n'est fourni, reste générique. Chaque phase doit contenir 3 à 5 "points" COURTS et ACTIONNABLES (12-18 mots max par point, style télégraphique clinique, pas de phrases longues). Chaque point = une action, une technique ou un exercice concret avec sa dose/fréquence quand pertinent.
 3. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
 
 {
@@ -146,9 +146,9 @@ INSTRUCTIONS STRICTES :
     { "rang": 3, "titre": "Hypothèse H3 spécifique", "probabilite": <calculé>, "justification": "Justification basée sur les données cliniques concrètes" }
   ],
   "priseEnCharge": [
-    { "phase": "Phase aiguë (J1–J7)", "titre": "Titre spécifique", "detail": "Techniques précises, exercices nommés, fréquence, conseils posturaux adaptés au profil" },
-    { "phase": "Phase subaiguë (J8–J21)", "titre": "Titre spécifique", "detail": "Techniques précises, progression des exercices, travail fonctionnel ciblé" },
-    { "phase": "Phase fonctionnelle (J22–J42)", "titre": "Titre spécifique", "detail": "Réathlétisation, retour activité, prévention rechute adaptée à la profession et sport du patient" }
+    { "phase": "Phase aiguë (J1–J7)", "titre": "Titre spécifique", "points": ["Action concise 1 (technique + fréquence)", "Action concise 2", "Action concise 3", "Action concise 4"] },
+    { "phase": "Phase subaiguë (J8–J21)", "titre": "Titre spécifique", "points": ["Action concise 1", "Action concise 2", "Action concise 3", "Action concise 4"] },
+    { "phase": "Phase fonctionnelle (J22–J42)", "titre": "Titre spécifique", "points": ["Action concise 1", "Action concise 2", "Action concise 3", "Action concise 4"] }
   ],
   "alertes": ["Alerte uniquement si red flag critique nécessitant orientation urgente, sinon tableau vide"]
 }`
@@ -298,6 +298,25 @@ export function parseAnalyseIA(raw: string): AnalyseIA | null {
       }
     }
 
+    // Normaliser la prise en charge : garantir que chaque phase a `points` ET `detail`
+    // (points = liste condensée pour l'affichage ; detail = texte concaténé pour PDF/export)
+    if (Array.isArray(parsed.priseEnCharge)) {
+      parsed.priseEnCharge = parsed.priseEnCharge.map(p => {
+        const raw = p as { phase?: string; titre?: string; detail?: string; points?: unknown }
+        let points: string[] = []
+        if (Array.isArray(raw.points)) {
+          points = raw.points.map(x => String(x).trim()).filter(Boolean)
+        } else if (typeof raw.detail === 'string' && raw.detail.trim()) {
+          // Legacy : découper le paragraphe en bullets
+          points = raw.detail
+            .split(/(?:\s*[•·]\s*|\.\s+(?=[A-ZÀ-Ÿ])|;\s+|\n+-?\s*)/)
+            .map(s => s.trim().replace(/^[-–•·]\s*/, '').replace(/\.$/, ''))
+            .filter(s => s.length > 2)
+        }
+        const detail = points.length > 0 ? points.join(' • ') : (raw.detail ?? '')
+        return { phase: raw.phase ?? '', titre: raw.titre ?? '', detail, points }
+      })
+    }
     return { ...parsed, generatedAt: new Date().toISOString(), alertes: parsed.alertes ?? [] }
   } catch {
     return null

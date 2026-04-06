@@ -19,8 +19,12 @@ import { BilanLombaire } from './components/bilans/BilanLombaire'
 import type { BilanLombaireHandle } from './components/bilans/BilanLombaire'
 import { BilanGenerique } from './components/bilans/BilanGenerique'
 import type { BilanGeneriqueHandle } from './components/bilans/BilanGenerique'
+import { BilanGeriatrique } from './components/bilans/BilanGeriatrique'
+import type { BilanGeriatriqueHandle } from './components/bilans/BilanGeriatrique'
 import { BilanIntermediaire } from './components/bilans/BilanIntermediaire'
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
+import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
+import type { BilanIntermediaireGeriatriqueHandle } from './components/bilans/BilanIntermediaireGeriatrique'
 import { BilanAnalyseIA } from './components/BilanAnalyseIA'
 import { BilanNoteIntermediaire } from './components/BilanNoteIntermediaire'
 import { BilanEvolutionIA } from './components/BilanEvolutionIA'
@@ -30,13 +34,18 @@ import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter
 import { buildPDFReportPrompt, buildIntermediairePrompt, parseAnalyseIAIntermediaire } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import { callGemini } from './utils/geminiClient'
-import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ProfileData, AnalyseIA, AnalyseIAIntermediaire, FicheExercice, BilanDocument } from './types'
+import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, AnalyseIAIntermediaire, FicheExercice, BilanDocument, PatientDocument } from './types'
+import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
 import { FicheExerciceIA } from './components/FicheExerciceIA'
+import { DocumentMasker } from './components/DocumentMasker'
+import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
 import { PDFPreview } from './components/PDFPreview'
 import { DashboardStats } from './components/DashboardStats'
 import { PatientTimeline } from './components/PatientTimeline'
+import { DossierDocuments } from './components/DossierDocuments'
+import { BilanResumeModal } from './components/BilanResumeModal'
 import { SmartObjectifs } from './components/SmartObjectifs'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import './App.css'
@@ -72,6 +81,8 @@ function App() {
   const [dbIntermediaires, setDbIntermediaires] = useLocalStorage<BilanIntermediaireRecord[]>('physio_intermediaires_db', [])
   const [dbNotes, setDbNotes] = useLocalStorage<NoteSeanceRecord[]>('physio_notes_seance_db', [])
   const [dbObjectifs, setDbObjectifs] = useLocalStorage<SmartObjectif[]>('physio_objectifs_db', [])
+  const [dbExerciceBank, setDbExerciceBank] = useLocalStorage<ExerciceBankEntry[]>('physio_exercice_bank', [])
+  const [dbPatientDocs, setDbPatientDocs] = useLocalStorage<PatientDocument[]>('physio_patient_docs', [])
   const isOnline = useOnlineStatus()
   const [profile, setProfile] = useLocalStorage<ProfileData>('physio_profile', DEFAULT_PROFILE)
   const [apiKey, setApiKey] = useLocalStorage<string>('physio_api_key', '')
@@ -81,8 +92,13 @@ function App() {
   const [currentAnalyseIA, setCurrentAnalyseIA] = useState<AnalyseIA | null>(null)
   const [currentBilanDataOverride, setCurrentBilanDataOverride] = useState<Record<string, unknown> | null>(null)
   const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
-  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database'>('general_info')
+  const [ficheExerciceContextOverride, setFicheExerciceContextOverride] = useState<{ notesLibres: string; bilanData: Record<string, unknown>; zone: string } | null>(null)
+  const [ficheExerciceSource, setFicheExerciceSource] = useState<{ type: 'note' | 'intermediaire'; id: number } | null>(null)
+  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database' | 'silhouette'>('general_info')
   const [deletingBilanId, setDeletingBilanId] = useState<number | null>(null)
+  const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
+  const [labelDraft, setLabelDraft] = useState('')
+  const [resumeBilan, setResumeBilan] = useState<{ record: BilanRecord; bilanNum: number } | null>(null)
   const [editingProfile, setEditingProfile] = useState(false)
   const [testingApiKey, setTestingApiKey] = useState(false)
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'ok' | 'error'>('idle')
@@ -91,6 +107,7 @@ function App() {
   const [patientMode, setPatientMode] = useState<'new' | 'existing'>('new')
   const [silhouetteData, setSilhouetteData] = useState<Record<string, unknown>>({})
   const [bilanDocuments, setBilanDocuments] = useState<BilanDocument[]>([])
+  const [maskingQueue, setMaskingQueue] = useState<Array<{ dataUrl: string; name: string; mimeType: string }>>([])
   const [selectedBodyZone, setSelectedBodyZone] = useState<string | null>(null)
   const [showZonePopup, setShowZonePopup] = useState(false)
   const [currentBilanIntermediaireId, setCurrentBilanIntermediaireId] = useState<number | null>(null)
@@ -125,7 +142,9 @@ function App() {
   const bilanCervicalRef = useRef<BilanCervicalHandle>(null)
   const bilanLombaireRef = useRef<BilanLombaireHandle>(null)
   const bilanGeneriqueRef     = useRef<BilanGeneriqueHandle>(null)
+  const bilanGeriatriqueRef   = useRef<BilanGeriatriqueHandle>(null)
   const bilanIntermediaireRef = useRef<BilanIntermediaireHandle>(null)
+  const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
   const photoInputRef         = useRef<HTMLInputElement>(null)
   const importDataRef    = useRef<HTMLInputElement>(null)
@@ -244,7 +263,11 @@ function App() {
     dbIntermediaires.filter(r => r.patientKey === key).sort((a, b) => a.id - b.id)
 
   const handleSaveIntermediaire = (status: 'incomplet' | 'complet') => {
-    const data = bilanIntermediaireRef.current?.getData() ?? {}
+    const isGeriatric = getBilanType(bilanIntermediaireZone ?? '') === 'geriatrique'
+    const data = (isGeriatric
+      ? bilanIntermediaireGeriatriqueRef.current?.getData()
+      : bilanIntermediaireRef.current?.getData()
+    ) ?? {}
     const now = new Date().toLocaleDateString('fr-FR')
     const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
     const avatarBg = db.find(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey)?.avatarBg
@@ -343,11 +366,43 @@ function App() {
 
   const improvDelta = (prev: number, curr: number) => Math.round(((prev - curr) / prev) * 100)
 
+  // Parse dd/mm/yyyy → Date (fallback: id-based ordering handled separately)
+  const parseFrDate = (raw: string | undefined): number => {
+    if (!raw) return 0
+    const parts = raw.split('/')
+    if (parts.length !== 3) return 0
+    const [d, m, y] = parts.map(Number)
+    const t = new Date(y, m - 1, d).getTime()
+    return isNaN(t) ? 0 : t
+  }
+
   const patientGeneralScore = (key: string): number | null => {
-    const bilans = getPatientBilans(key)
-    if (bilans.length < 2) return null
-    const first = bilans[0].evn, last = bilans[bilans.length - 1].evn
-    if (first == null || last == null) return null
+    // Collecte chronologique de TOUS les points EVN/EVA du patient
+    const points: Array<{ time: number; id: number; evn: number }> = []
+
+    // Bilans initiaux
+    for (const b of getPatientBilans(key)) {
+      if (b.evn != null) points.push({ time: parseFrDate(b.dateBilan), id: b.id, evn: b.evn })
+    }
+    // Bilans intermédiaires (EVN dans troncCommun.evn.pireActuel)
+    for (const r of dbIntermediaires.filter(r => r.patientKey === key)) {
+      const tc = (r.data as Record<string, Record<string, Record<string, unknown>>> | undefined)?.troncCommun
+      const v = tc?.evn?.pireActuel
+      const n = typeof v === 'number' ? v : typeof v === 'string' && v !== '' ? Number(v) : NaN
+      if (!isNaN(n)) points.push({ time: parseFrDate(r.dateBilan), id: r.id, evn: n })
+    }
+    // Notes de séance (EVA)
+    for (const n of dbNotes.filter(r => r.patientKey === key)) {
+      const v = n.data?.eva
+      const num = typeof v === 'string' && v !== '' ? Number(v) : typeof v === 'number' ? v : NaN
+      if (!isNaN(num)) points.push({ time: parseFrDate(n.dateSeance), id: n.id, evn: num })
+    }
+
+    if (points.length < 2) return null
+    // Tri chronologique (par date, puis id pour départager en cas d'égalité)
+    points.sort((a, b) => a.time - b.time || a.id - b.id)
+    const first = points[0].evn, last = points[points.length - 1].evn
+    if (first === 0) return null // évite division par zéro
     return improvDelta(first, last)
   }
 
@@ -369,6 +424,7 @@ function App() {
       case 'hanche':   return bilanHancheRef.current?.getData() ?? null
       case 'cervical': return bilanCervicalRef.current?.getData() ?? null
       case 'lombaire': return bilanLombaireRef.current?.getData() ?? null
+      case 'geriatrique': return bilanGeriatriqueRef.current?.getData() ?? null
       default:         return bilanGeneriqueRef.current?.getData() ?? null
     }
   }
@@ -606,6 +662,22 @@ STRUCTURE (n'inclure que si données présentes) :
     }
   }
 
+  const handleExportExerciceBank = () => {
+    if (dbExerciceBank.length === 0) {
+      showToast('Aucun exercice dans la banque', 'info')
+      return
+    }
+    const csv = exportBankAsCSV(dbExerciceBank)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `banque-exercices-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    showToast(`${dbExerciceBank.length} exercices exportés`, 'success')
+  }
+
   const handleExportData = () => {
     const payload = JSON.stringify({ db, profile, apiKey, exportedAt: new Date().toISOString() }, null, 2)
     const blob = new Blob([payload], { type: 'application/json' })
@@ -780,8 +852,15 @@ STRUCTURE (n'inclure que si données présentes) :
                               </div>
                             </div>
                             {score !== null
-                              ? <span style={{ fontWeight: 700, fontSize: '0.88rem', color: scoreColor, background: scoreBg, padding: '0.25rem 0.65rem', borderRadius: 'var(--radius-full)', flexShrink: 0 }}>
-                                  {score > 0 ? '+' : ''}{score}%
+                              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: '0.82rem', color: scoreColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
+                                  {score > 0 ? (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                  ) : score < 0 ? (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                  ) : (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                  )}
+                                  {Math.abs(score)}%
                                 </span>
                               : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                             }
@@ -823,7 +902,7 @@ STRUCTURE (n'inclure que si données présentes) :
                         const ZONE_LABELS: Record<string, string> = {
                           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou',
                           hanche: 'Hanche', cervical: 'Rachis Cervical',
-                          lombaire: 'Rachis Lombaire', generique: 'Autres bilans',
+                          lombaire: 'Rachis Lombaire', generique: 'Autres bilans', geriatrique: 'Gériatrie',
                         }
                         const groupMap = new Map<string, typeof bilans>()
                         bilans.forEach(r => {
@@ -843,20 +922,28 @@ STRUCTURE (n'inclure que si données présentes) :
                             {zoneScores.map(item => {
                               if (!item) return null
                               const { zoneType, first, last, score } = item
-                              const color  = score > 0 ? '#16a34a' : score < 0 ? '#dc2626' : '#94a3b8'
-                              const bg     = score > 0 ? '#f0fdf4' : score < 0 ? '#fef2f2' : '#f1f5f9'
-                              const border = score > 0 ? '#86efac' : score < 0 ? '#fca5a5' : '#e2e8f0'
+                              const color = score > 0 ? '#16a34a' : score < 0 ? '#dc2626' : '#64748b'
+                              const border = score > 0 ? '#86efac' : score < 0 ? '#fca5a5' : 'var(--border-color)'
                               return (
-                                <div key={zoneType} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 'var(--radius-lg)', padding: '0.85rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div key={zoneType} style={{ background: 'var(--surface)', border: `1px solid ${border}`, borderRadius: 'var(--radius-lg)', padding: '0.7rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                      Score d'amélioration — {ZONE_LABELS[zoneType] ?? zoneType}
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.15rem', letterSpacing: '0.02em' }}>
+                                      Amélioration globale · {ZONE_LABELS[zoneType] ?? zoneType}
                                     </div>
-                                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                                      EVN initial : <strong>{first}</strong> → actuel : <strong>{last}</strong>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                      EVN <strong style={{ color: 'var(--text-main)' }}>{first}</strong> → <strong style={{ color: 'var(--text-main)' }}>{last}</strong>
                                     </div>
                                   </div>
-                                  <div style={{ fontWeight: 800, fontSize: '1.75rem', color }}>{score > 0 ? '+' : ''}{score}%</div>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: '1.05rem', color, letterSpacing: '-0.01em' }}>
+                                    {score > 0 ? (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                    ) : score < 0 ? (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                    ) : (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    )}
+                                    {Math.abs(score)}%
+                                  </div>
                                 </div>
                               )
                             })}
@@ -873,6 +960,7 @@ STRUCTURE (n'inclure que si données présentes) :
                             cervical: 'Rachis Cervical',
                             lombaire: 'Rachis Lombaire',
                             generique: 'Autres bilans',
+                            geriatrique: 'Gériatrie',
                           }
                           const groupMap = new Map<string, typeof bilans>()
                           bilans.forEach(record => {
@@ -906,8 +994,39 @@ STRUCTURE (n'inclure que si données présentes) :
                             <div key={record.id} style={{ background: 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem', flexWrap: 'wrap' }}>
                                     <span style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem' }}>Bilan N°{index + 1}</span>
+                                    {editingLabelBilanId === record.id ? (
+                                      <input
+                                        autoFocus
+                                        value={labelDraft}
+                                        onChange={e => setLabelDraft(e.target.value)}
+                                        onBlur={() => {
+                                          const trimmed = labelDraft.trim()
+                                          setDb(prev => prev.map(r => r.id === record.id ? { ...r, customLabel: trimmed || undefined } : r))
+                                          setEditingLabelBilanId(null)
+                                        }}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter') { (e.target as HTMLInputElement).blur() }
+                                          if (e.key === 'Escape') { setEditingLabelBilanId(null) }
+                                        }}
+                                        placeholder="Ex : tendinopathie coiffe des rotateurs"
+                                        style={{ flex: 1, minWidth: 140, fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white' }}
+                                      />
+                                    ) : (
+                                      <span
+                                        onClick={() => { setEditingLabelBilanId(record.id); setLabelDraft(record.customLabel ?? '') }}
+                                        title={record.customLabel ? 'Cliquer pour modifier' : 'Cliquer pour ajouter un titre'}
+                                        style={{ fontSize: '0.85rem', fontWeight: 500, color: record.customLabel ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: record.customLabel ? 'normal' : 'italic', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                      >
+                                        {record.customLabel ? `: ${record.customLabel}` : (
+                                          <>
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                            ajouter un titre
+                                          </>
+                                        )}
+                                      </span>
+                                    )}
                                     {!incomplet && record.analyseIA && (
                                       <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>IA</span>
                                     )}
@@ -919,8 +1038,15 @@ STRUCTURE (n'inclure que si données présentes) :
                                 {incomplet ? (
                                   <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#991b1b', flexShrink: 0, paddingTop: 2 }}>Incomplet</span>
                                 ) : delta !== null ? (
-                                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: dColor, background: dBg, padding: '0.3rem 0.7rem', borderRadius: 'var(--radius-full)', flexShrink: 0 }}>
-                                    {delta > 0 ? '▲' : delta < 0 ? '▼' : '='} {Math.abs(delta)}%
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: '0.82rem', color: dColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
+                                    {delta > 0 ? (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                    ) : delta < 0 ? (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                    ) : (
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    )}
+                                    {Math.abs(delta)}%
                                   </span>
                                 ) : null}
                               </div>
@@ -995,8 +1121,14 @@ STRUCTURE (n'inclure que si données présentes) :
                                     </svg>
                                     Fiche d'exercices
                                   </button>
-                                  {/* Rangée 3 : Modifier / Supprimer — liens discrets */}
+                                  {/* Rangée 3 : Résumé / Modifier / Supprimer — liens discrets */}
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
+                                    <button
+                                      onClick={() => setResumeBilan({ record, bilanNum: index + 1 })}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                      Résumé
+                                    </button>
                                     <button
                                       onClick={() => {
                                         setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
@@ -1058,8 +1190,15 @@ STRUCTURE (n'inclure que si données présentes) :
                                             <div style={{ fontSize: '0.78rem', color: '#c2410c' }}>{rec.dateBilan}</div>
                                           </div>
                                           {score !== null && (
-                                            <span style={{ fontWeight: 700, fontSize: '0.85rem', color: sColor, background: sBg, padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-full)', flexShrink: 0 }}>
-                                              {score > 0 ? '▲' : score < 0 ? '▼' : '='} {Math.abs(score)}%
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: '0.8rem', color: sColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
+                                              {score > 0 ? (
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                              ) : score < 0 ? (
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                              ) : (
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                              )}
+                                              {Math.abs(score)}%
                                             </span>
                                           )}
                                         </div>
@@ -1121,6 +1260,24 @@ STRUCTURE (n'inclure que si données présentes) :
                                                 style={{ width: '100%', padding: '0.55rem 1rem', borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                                                 onClick={() => {
                                                   setFormData(prev => ({ ...prev, nom: rec.nom, prenom: rec.prenom, dateNaissance: rec.dateNaissance }))
+                                                  // Build context from intermediaire + historique
+                                                  const patKey = rec.patientKey
+                                                  const bt = rec.bilanType ?? getBilanType(rec.zone ?? '')
+                                                  const allNotes = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
+                                                  const allBilans = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+                                                  const historiqueStr = [
+                                                    ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
+                                                    ...allNotes.map(n => `Séance n°${n.numSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — ${n.data.interventions.join(', ')}`),
+                                                  ].join('\n')
+                                                  const tc = (rec.data?.troncCommun as Record<string, unknown>) ?? {}
+                                                  const evnData = (tc.evn as Record<string, unknown>) ?? {}
+                                                  setFicheExerciceContextOverride({
+                                                    zone: rec.zone ?? '',
+                                                    bilanData: rec.data ?? {},
+                                                    notesLibres: `BILAN INTERMÉDIAIRE — EVN actuelle: ${evnData.pireActuel ?? '?'}/10 (initiale: ${evnData.pireInitial ?? '?'}/10)\nHistorique du patient:\n${historiqueStr}`,
+                                                  })
+                                                  setFicheExerciceSource({ type: 'intermediaire', id: rec.id })
+                                                  setSelectedBodyZone(rec.zone ?? null)
                                                   setFicheBackStep('database')
                                                   setStep('fiche_exercice')
                                                 }}>
@@ -1187,7 +1344,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                 <div style={{ flex: 1, height: 1, background: '#c4b5fd' }} />
                               </div>
                               {notes.map(note => {
-                                const ZONE_LABELS: Record<string, string> = { epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche', cervical: 'Cervical', lombaire: 'Lombaire', generique: 'Général' }
+                                const ZONE_LABELS: Record<string, string> = { epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche', cervical: 'Cervical', lombaire: 'Lombaire', generique: 'Général', geriatrique: 'Gériatrie' }
                                 const zt = note.bilanType ?? getBilanType(note.zone ?? '')
                                 return (
                                   <div key={note.id} style={{ background: 'var(--surface)', borderRadius: 12, border: '1.5px solid #ddd6fe', padding: '0.75rem', boxShadow: '0 1px 3px rgba(109,40,217,0.06)' }}>
@@ -1288,6 +1445,23 @@ STRUCTURE (n'inclure que si données présentes) :
                                           style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                                           onClick={() => {
                                             setFormData(prev => ({ ...prev, nom: note.nom, prenom: note.prenom, dateNaissance: note.dateNaissance }))
+                                            // Build context from note de séance + historique
+                                            const patKey = note.patientKey
+                                            const bt = note.bilanType ?? getBilanType(note.zone ?? '')
+                                            const allNotesForZone = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt).sort((a, b) => a.id - b.id)
+                                            const allBilansForZone = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+                                            const allIntersForZone = dbIntermediaires.filter(r => r.patientKey === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+                                            const historiqueStr = [
+                                              ...allBilansForZone.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
+                                              ...allIntersForZone.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>)?.evn as Record<string, unknown> ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${tc.pireActuel ?? '?'}/10` }),
+                                              ...allNotesForZone.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — ${n.data.interventions.join(', ')}`),
+                                            ].join('\n')
+                                            setFicheExerciceContextOverride({
+                                              zone: note.zone ?? '',
+                                              bilanData: {},
+                                              notesLibres: `SÉANCE n°${note.numSeance} du ${note.dateSeance}\nEVA: ${note.data.eva}/10 — ${note.data.evolution}\nInterventions: ${note.data.interventions.join(', ')}\nDosage: ${note.data.detailDosage}\nTolérance: ${note.data.tolerance} ${note.data.toleranceDetail}\nRessenti: ${note.data.noteSubjective}\n\nHistorique complet du patient:\n${historiqueStr}`,
+                                            })
+                                            setFicheExerciceSource({ type: 'note', id: note.id })
                                             setSelectedBodyZone(note.zone ?? null)
                                             setFicheBackStep('database')
                                             setStep('fiche_exercice')
@@ -1394,6 +1568,31 @@ STRUCTURE (n'inclure que si données présentes) :
                             notesSeance={getPatientNotes(selectedPatient ?? '')}
                           />
                         </div>
+
+                        {/* ── Documents ────────────────────── */}
+                        <DossierDocuments
+                          patientKey={selectedPatient ?? ''}
+                          bilans={bilans}
+                          standaloneDocs={dbPatientDocs.filter(d => d.patientKey === selectedPatient)}
+                          onRename={(target, newName) => {
+                            if (target.kind === 'bilan') {
+                              setDb(prev => prev.map(r => {
+                                if (r.id !== target.bilanId || !r.documents) return r
+                                const docs = r.documents.map((d, i) => i === target.docIndex ? { ...d, name: newName } : d)
+                                return { ...r, documents: docs }
+                              }))
+                            } else {
+                              setDbPatientDocs(prev => prev.map(d => d.id === target.docId ? { ...d, name: newName } : d))
+                            }
+                          }}
+                          onDelete={(docId) => {
+                            setDbPatientDocs(prev => prev.filter(d => d.id !== docId))
+                          }}
+                          onAdd={(doc) => {
+                            const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                            setDbPatientDocs(prev => [...prev, { ...doc, id, patientKey: selectedPatient ?? '' }])
+                          }}
+                        />
                       </div>
                     </>
                   )
@@ -1410,7 +1609,8 @@ STRUCTURE (n'inclure que si données présentes) :
         const total     = allPatientKeys.length
         const forte     = allPatientKeys.filter(k => (patientGeneralScore(k) ?? 0) > 50).length
         const moderee   = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s > 0 && s <= 50 }).length
-        const regressN  = allPatientKeys.filter(k => (patientGeneralScore(k) ?? 1) <= 0).length
+        const regressN  = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s <= 0 }).length
+        const sansScore = Math.max(total - forte - moderee - regressN, 0)
         const slot = (n: number) => total > 0 ? (n / total) * circ : 0
         const seg  = (n: number) => Math.max(slot(n) - 6, 0)
         const startOff = -circ / 4
@@ -1586,38 +1786,56 @@ STRUCTURE (n'inclure que si données présentes) :
                   {/* Dashboard Stats */}
                   <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} />
 
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'1rem' }}>Mes Patients</div>
-                    <div style={{ display:'flex', alignItems:'center', gap:'1.25rem' }}>
-                      <svg viewBox="0 0 150 150" width="130" height="130" style={{ flexShrink:0 }}>
-                        <circle cx="75" cy="75" r={r} fill="none" stroke="#e2e8f0" strokeWidth="14"/>
-                        {forte   > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#22c55e" strokeWidth="14" strokeDasharray={`${seg(forte)} ${circ}`}   strokeDashoffset={startOff} strokeLinecap="round"/>}
-                        {moderee > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#f97316" strokeWidth="14" strokeDasharray={`${seg(moderee)} ${circ}`} strokeDashoffset={startOff - slot(forte)} strokeLinecap="round"/>}
-                        {regressN> 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#ef4444" strokeWidth="14" strokeDasharray={`${seg(regressN)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee)} strokeLinecap="round"/>}
-                        <text x="75" y="69" textAnchor="middle" fill="var(--primary-dark)" fontSize="26" fontWeight="800">{total}</text>
-                        <text x="75" y="87" textAnchor="middle" fill="#94a3b8" fontSize="11">patients</text>
+                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.1rem 1.15rem', marginBottom:'1.25rem', border:'1px solid var(--border-color)' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem' }}>
+                      <div style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--primary-dark)', letterSpacing:'0.01em' }}>Mes Patients</div>
+                      <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', fontWeight:500 }}>Répartition par évolution</div>
+                    </div>
+
+                    {/* Donut + breakdown patients */}
+                    <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
+                      <svg viewBox="0 0 150 150" width="112" height="112" style={{ flexShrink:0 }}>
+                        <circle cx="75" cy="75" r={r} fill="none" stroke="#f1f5f9" strokeWidth="10"/>
+                        {forte   > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#22c55e" strokeWidth="10" strokeDasharray={`${seg(forte)} ${circ}`}   strokeDashoffset={startOff} strokeLinecap="round"/>}
+                        {moderee > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#f97316" strokeWidth="10" strokeDasharray={`${seg(moderee)} ${circ}`} strokeDashoffset={startOff - slot(forte)} strokeLinecap="round"/>}
+                        {regressN> 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#ef4444" strokeWidth="10" strokeDasharray={`${seg(regressN)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee)} strokeLinecap="round"/>}
+                        {sansScore > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#cbd5e1" strokeWidth="10" strokeDasharray={`${seg(sansScore)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee) - slot(regressN)} strokeLinecap="round"/>}
+                        <text x="75" y="72" textAnchor="middle" fill="var(--primary-dark)" fontSize="28" fontWeight="700" letterSpacing="-0.02em">{total}</text>
+                        <text x="75" y="90" textAnchor="middle" fill="#94a3b8" fontSize="10" letterSpacing="0.04em">PATIENTS</text>
                       </svg>
-                      <div style={{ flex:1, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.85rem' }}>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:'0.5rem' }}>
                         {[
-                          { label:'Bilans réalisés', value: db.length, color:'var(--primary)' },
-                          { label:'Score global', value: `${globalScore}%`, color: gsColor },
-                          { label:'En amélioration', value: forte + moderee, color:'#16a34a' },
-                          { label:'En régression', value: regressN, color:'#dc2626' },
-                          { label:'Bilans incomplets', value: incompletCount, color: incompletCount > 0 ? '#d97706' : '#94a3b8' },
+                          { c:'#22c55e', label:'Forte amélioration', hint:'>50%',  n: forte },
+                          { c:'#f97316', label:'Modérée',            hint:'1–50%', n: moderee },
+                          { c:'#ef4444', label:'Régression',         hint:'EVN ↑', n: regressN },
+                          { c:'#cbd5e1', label:'Sans score',         hint:'< 2 bilans', n: sansScore },
                         ].map(s => (
-                          <div key={s.label}>
-                            <div style={{ fontSize:'1.4rem', fontWeight:800, color: s.color, lineHeight:1 }}>{s.value}</div>
-                            <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', marginTop:'0.2rem', lineHeight:1.2 }}>{s.label}</div>
+                          <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <span style={{ width:8, height:8, borderRadius:'50%', background:s.c, flexShrink:0 }} />
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:'0.78rem', color:'var(--text-main)', fontWeight:600, lineHeight:1.2 }}>{s.label}</div>
+                              <div style={{ fontSize:'0.66rem', color:'var(--text-muted)', lineHeight:1.2 }}>{s.hint}</div>
+                            </div>
+                            <div style={{ fontSize:'0.95rem', fontWeight:700, color:'var(--primary-dark)', minWidth:20, textAlign:'right' }}>{s.n}</div>
                           </div>
                         ))}
                       </div>
                     </div>
-                    <div style={{ display:'flex', gap:'1rem', flexWrap:'wrap', marginTop:'1rem', paddingTop:'0.75rem', borderTop:'1px solid var(--border-color)' }}>
-                      {[{ c:'#22c55e', l:'Forte amélioration (>50%)' }, { c:'#f97316', l:'Modérée (1–50%)' }, { c:'#ef4444', l:'Régression' }].map(({ c, l }) => (
-                        <div key={l} style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontSize:'0.72rem', color:'var(--text-muted)' }}>
-                          <div style={{ width:8, height:8, borderRadius:'50%', background:c, flexShrink:0 }} />{l}
-                        </div>
-                      ))}
+
+                    {/* Métriques complémentaires (pas liées au donut) */}
+                    <div style={{ display:'flex', gap:0, marginTop:'0.9rem', paddingTop:'0.75rem', borderTop:'1px solid #f1f5f9' }}>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
+                        <div style={{ fontSize:'1.05rem', fontWeight:700, color:'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{db.length}</div>
+                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Bilans</div>
+                      </div>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
+                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: gsColor, lineHeight:1, letterSpacing:'-0.01em' }}>{globalScore}%</div>
+                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Score global</div>
+                      </div>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: incompletCount > 0 ? '#d97706' : 'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{incompletCount}</div>
+                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Incomplets</div>
+                      </div>
                     </div>
                   </div>
 
@@ -1646,6 +1864,26 @@ STRUCTURE (n'inclure que si données présentes) :
                       </button>
                       <input ref={importDataRef} type="file" accept=".json" style={{ display:'none' }} onChange={handleImportData} />
                     </div>
+                  </div>
+
+                  {/* Banque d'exercices */}
+                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.5rem' }}>
+                      <div style={{ fontWeight:700, color:'var(--primary-dark)', fontSize:'0.92rem' }}>Banque d'exercices</div>
+                      <span style={{ fontSize:'0.75rem', fontWeight:700, padding:'0.15rem 0.55rem', borderRadius:'var(--radius-full)', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0' }}>
+                        {dbExerciceBank.length} {dbExerciceBank.length > 1 ? 'exercices' : 'exercice'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>
+                      Tous les exercices uniques générés par l'IA sont collectés ici automatiquement. Exporte-les en CSV pour construire ta banque personnelle.
+                    </p>
+                    <button onClick={handleExportExerciceBank} disabled={dbExerciceBank.length === 0}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background: dbExerciceBank.length === 0 ? 'var(--secondary)' : 'linear-gradient(135deg, #059669, #047857)', border: dbExerciceBank.length === 0 ? '1px solid var(--border-color)' : 'none', color: dbExerciceBank.length === 0 ? 'var(--text-muted)' : 'white', fontWeight:700, fontSize:'0.88rem', cursor: dbExerciceBank.length === 0 ? 'not-allowed' : 'pointer' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                      </svg>
+                      Exporter en CSV (.csv)
+                    </button>
                   </div>
 
                   <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Aperçu des patients</div>
@@ -1711,6 +1949,15 @@ STRUCTURE (n'inclure que si données présentes) :
             <span>Profil</span>
           </button>
         </nav>
+      )}
+
+      {/* ── Résumé bilan modal ─────────────────────────────────────────────────── */}
+      {resumeBilan && (
+        <BilanResumeModal
+          record={resumeBilan.record}
+          bilanNum={resumeBilan.bilanNum}
+          onClose={() => setResumeBilan(null)}
+        />
       )}
 
       {/* ── Delete confirmation dialog ─────────────────────────────────────────── */}
@@ -1781,6 +2028,7 @@ STRUCTURE (n'inclure que si données présentes) :
                 { zone: 'Cheville',      label: 'Cheville' },
                 { zone: 'Cervicales',    label: 'Rachis Cervical' },
                 { zone: 'Rachis Lombaire', label: 'Rachis Lombaire' },
+                { zone: 'Gériatrie',     label: 'Bilan Gériatrique' },
                 { zone: 'Autre',         label: 'Bilan Général' },
               ].map(({ zone, label }) => (
                 <button key={zone} onClick={() => {
@@ -1819,6 +2067,7 @@ STRUCTURE (n'inclure que si données présentes) :
                 { zone: 'Cheville',      label: 'Cheville' },
                 { zone: 'Cervicales',    label: 'Rachis Cervical' },
                 { zone: 'Rachis Lombaire', label: 'Rachis Lombaire' },
+                { zone: 'Gériatrie',     label: 'Bilan Gériatrique' },
                 { zone: 'Autre',         label: 'Bilan Général' },
               ].map(({ zone, label }) => (
                 <button key={zone} onClick={() => {
@@ -1864,6 +2113,25 @@ STRUCTURE (n'inclure que si données présentes) :
           </div>
         </div>
       )}
+
+      {/* ── Document Masker (traite la queue) ─────────────────────────────────── */}
+      {maskingQueue.length > 0 && (() => {
+        const current = maskingQueue[0]
+        return (
+          <DocumentMasker
+            key={current.name + maskingQueue.length}
+            imageDataUrl={current.dataUrl}
+            fileName={current.name + (maskingQueue.length > 1 ? ` (${maskingQueue.length} en attente)` : '')}
+            onConfirm={(maskedDataUrl) => {
+              const base64 = maskedDataUrl.split(',')[1]
+              setBilanDocuments(prev => [...prev, { name: current.name, mimeType: 'image/jpeg', data: base64, addedAt: new Date().toISOString() }])
+              setMaskingQueue(prev => prev.slice(1))
+              showToast('Document anonymisé et ajouté', 'success')
+            }}
+            onCancel={() => setMaskingQueue(prev => prev.slice(1))}
+          />
+        )
+      })()}
 
       {/* ── Zone popup ─────────────────────────────────────────────────────────── */}
       {showZonePopup && (
@@ -2052,7 +2320,7 @@ STRUCTURE (n'inclure que si données présentes) :
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
 
-          <div className="scroll-area" style={{ paddingBottom: '13rem' }}>
+          <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
             {getBilanType(selectedBodyZone ?? '') === 'epaule'   && <BilanEpaule   key={currentBilanId ?? 'new'} ref={bilanEpauleRef}   initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'cheville' && <BilanCheville key={currentBilanId ?? 'new'} ref={bilanChevilleRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'genou'    && <BilanGenou    key={currentBilanId ?? 'new'} ref={bilanGenouRef}    initialData={currentBilanDataOverride ?? undefined} />}
@@ -2060,6 +2328,7 @@ STRUCTURE (n'inclure que si données présentes) :
             {getBilanType(selectedBodyZone ?? '') === 'cervical' && <BilanCervical key={currentBilanId ?? 'new'} ref={bilanCervicalRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'lombaire' && <BilanLombaire key={currentBilanId ?? 'new'} ref={bilanLombaireRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique key={currentBilanId ?? 'new'} ref={bilanGeneriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'geriatrique' && <BilanGeriatrique key={currentBilanId ?? 'new'} ref={bilanGeriatriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
 
             {/* ── Note de fin de bilan ── */}
             <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
@@ -2114,20 +2383,47 @@ STRUCTURE (n'inclure que si données présentes) :
                     const files = Array.from(e.target.files ?? [])
                     files.forEach(file => {
                       const reader = new FileReader()
-                      reader.onload = ev => {
+                      reader.onload = async ev => {
                         const dataUrl = ev.target?.result as string
-                        const base64 = dataUrl.split(',')[1]
-                        setBilanDocuments(prev => [...prev, { name: file.name, mimeType: file.type || 'application/octet-stream', data: base64, addedAt: new Date().toISOString() }])
+                        const mimeType = file.type || 'application/octet-stream'
+                        // Pour les images, ajouter à la queue de masquage
+                        if (mimeType.startsWith('image/')) {
+                          setMaskingQueue(prev => [...prev, { dataUrl, name: file.name, mimeType }])
+                        } else if (mimeType === 'application/pdf') {
+                          // PDF : convertir en images puis ajouter à la queue
+                          showToast('Conversion du PDF en images…', 'info')
+                          try {
+                            const images = await pdfToImages(dataUrl)
+                            const baseName = file.name.replace(/\.pdf$/i, '')
+                            const items = images.map((imgDataUrl, i) => ({
+                              dataUrl: imgDataUrl,
+                              name: images.length > 1 ? `${baseName} — page ${i + 1}.jpg` : `${baseName}.jpg`,
+                              mimeType: 'image/jpeg',
+                            }))
+                            setMaskingQueue(prev => [...prev, ...items])
+                          } catch (err) {
+                            console.error('Erreur conversion PDF', err)
+                            showToast('Erreur lors de la conversion du PDF', 'error')
+                          }
+                        } else {
+                          const base64 = dataUrl.split(',')[1]
+                          setBilanDocuments(prev => [...prev, { name: file.name, mimeType, data: base64, addedAt: new Date().toISOString() }])
+                          showToast('Document ajouté', 'info')
+                        }
                       }
                       reader.readAsDataURL(file)
                     })
                     e.target.value = ''
                   }} />
               </label>
+              <p style={{ fontSize: '0.7rem', color: '#92400e', margin: '6px 0 0', lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Masquez les infos patient (nom, date de naissance, n° sécu) avant l'envoi à l'IA.
+              </p>
             </div>
-          </div>
 
-          <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {/* ── Actions (fin de page) ── */}
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)' }}
               onClick={handleSaveAndAnalyse}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -2157,6 +2453,7 @@ STRUCTURE (n'inclure que si données présentes) :
                 {exportingPDF ? 'Génération du rapport…' : 'Télécharger le PDF'}
               </div>
             </button>
+            </div>
           </div>
         </div>
       )}
@@ -2191,7 +2488,7 @@ STRUCTURE (n'inclure que si données présentes) :
         const bilanType = getBilanType(noteSeanceZone ?? '')
         const ZONE_LABELS: Record<string, string> = {
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général',
+          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
         }
         const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
         const numSeance = currentNoteSeanceId !== null
@@ -2225,7 +2522,24 @@ STRUCTURE (n'inclure que si données présentes) :
               <button
                 style={{ width: '100%', padding: '0.7rem', borderRadius: 'var(--radius-lg)', background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 onClick={() => {
+                  const data = noteSeanceRef.current?.getData()
                   handleSaveNote()
+                  // Build contexte from la séance en cours
+                  const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+                  const bt = getBilanType(noteSeanceZone ?? '')
+                  const allNotesForZone = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
+                  const allBilansForZone = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+                  const historiqueStr = [
+                    ...allBilansForZone.map(b => `Bilan ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
+                    ...allNotesForZone.map(n => `Séance n°${n.numSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution}`),
+                  ].join('\n')
+                  const savedNoteId = dbNotes.filter(n => n.patientKey === patKey).sort((a, b) => b.id - a.id)[0]?.id ?? Date.now()
+                  setFicheExerciceContextOverride({
+                    zone: noteSeanceZone ?? '',
+                    bilanData: {},
+                    notesLibres: `SÉANCE DU JOUR\nEVA: ${data?.eva ?? '?'}/10 — ${data?.evolution ?? ''}\nInterventions: ${data?.interventions?.join(', ') ?? ''}\nDosage: ${data?.detailDosage ?? ''}\nTolérance: ${data?.tolerance ?? ''}\nRessenti: ${data?.noteSubjective ?? ''}\n\nHistorique:\n${historiqueStr}`,
+                  })
+                  setFicheExerciceSource({ type: 'note', id: savedNoteId })
                   setFicheBackStep('database')
                   setStep('fiche_exercice')
                 }}>
@@ -2244,11 +2558,11 @@ STRUCTURE (n'inclure que si données présentes) :
         const bilanType = getBilanType(bilanIntermediaireZone ?? '')
         const ZONE_LABELS: Record<string, string> = {
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général',
+          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
         }
         return (
-          <div style={{ minHeight: '100vh', background: 'var(--background)', paddingBottom: '6rem' }}>
-            <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--surface)', borderBottom: '1px solid var(--border-color)', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div className="general-info-screen fade-in">
+            <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border-color)', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
               <button onClick={() => { setCurrentBilanIntermediaireId(null); setCurrentBilanIntermediaireData(null); setBilanIntermediaireZone(null); setStep('database') }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', padding: '0.3rem 0.5rem', borderRadius: 'var(--radius-md)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2261,10 +2575,27 @@ STRUCTURE (n'inclure que si données présentes) :
               <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-full)', background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}>Intermédiaire</span>
             </div>
 
-            <div style={{ padding: '1rem' }}>
+            <div className="scroll-area" style={{ padding: '1rem', paddingBottom: '9rem' }}>
               <h2 className="title-section" style={{ marginBottom: 0 }}>Bilan intermédiaire — {ZONE_LABELS[bilanType]}</h2>
               <div style={{ marginBottom: 16 }}>
-                <BilanIntermediaire key={currentBilanIntermediaireId ?? `new-inter-${bilanIntermediaireZone}`} ref={bilanIntermediaireRef} bilanType={bilanType} initialData={currentBilanIntermediaireData ?? undefined} />
+                {bilanType === 'geriatrique' ? (() => {
+                  // Récupérer le dernier bilan initial gériatrique du patient pour fournir la baseline
+                  const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+                  const geriatricBilans = db
+                    .filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === 'geriatrique' && r.status === 'complet')
+                    .sort((a, b) => b.id - a.id)
+                  const baseline = geriatricBilans[0]?.bilanData
+                  return (
+                    <BilanIntermediaireGeriatrique
+                      key={currentBilanIntermediaireId ?? `new-inter-geriatrique`}
+                      ref={bilanIntermediaireGeriatriqueRef}
+                      baseline={baseline}
+                      initialData={currentBilanIntermediaireData ?? undefined}
+                    />
+                  )
+                })() : (
+                  <BilanIntermediaire key={currentBilanIntermediaireId ?? `new-inter-${bilanIntermediaireZone}`} ref={bilanIntermediaireRef} bilanType={bilanType} initialData={currentBilanIntermediaireData ?? undefined} />
+                )}
               </div>
             </div>
 
@@ -2370,22 +2701,38 @@ STRUCTURE (n'inclure que si données présentes) :
           apiKey={apiKey}
           context={{
             patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
-            zone: selectedBodyZone ?? '',
-            bilanType: getBilanType(selectedBodyZone ?? ''),
-            bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
-            notesLibres: bilanNotes,
+            zone: ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? '',
+            bilanType: getBilanType(ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? ''),
+            bilanData: ficheExerciceContextOverride?.bilanData ?? currentBilanDataOverride ?? getBilanData() ?? {},
+            notesLibres: ficheExerciceContextOverride?.notesLibres ?? bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
           }}
-          analyseIA={currentAnalyseIA}
-          cached={currentBilanId !== null ? (db.find(r => r.id === currentBilanId)?.ficheExercice ?? null) : null}
+          analyseIA={ficheExerciceContextOverride ? null : currentAnalyseIA}
+          cached={
+            ficheExerciceSource?.type === 'note' ? (dbNotes.find(n => n.id === ficheExerciceSource.id)?.ficheExercice ?? null)
+            : ficheExerciceSource?.type === 'intermediaire' ? (dbIntermediaires.find(r => r.id === ficheExerciceSource.id)?.ficheExercice ?? null)
+            : currentBilanId !== null ? (db.find(r => r.id === currentBilanId)?.ficheExercice ?? null)
+            : null
+          }
           onResult={(fiche: FicheExercice) => {
-            if (currentBilanId !== null) {
+            if (ficheExerciceSource?.type === 'note') {
+              setDbNotes(prev => prev.map(n => n.id === ficheExerciceSource.id ? { ...n, ficheExercice: fiche } : n))
+            } else if (ficheExerciceSource?.type === 'intermediaire') {
+              setDbIntermediaires(prev => prev.map(r => r.id === ficheExerciceSource.id ? { ...r, ficheExercice: fiche } : r))
+            } else if (currentBilanId !== null) {
               setDb(prev => prev.map(r => r.id === currentBilanId ? { ...r, ficheExercice: fiche } : r))
+            }
+            // Ajouter les exercices à la banque
+            const parsed = parseExercicesFromMarkdown(fiche.markdown)
+            if (parsed.length > 0) {
+              const zone = ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? ''
+              const bt = getBilanType(zone)
+              setDbExerciceBank(prev => addExercicesToBank(prev, parsed, zone, bt))
             }
             showToast('Fiche d\'exercices générée', 'success')
           }}
-          onBack={() => setStep(ficheBackStep)}
-          onClose={() => { setCurrentBilanDataOverride(null); goToPatientRecord() }}
+          onBack={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setStep(ficheBackStep) }}
+          onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}
           onGoToProfile={() => setStep('profile')}
         />
       )}

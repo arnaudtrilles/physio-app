@@ -15,6 +15,7 @@ const BILAN_TYPE_LABELS: Record<string, string> = {
   cervical: 'Cervical',
   lombaire: 'Lombaire',
   generique: 'Général',
+  geriatrique: 'Gériatrie',
 }
 
 function Icon({ type, size = 18, color = 'currentColor' }: { type: 'user' | 'clipboard' | 'trending' | 'calendar'; size?: number; color?: string }) {
@@ -58,7 +59,7 @@ export function DashboardStats({ bilans, intermediaires, notesSeance }: Dashboar
     return improvements.reduce((sum, v) => sum + v, 0) / improvements.length
   }, [bilans])
 
-  const seancesNotees = notesSeance.length
+  void notesSeance
 
   const zoneCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -80,16 +81,10 @@ export function DashboardStats({ bilans, intermediaires, notesSeance }: Dashboar
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: '1.25rem' }}>
       {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-        <StatCard label="Patients actifs" value={patientsActifs} color="#1e3a8a" iconType="user" />
-        <StatCard label="Bilans réalisés" value={bilansComplets} color="#1e3a8a" iconType="clipboard" />
-        <StatCard
-          label="Amélioration moy."
-          value={tauxAmelioration != null ? `${tauxAmelioration >= 0 ? '↑' : '↓'} ${Math.abs(tauxAmelioration).toFixed(0)}%` : '—'}
-          color="#16a34a"
-          iconType="trending"
-        />
-        <StatCard label="Séances notées" value={seancesNotees} color="#6d28d9" iconType="calendar" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <StatCard label="Patients" value={patientsActifs} color="#1e3a8a" iconType="user" />
+        <StatCard label="Bilans" value={bilansComplets} color="#1e3a8a" iconType="clipboard" />
+        <AmeliorationCard tauxAmelioration={tauxAmelioration} />
       </div>
 
       {/* Zone chart */}
@@ -121,14 +116,41 @@ export function DashboardStats({ bilans, intermediaires, notesSeance }: Dashboar
 
 function StatCard({ label, value, color, iconType }: { label: string; value: string | number; color: string; iconType: 'user' | 'clipboard' | 'trending' | 'calendar' }) {
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: `${color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon type={iconType} size={15} color={color} />
-        </div>
-        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', padding: '0.75rem 0.65rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <Icon type={iconType} size={13} color={color} />
+        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>{label}</span>
       </div>
-      <span style={{ fontSize: '1.5rem', fontWeight: 800, color, lineHeight: 1.1 }}>{value}</span>
+      <span style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--primary-dark)', lineHeight: 1.1, letterSpacing: '-0.01em' }}>{value}</span>
+    </div>
+  )
+}
+
+function AmeliorationCard({ tauxAmelioration }: { tauxAmelioration: number | null }) {
+  const hasValue = tauxAmelioration != null
+  const isPositive = hasValue && tauxAmelioration > 0
+  const isNegative = hasValue && tauxAmelioration < 0
+  const color = !hasValue ? '#64748b' : isPositive ? '#16a34a' : isNegative ? '#dc2626' : '#64748b'
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', padding: '0.75rem 0.65rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <Icon type="trending" size={13} color={color} />
+        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Amélioration</span>
+      </div>
+      {hasValue ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '1.35rem', fontWeight: 700, color, lineHeight: 1.1, letterSpacing: '-0.01em' }}>
+          {isPositive ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+          ) : isNegative ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          )}
+          {Math.abs(tauxAmelioration).toFixed(0)}%
+        </span>
+      ) : (
+        <span style={{ fontSize: '1.35rem', fontWeight: 700, color: '#cbd5e1', lineHeight: 1.1 }}>—</span>
+      )}
     </div>
   )
 }

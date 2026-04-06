@@ -254,8 +254,8 @@ export function PatientTimeline({ bilans, intermediaires, notesSeance }: Patient
       all.push({ kind: 'note', date: d, dateLabel: n.dateSeance, monthKey: formatMonthYear(d), payload: n })
     }
 
-    // newest first
-    all.sort((a, b) => b.date.getTime() - a.date.getTime())
+    // oldest first (chronological order)
+    all.sort((a, b) => a.date.getTime() - b.date.getTime())
     return all
   }, [bilans, intermediaires, notesSeance])
 

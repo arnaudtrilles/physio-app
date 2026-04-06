@@ -44,15 +44,25 @@ export function BilanAnalyseIA({ apiKey, context, documents, cached, onResult, o
   const [correction, setCorrection] = useState('')
   const [showCorrection, setShowCorrection] = useState(false)
   const [refining, setRefining] = useState(false)
+  const [preAnalyseNotes, setPreAnalyseNotes] = useState('')
 
   const runAnalysis = async (attempt = 0) => {
     setLoading(true)
     setError(null)
     try {
+      // Merge therapist pre-analysis notes into context.notesLibres
+      const therapistNotes = preAnalyseNotes.trim()
+      const mergedNotes = therapistNotes
+        ? (context.notesLibres?.trim()
+            ? `${context.notesLibres.trim()}\n\n--- OBSERVATIONS DU THÉRAPEUTE (pré-analyse, prioritaires) ---\n${therapistNotes}`
+            : `OBSERVATIONS DU THÉRAPEUTE (pré-analyse) :\n${therapistNotes}`)
+        : context.notesLibres
+      const mergedContext = { ...context, notesLibres: mergedNotes }
+
       const raw = await callGemini(
         apiKey,
-        'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel.',
-        buildClinicalPrompt(context),
+        'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.',
+        buildClinicalPrompt(mergedContext),
         8192,
         true,
         'gemini-2.5-pro',
@@ -79,8 +89,7 @@ export function BilanAnalyseIA({ apiKey, context, documents, cached, onResult, o
         }
       }
     } finally {
-      if (attempt >= 2) setLoading(false)
-      else if (attempt === 0) setLoading(true)
+      setLoading(false)
     }
   }
 
@@ -314,15 +323,24 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                 <h4 style={{ color: '#9a3412' }}>Prise en charge suggérée</h4>
               </div>
               <div className="ai-section-body">
-                {analyse.priseEnCharge.map((p, i) => (
-                  <div key={i} className="treatment-item">
-                    <div className="treatment-num">{i + 1}</div>
-                    <div className="treatment-content">
-                      <div className="title">{p.phase} : {p.titre}</div>
-                      <div className="detail">{p.detail}</div>
+                {analyse.priseEnCharge.map((p, i) => {
+                  const bullets = (p.points && p.points.length > 0)
+                    ? p.points
+                    : (p.detail ? [p.detail] : [])
+                  return (
+                    <div key={i} className="treatment-item">
+                      <div className="treatment-num">{i + 1}</div>
+                      <div className="treatment-content">
+                        <div className="title">{p.phase} : {p.titre}</div>
+                        {bullets.length > 0 && (
+                          <ul className="treatment-points">
+                            {bullets.map((b, j) => <li key={j}>{b}</li>)}
+                          </ul>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -399,6 +417,33 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Notes pré-analyse du thérapeute */}
+        {!analyse && !loading && apiKey && !error && (
+          <div className="ai-section-card">
+            <div className="ai-section-header">
+              <div className="ai-section-icon" style={{ background: '#eff6ff' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </div>
+              <h4 style={{ color: '#1e3a8a' }}>Vos observations cliniques</h4>
+            </div>
+            <div className="ai-section-body">
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+                Notez votre diagnostic supposé, vos hypothèses, ou toute observation clinique à communiquer à l'IA avant l'analyse. Optionnel — laissez vide pour une analyse uniquement basée sur les données du bilan.
+              </p>
+              <textarea
+                value={preAnalyseNotes}
+                onChange={e => setPreAnalyseNotes(e.target.value)}
+                rows={4}
+                placeholder="Ex : Je suspecte une tendinopathie de la coiffe des rotateurs. Patient avec douleur nocturne sélective, arc douloureux 60-120°. Pas de signes d'atteinte capsulaire. Vérifier si impingement sous-acromial."
+                style={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
+              />
+            </div>
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { jsPDF } from 'jspdf'
 import type { FicheExercice, AnalyseIA } from '../types'
 import { buildFicheExercicePrompt } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
@@ -164,56 +165,176 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
     } catch { /* ignore */ }
   }
 
+  const sanitize = (text: string): string =>
+    text.replace(/[\u2018\u2019\u2032]/g, "'").replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2013/g, '-').replace(/\u2014/g, '-').replace(/\u2026/g, '...')
+      .replace(/\u00A0/g, ' ').replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+      .replace(/\u00B2/g, '2').replace(/\u00B3/g, '3')
+      .replace(/\u2265/g, '>=').replace(/\u2264/g, '<=')
+
+  const buildPDF = (): jsPDF => {
+    const doc = new jsPDF()
+    const W = 210
+    const ML = 18
+    const MR = 18
+    const MW = W - ML - MR
+    let y = 20
+    const check = (need = 10) => { if (y + need > 282) { doc.addPage(); y = 20 } }
+    const split = (text: string, maxW: number) => doc.splitTextToSize(sanitize(text), maxW)
+
+    // Header vert
+    doc.setFillColor(5, 150, 105)
+    doc.rect(0, 0, W, 30, 'F')
+    doc.setFillColor(4, 120, 87)
+    doc.rect(0, 30, W, 1.5, 'F')
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255)
+    doc.text(sanitize("FICHE D'EXERCICES A DOMICILE"), ML, 13)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.text(sanitize(`${context.patient.prenom} ${context.patient.nom}  ·  ${context.zone}`), ML, 22)
+    const dateStr = new Date(fiche!.generatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+    doc.text(sanitize(dateStr), W - MR - doc.getTextWidth(sanitize(dateStr)), 22)
+    doc.setTextColor(31, 41, 55)
+    y = 40
+
+    // Parse markdown
+    const lines = fiche!.markdown.split('\n')
+    for (const line of lines) {
+      if (/^\s*#{1,2}\s*$/.test(line)) continue
+      if (line.startsWith('### ')) {
+        y += 3
+        check(12)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        doc.setTextColor(5, 150, 105)
+        const tl = split(line.slice(4), MW)
+        for (const t of tl) { check(7); doc.text(t, ML, y); y += 6 }
+        doc.setTextColor(31, 41, 55)
+        y += 2
+      } else if (line.startsWith('#### ')) {
+        y += 3
+        check(12)
+        doc.setFillColor(240, 253, 244)
+        doc.roundedRect(ML - 1, y - 6, MW + 2, 9, 1, 1, 'F')
+        doc.setFillColor(5, 150, 105)
+        doc.rect(ML - 1, y - 6, 2.5, 9, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.setTextColor(4, 120, 87)
+        doc.text(sanitize(line.slice(5)), ML + 4, y)
+        doc.setTextColor(31, 41, 55)
+        y += 8
+      } else if (line.trim() === '---') {
+        check(5)
+        doc.setDrawColor(229, 231, 235)
+        doc.setLineWidth(0.3)
+        doc.line(ML, y, W - MR, y)
+        y += 4
+      } else if (line.match(/^- \*\*(.+?)\*\*(.*)$/)) {
+        const m = line.match(/^- \*\*(.+?)\*\*(.*)$/)!
+        check(7)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9.5)
+        const bullet = sanitize(`• ${m[1]}`)
+        const bw = doc.getTextWidth(bullet)
+        doc.text(bullet, ML + 4, y)
+        if (m[2].trim()) {
+          doc.setFont('helvetica', 'normal')
+          const rest = split(m[2].trimStart(), MW - 4 - bw - 2)
+          doc.text(rest[0] ?? '', ML + 4 + bw + 1, y)
+          y += 5
+          for (let r = 1; r < rest.length; r++) { check(5); doc.text(rest[r], ML + 4 + bw + 1, y); y += 4.5 }
+        } else {
+          y += 5
+        }
+      } else if (/^\s*>\s/.test(line)) {
+        const text = line.replace(/^\s*>\s*/, '').replace(/\*\*(.+?)\*\*/g, '$1')
+        check(7)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(75, 85, 99)
+        const bl = split(text, MW - 12)
+        for (const b of bl) { check(5); doc.text(b, ML + 10, y); y += 4.5 }
+        doc.setTextColor(31, 41, 55)
+        y += 1
+      } else if (line.startsWith('- ')) {
+        const text = line.replace(/^- /, '').replace(/\*\*(.+?)\*\*/g, '$1')
+        check(7)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        const bl = split(`• ${text}`, MW - 6)
+        for (const b of bl) { check(5); doc.text(b, ML + 4, y); y += 4.5 }
+        y += 1
+      } else if (line.trim() === '') {
+        y += 3
+      } else {
+        const text = line.replace(/\*\*(.+?)\*\*/g, '$1')
+        if (text.trim()) {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          const tl = split(text, MW)
+          for (const t of tl) { check(5); doc.text(t, ML, y); y += 4.5 }
+          y += 1
+        }
+      }
+    }
+
+    // Footer sur chaque page
+    const totalPages = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p)
+      doc.setDrawColor(229, 231, 235)
+      doc.setLineWidth(0.3)
+      doc.line(ML, 286, W - MR, 286)
+      doc.setFontSize(6.5)
+      doc.setFont('helvetica', 'italic')
+      doc.setTextColor(107, 114, 128)
+      doc.text(sanitize('Arretez en cas de douleur intense et contactez votre therapeute'), ML, 291)
+      doc.text(`Page ${p}/${totalPages}`, W - MR - 18, 291)
+      doc.setTextColor(31, 41, 55)
+    }
+
+    return doc
+  }
+
   const handleExportPDF = () => {
     if (!fiche) return
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
-    // Convert markdown to simple HTML for print
-    const html = fiche.markdown
-      .replace(/^\s*#{1,2}\s*$/gm, '')
-      .replace(/### (.+)/g, '<h2 style="font-size:16px;color:#1e3a8a;margin:18px 0 8px;font-weight:800">$1</h2>')
-      .replace(/#### (.+)/g, '<h3 style="font-size:14px;color:#1e3a8a;margin:16px 0 6px;padding:6px 10px;background:#eff6ff;border-left:3px solid #2563eb;border-radius:4px;font-weight:700">$1</h3>')
-      .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0">')
-      .replace(/- \*\*(.+?)\*\*/g, '<p style="margin:4px 0;font-size:13px"><strong>$1</strong></p>')
-      .replace(/^- (.+)$/gm, '<p style="margin:3px 0 3px 8px;font-size:13px">• $1</p>')
-      .replace(/^\s*>\s*(.+)$/gm, '<p style="margin:2px 0 2px 16px;font-size:12px;color:#374151;background:#f9fafb;padding:3px 8px;border:1px solid #e5e7eb;border-radius:4px">$1</p>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\n\n/g, '<br>')
-    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fiche d'exercices — ${context.patient.prenom} ${context.patient.nom}</title>
-      <style>@page{margin:20mm 15mm}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1f2937;line-height:1.6;max-width:700px;margin:0 auto;padding:20px}
-      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #059669;padding-bottom:10px;margin-bottom:16px}
-      .patient{font-size:11px;color:#6b7280}</style></head><body>
-      <div class="header"><div><strong style="font-size:16px;color:#059669">Fiche d'exercices à domicile</strong><div class="patient">${context.patient.prenom} ${context.patient.nom} · ${context.zone}</div></div>
-      <div style="font-size:11px;color:#6b7280">${new Date(fiche.generatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</div></div>
-      ${html}
-      <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af">Ces exercices sont personnalisés. Arrêtez en cas de douleur intense et contactez votre thérapeute.</div>
-      <script>window.onload=function(){window.print()}</script></body></html>`)
-    printWindow.document.close()
+    const doc = buildPDF()
+    const safeName = (context.patient.nom || 'Anonyme').replace(/\s+/g, '_')
+    const safeFirst = (context.patient.prenom || '').replace(/\s+/g, '_')
+    const dateFile = new Date(fiche.generatedAt).toISOString().split('T')[0]
+    doc.save(`Exercices_${safeName}_${safeFirst}_${dateFile}.pdf`)
   }
 
   const handleShare = async () => {
     if (!fiche) return
-    // Build clean text for sharing
-    const cleanText = fiche.markdown
-      .replace(/#{1,4}\s*/g, '')
-      .replace(/\*\*/g, '')
-      .replace(/^\s*>\s*/gm, '  ')
-      .trim()
+    const doc = buildPDF()
+    const safeName = (context.patient.nom || 'Anonyme').replace(/\s+/g, '_')
+    const safeFirst = (context.patient.prenom || '').replace(/\s+/g, '_')
+    const dateFile = new Date(fiche.generatedAt).toISOString().split('T')[0]
+    const filename = `Exercices_${safeName}_${safeFirst}_${dateFile}.pdf`
+    const pdfBlob = doc.output('blob')
+    const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' })
 
-    const shareText = `Programme d'exercices à domicile\n${context.zone} — ${new Date(fiche.generatedAt).toLocaleDateString('fr-FR')}\n\n${cleanText}\n\nAttention : Arrêtez en cas de douleur intense et contactez votre thérapeute.`
-
-    // Try Web Share API first (mobile)
-    if (navigator.share) {
+    // Try Web Share API with file (mobile)
+    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       try {
-        await navigator.share({ title: `Exercices — ${context.zone}`, text: shareText })
+        await navigator.share({ title: `Exercices — ${context.zone}`, files: [pdfFile] })
         setShared(true)
         setTimeout(() => setShared(false), 2000)
         return
       } catch { /* user cancelled or not supported */ }
     }
-    // Fallback: copy to clipboard
+    // Fallback: télécharge le PDF
     try {
-      await navigator.clipboard.writeText(shareText)
+      const url = URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
       setShared(true)
       setTimeout(() => setShared(false), 2000)
     } catch { /* ignore */ }

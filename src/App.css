@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
 }
 
 .start-screen {
@@ -49,8 +50,12 @@
 /* Scroll area for long forms */
 .scroll-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 5rem; /* space for fixed bottom button */
+  touch-action: pan-y; /* empêche le swipe-back iOS qui mange les taps sur les boutons au bord gauche */
+  overscroll-behavior-x: contain;
 }
 
 /* Hide scrollbar for slick UI */
@@ -404,7 +409,6 @@
 .choix-btn:hover {
   border-color: var(--primary);
   color: var(--primary);
-  transform: scale(1.04);
 }
 
 .choix-btn.active {
@@ -412,7 +416,6 @@
   border-color: var(--primary);
   color: white;
   font-weight: 600;
-  transform: scale(1.05);
 }
 
 /* ── BilanEpaule: Section header ────────────────────────────── */
@@ -536,6 +539,31 @@
 }
 .treatment-content .title  { font-size: 13px; font-weight: 600; color: #0f172a; margin: 0 0 2px; }
 .treatment-content .detail { font-size: 11px; color: #64748b; margin: 0; line-height: 1.4; }
+.treatment-points {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.treatment-points li {
+  position: relative;
+  padding-left: 12px;
+  font-size: 11.5px;
+  color: #475569;
+  line-height: 1.4;
+}
+.treatment-points li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c2410c;
+}
 
 .ai-alerte-item {
   display: flex; align-items: flex-start; gap: 10px;

@@ -1,4 +1,4 @@
-export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique'
+export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique' | 'geriatrique'
 
 export interface FicheExercice {
   generatedAt: string
@@ -13,6 +13,15 @@ export interface BilanDocument {
   addedAt: string    // ISO date
 }
 
+export interface PatientDocument {
+  id: string
+  patientKey: string
+  name: string
+  mimeType: string
+  data: string       // base64 encoded
+  addedAt: string
+}
+
 export interface BilanRecord {
   id: number
   nom: string
@@ -25,6 +34,7 @@ export interface BilanRecord {
   pathologie?: string
   avatarBg?: string
   status?: 'incomplet' | 'complet'
+  customLabel?: string
   bilanType?: BilanType
   bilanData?: Record<string, unknown>
   notes?: string
@@ -38,7 +48,7 @@ export interface AnalyseIA {
   generatedAt: string
   diagnostic: { titre: string; description: string }
   hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>
-  priseEnCharge: Array<{ phase: string; titre: string; detail: string }>
+  priseEnCharge: Array<{ phase: string; titre: string; detail: string; points?: string[] }>
   alertes: string[]
 }
 
@@ -63,6 +73,7 @@ export interface BilanIntermediaireRecord {
   status?: 'incomplet' | 'complet'
   notes?: string
   analyseIA?: AnalyseIAIntermediaire
+  ficheExercice?: FicheExercice
 }
 
 export interface AnalyseSeanceMini {
@@ -98,6 +109,22 @@ export interface NoteSeanceRecord {
     notePlan: string
   }
   analyseIA?: AnalyseSeanceMini
+  ficheExercice?: FicheExercice
+}
+
+export interface ExerciceBankEntry {
+  id: string               // hash/slug du nom
+  nom: string
+  zone: string             // ex: "Épaule", "Genou"
+  bilanType: string        // ex: "epaule"
+  objectif: string
+  positionDepart: string
+  mouvement: string        // concaténation des étapes
+  dosage: string
+  limiteSecurite: string
+  firstSeenAt: string      // ISO date
+  lastSeenAt: string       // ISO date
+  occurrences: number
 }
 
 export interface SmartObjectif {

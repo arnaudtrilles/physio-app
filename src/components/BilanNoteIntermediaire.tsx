@@ -64,8 +64,7 @@ export function BilanNoteIntermediaire({
         setError(msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429') ? 'quota' : msg)
       }
     } finally {
-      if (attempt >= 2) setLoading(false)
-      else if (attempt === 0) setLoading(true)
+      setLoading(false)
     }
   }
 

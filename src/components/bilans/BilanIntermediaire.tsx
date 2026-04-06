@@ -338,7 +338,7 @@ export const BilanIntermediaire = forwardRef<
 
   const sectionLabel: Record<BilanType, string> = {
     epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-    cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général',
+    cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
   }
 
   const evnRowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }
