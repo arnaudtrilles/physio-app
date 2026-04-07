@@ -108,11 +108,23 @@ export type ImprovementEntry = { num: number; date: string; evn: number | null; 
 
 // ── MAIN PDF GENERATOR ───────────────────────────────────────────────────────
 
+interface PatientInfo {
+  nom: string
+  prenom: string
+  dateNaissance: string
+  profession?: string
+  sport?: string
+  famille?: string
+  chirurgie?: string
+  notes?: string
+}
+
 export const generatePDF = async (
-  patientId: any,
-  generalInfo: any,
-  zoneData: any,
-  bilanZoneData?: { sectionTitle: string; data: Record<string, any> } | null,
+  patientId: PatientInfo,
+  generalInfo: PatientInfo,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  zoneData: Record<string, any>,
+  bilanZoneData?: { sectionTitle: string; data: Record<string, unknown> } | null,
   improvementData?: { generalScore: number | null; bilans: ImprovementEntry[] } | null,
   analyseIA?: { diagnostic: { titre: string; description: string }; hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>; priseEnCharge: Array<{ phase: string; titre: string; detail: string }>; alertes: string[] } | null,
   notesLibres?: string,
@@ -250,9 +262,9 @@ export const generatePDF = async (
 
   // Infos complémentaires
   if (generalInfo.sport || generalInfo.famille || generalInfo.chirurgie) {
-    fieldLine('Activité physique', generalInfo.sport)
-    fieldLine('Antécédents', generalInfo.famille)
-    fieldLine('Chirurgie', generalInfo.chirurgie)
+    fieldLine('Activité physique', generalInfo.sport ?? '')
+    fieldLine('Antécédents', generalInfo.famille ?? '')
+    fieldLine('Chirurgie', generalInfo.chirurgie ?? '')
   }
 
   // ── 2. Cartographie corporelle ────────────────────────────────────────────

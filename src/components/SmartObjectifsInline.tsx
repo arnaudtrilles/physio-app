@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 
 interface SmartObjectifItem {
   id: number
@@ -12,7 +12,7 @@ interface SmartObjectifsInlineProps {
   onChange: (objectifs: SmartObjectifItem[]) => void
 }
 
-export function SmartObjectifsInline({ objectifs, onChange }: SmartObjectifsInlineProps) {
+export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objectifs, onChange }: SmartObjectifsInlineProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [titre, setTitre] = useState('')
   const [cible, setCible] = useState('')
@@ -93,4 +93,4 @@ export function SmartObjectifsInline({ objectifs, onChange }: SmartObjectifsInli
       )}
     </div>
   )
-}
+})

@@ -1,28 +1,10 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
 import { SmartObjectifsInline } from '../SmartObjectifsInline'
+import { OuiNon } from './shared'
 
 export interface BilanGeneriqueHandle {
   getData: () => Record<string, unknown>
   setData: (d: Record<string, unknown>) => void
-}
-
-function OuiNon({ label, value, onChange, detail, onDetailChange }: { label: string; value: string; onChange: (v: string) => void; detail?: string; onDetailChange?: (v: string) => void }) {
-  return (
-    <div className="oui-non-group" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="oui-non-label">{label}</span>
-        <div className="oui-non-btns">
-          {['Oui', 'Non'].map(v => (
-            <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-          ))}
-        </div>
-      </div>
-      {value === 'oui' && onDetailChange && (
-        <textarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
-          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
-      )}
-    </div>
-  )
 }
 
 export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {

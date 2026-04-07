@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback, lazy, Suspense } from 'react'
 import { useSpeechRecognition } from './hooks/useSpeechRecognition'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
-import { BodySilhouette } from './components/BodySilhouette'
+const BodySilhouette = lazy(() => import('./components/BodySilhouette').then(m => ({ default: m.BodySilhouette })))
 import { StaticBodyVisual } from './components/StaticBodyVisual'
 import { BilanEpaule } from './components/BilanEpaule'
 import type { BilanEpauleHandle } from './components/BilanEpaule'
@@ -25,9 +25,9 @@ import { BilanIntermediaire } from './components/bilans/BilanIntermediaire'
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
 import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
 import type { BilanIntermediaireGeriatriqueHandle } from './components/bilans/BilanIntermediaireGeriatrique'
-import { BilanAnalyseIA } from './components/BilanAnalyseIA'
-import { BilanNoteIntermediaire } from './components/BilanNoteIntermediaire'
-import { BilanEvolutionIA } from './components/BilanEvolutionIA'
+const BilanAnalyseIA = lazy(() => import('./components/BilanAnalyseIA').then(m => ({ default: m.BilanAnalyseIA })))
+const BilanNoteIntermediaire = lazy(() => import('./components/BilanNoteIntermediaire').then(m => ({ default: m.BilanNoteIntermediaire })))
+const BilanEvolutionIA = lazy(() => import('./components/BilanEvolutionIA').then(m => ({ default: m.BilanEvolutionIA })))
 import { generatePDF } from './utils/pdfGenerator'
 import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
@@ -36,8 +36,9 @@ import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import { callGemini } from './utils/geminiClient'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument } from './types'
 import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
-import { FicheExerciceIA } from './components/FicheExerciceIA'
-import { DocumentMasker } from './components/DocumentMasker'
+import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
+const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
+const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
@@ -51,6 +52,12 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import './App.css'
 
 type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'silhouette' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice'
+
+const LazyFallback = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
+    <div className="spinner" style={{ width: 28, height: 28 }} />
+  </div>
+)
 
 const DEMO_DB: BilanRecord[] = [
   { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
@@ -152,21 +159,21 @@ function App() {
   const { activeField, toggleListening } = useSpeechRecognition()
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
-  const updateField = (field: keyof typeof formData, value: string) =>
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const updateField = useCallback((field: keyof typeof formData, value: string) =>
+    setFormData(prev => ({ ...prev, [field]: value })), [])
 
-  const handleVoice = (field: keyof typeof formData) => {
+  const handleVoice = useCallback((field: keyof typeof formData) => {
     const baseText = formData[field]
     toggleListening(field, (transcript) => {
       setFormData(prev => ({ ...prev, [field]: baseText ? `${baseText} ${transcript}` : transcript }))
     })
-  }
+  }, [formData, toggleListening])
 
-  const goToPatientRecord = () => {
+  const goToPatientRecord = useCallback(() => {
     const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
     setSelectedPatient(key)
     setStep('database')
-  }
+  }, [formData.nom, formData.prenom])
 
   const handleQuitBilan = () => {
     if ((formData.nom || currentBilanId !== null) && selectedBodyZone) {
@@ -179,7 +186,7 @@ function App() {
     setStep('database')
   }
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({ nom: '', prenom: '', dateNaissance: '', profession: '', sport: '', famille: '', chirurgie: '', notes: '' })
     setSilhouetteData({})
     setBilanDocuments([])
@@ -189,7 +196,7 @@ function App() {
     setCurrentBilanId(null)
     setCurrentBilanDataOverride(null)
     setBilanZoneBackStep('general_info')
-  }
+  }, [])
 
   const getIntermediairePreFill = (patKey: string, zone: string): Record<string, unknown> => {
     const bilanType = getBilanType(zone)
@@ -680,7 +687,7 @@ STRUCTURE (n'inclure que si données présentes) :
 
   const handleExportData = () => {
     if (!allDataLoaded) { showToast('Chargement en cours, réessayez dans un instant', 'error'); return }
-    const payload = JSON.stringify({ db, dbIntermediaires, dbNotes, dbObjectifs, dbExerciceBank, dbPatientDocs, profile, apiKey, exportedAt: new Date().toISOString() }, null, 2)
+    const payload = JSON.stringify({ db, dbIntermediaires, dbNotes, dbObjectifs, dbExerciceBank, dbPatientDocs, profile, exportedAt: new Date().toISOString() }, null, 2)
     const blob = new Blob([payload], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -697,16 +704,15 @@ STRUCTURE (n'inclure que si données présentes) :
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
-        const parsed = JSON.parse(ev.target?.result as string)
-        if (!parsed.db || !Array.isArray(parsed.db)) throw new Error('Format invalide')
+        const raw = JSON.parse(ev.target?.result as string)
+        const parsed = backupSchema.parse(raw)
         setDb(parsed.db)
-        if (parsed.dbIntermediaires) setDbIntermediaires(parsed.dbIntermediaires)
-        if (Array.isArray(parsed.dbNotes)) setDbNotes(parsed.dbNotes)
-        if (parsed.dbObjectifs) setDbObjectifs(parsed.dbObjectifs)
-        if (parsed.dbExerciceBank) setDbExerciceBank(parsed.dbExerciceBank)
-        if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs)
-        if (parsed.profile) setProfile(parsed.profile)
-        if (parsed.apiKey) { setApiKey(parsed.apiKey); setApiKeyDraft(parsed.apiKey) }
+        if (parsed.dbIntermediaires) setDbIntermediaires(parsed.dbIntermediaires as unknown as BilanIntermediaireRecord[])
+        if (parsed.dbNotes) setDbNotes(parsed.dbNotes as unknown as NoteSeanceRecord[])
+        if (parsed.dbObjectifs) setDbObjectifs(parsed.dbObjectifs as unknown as SmartObjectif[])
+        if (parsed.dbExerciceBank) setDbExerciceBank(parsed.dbExerciceBank as unknown as ExerciceBankEntry[])
+        if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs as unknown as PatientDocument[])
+        if (parsed.profile) setProfile(parsed.profile as unknown as ProfileData)
         const noteKeys = (parsed.dbNotes as Array<{ patientKey: string }> | undefined)?.map(n => n.patientKey) ?? []
         const uniqueNoteKeys = [...new Set(noteKeys)]
         const counts = [
@@ -736,7 +742,6 @@ STRUCTURE (n'inclure que si données présentes) :
     setTestingApiKey(true)
     setApiKeyStatus('idle')
     try {
-      const { callGemini } = await import('./utils/geminiClient')
       await callGemini(apiKeyDraft.trim(), 'You are a test assistant.', 'ping', 1)
       setApiKeyStatus('ok')
       showToast('Connexion Gemini réussie', 'success')
@@ -1477,12 +1482,10 @@ STRUCTURE (n'inclure que si données présentes) :
                                                 'Tu es un kinésithérapeute expert. Analyse la séance actuelle dans le contexte de tout l\'historique COMPLET du patient (bilans, bilans intermédiaires, séances précédentes, analyses IA, exercices prescrits). Sois concis. Réponds UNIQUEMENT en JSON valide.',
                                                 `HISTORIQUE COMPLET DU PATIENT (${ZONE_LABELS[zt] ?? zt}) :\n${historiqueStr}\n\nSÉANCE ACTUELLE (n°${note.numSeance}) :\nEVA : ${note.data.eva}/10\nÉvolution : ${note.data.evolution}\nObservance : ${note.data.observance}\nInterventions : ${note.data.interventions.join(', ')}\nDosage : ${note.data.detailDosage}\nTolérance : ${note.data.tolerance} ${note.data.toleranceDetail}\nRessenti : ${note.data.noteSubjective}\nProchaine étape : ${note.data.prochaineEtape.join(', ')}\nNote : ${note.data.notePlan}\n\nRéponds en JSON :\n{"resume":"1-2 phrases résumant la séance","evolution":"1 phrase sur la tendance globale de l\'évolution","vigilance":["point de vigilance 1","point 2 si pertinent"],"focus":"1 phrase sur quoi se focaliser à la prochaine séance","conseil":"1-2 phrases de conseil IA basé sur la direction de la symptomatologie et l\'historique — concret et actionnable"}`,
                                                 2048, true, 'gemini-2.5-flash')
-                                              const parsed = JSON.parse(raw)
-                                              if (parsed.resume) {
-                                                const mini = { generatedAt: new Date().toISOString(), resume: parsed.resume, evolution: parsed.evolution ?? '', vigilance: parsed.vigilance ?? [], focus: parsed.focus ?? '', conseil: parsed.conseil ?? '' }
-                                                setDbNotes(prev => prev.map(n => n.id === note.id ? { ...n, analyseIA: mini } : n))
-                                                showToast('Analyse générée', 'success')
-                                              }
+                                              const parsed = analyseSeanceMiniSchema.parse(JSON.parse(raw))
+                                              const mini = { generatedAt: new Date().toISOString(), ...parsed }
+                                              setDbNotes(prev => prev.map(n => n.id === note.id ? { ...n, analyseIA: mini } : n))
+                                              showToast('Analyse générée', 'success')
                                             } catch { showToast('Erreur analyse', 'error') }
                                           }}>
                                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2166,18 +2169,20 @@ STRUCTURE (n'inclure que si données présentes) :
       {maskingQueue.length > 0 && (() => {
         const current = maskingQueue[0]
         return (
-          <DocumentMasker
-            key={current.name + maskingQueue.length}
-            imageDataUrl={current.dataUrl}
-            fileName={current.name + (maskingQueue.length > 1 ? ` (${maskingQueue.length} en attente)` : '')}
-            onConfirm={(maskedDataUrl) => {
-              const base64 = maskedDataUrl.split(',')[1]
-              setBilanDocuments(prev => [...prev, { name: current.name, mimeType: 'image/jpeg', data: base64, addedAt: new Date().toISOString() }])
-              setMaskingQueue(prev => prev.slice(1))
-              showToast('Document anonymisé et ajouté', 'success')
-            }}
-            onCancel={() => setMaskingQueue(prev => prev.slice(1))}
-          />
+          <Suspense fallback={<LazyFallback />}>
+            <DocumentMasker
+              key={current.name + maskingQueue.length}
+              imageDataUrl={current.dataUrl}
+              fileName={current.name + (maskingQueue.length > 1 ? ` (${maskingQueue.length} en attente)` : '')}
+              onConfirm={(maskedDataUrl) => {
+                const base64 = maskedDataUrl.split(',')[1]
+                setBilanDocuments(prev => [...prev, { name: current.name, mimeType: 'image/jpeg', data: base64, addedAt: new Date().toISOString() }])
+                setMaskingQueue(prev => prev.slice(1))
+                showToast('Document anonymisé et ajouté', 'success')
+              }}
+              onCancel={() => setMaskingQueue(prev => prev.slice(1))}
+            />
+          </Suspense>
         )
       })()}
 
@@ -2234,7 +2239,7 @@ STRUCTURE (n'inclure que si données présentes) :
               <div className="form-group" style={{background: 'var(--secondary)', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem'}}>
                 <label style={{fontSize: '1.1rem', color: 'var(--primary-dark)', fontWeight: 600}}>Pour quel patient ?</label>
                 <select className="input-luxe" defaultValue=""
-                  onChange={(e) => { if(e.target.value) { const val = JSON.parse(e.target.value); setFormData(prev => ({...prev, nom: val.nom, prenom: val.prenom, dateNaissance: val.dateNaissance})) }}}>
+                  onChange={(e) => { if(e.target.value) { try { const val = JSON.parse(e.target.value); setFormData(prev => ({...prev, nom: val.nom, prenom: val.prenom, dateNaissance: val.dateNaissance})) } catch { /* select value is self-generated JSON */ } }}}>
                   <option value="" disabled>-- Dossiers récents --</option>
                   {Array.from(new Map(db.map(r => [`${(r.nom||'').toUpperCase()} ${r.prenom}`, r])).values()).map(r => (
                     <option key={r.id} value={JSON.stringify({nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance})}>
@@ -2332,7 +2337,9 @@ STRUCTURE (n'inclure que si données présentes) :
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area flex-center" style={{ paddingBottom: '16rem' }}>
-            <BodySilhouette onContextChange={(data) => setSilhouetteData(data)} />
+            <Suspense fallback={<LazyFallback />}>
+              <BodySilhouette onContextChange={(data) => setSilhouetteData(data)} />
+            </Suspense>
           </div>
           <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {selectedBodyZone && (
@@ -2518,6 +2525,7 @@ STRUCTURE (n'inclure que si données présentes) :
           bilanData: r.bilanData ?? {},
         }))
         return (
+          <Suspense fallback={<LazyFallback />}>
           <BilanEvolutionIA
             apiKey={apiKey}
             context={{
@@ -2528,6 +2536,7 @@ STRUCTURE (n'inclure que si données présentes) :
             onClose={() => setStep('database')}
             onGoToProfile={() => setStep('profile')}
           />
+          </Suspense>
         )
       })()}
 
@@ -2663,6 +2672,7 @@ STRUCTURE (n'inclure que si données présentes) :
 
       {/* ── Note diagnostique intermédiaire step ─────────────────────────────── */}
       {step === 'note_intermediaire' && currentIntermediaireForNote && (
+        <Suspense fallback={<LazyFallback />}>
         <BilanNoteIntermediaire
           apiKey={apiKey}
           patient={{ nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance }}
@@ -2700,6 +2710,7 @@ STRUCTURE (n'inclure que si données présentes) :
             setStep('fiche_exercice')
           }}
         />
+        </Suspense>
       )}
 
       {/* ── PDF Preview step ──────────────────────────────────────────────────── */}
@@ -2715,6 +2726,7 @@ STRUCTURE (n'inclure que si données présentes) :
 
       {/* ── Analyse IA step ────────────────────────────────────────────────────── */}
       {step === 'analyse_ia' && (
+        <Suspense fallback={<LazyFallback />}>
         <BilanAnalyseIA
           apiKey={apiKey}
           context={{
@@ -2754,10 +2766,12 @@ STRUCTURE (n'inclure que si données présentes) :
           onGoToProfile={() => setStep('profile')}
           onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
         />
+        </Suspense>
       )}
 
       {/* ── Fiche Exercice IA step ────────────────────────────────────────────── */}
       {step === 'fiche_exercice' && (
+        <Suspense fallback={<LazyFallback />}>
         <FicheExerciceIA
           apiKey={apiKey}
           context={{
@@ -2813,6 +2827,7 @@ STRUCTURE (n'inclure que si données présentes) :
           onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}
           onGoToProfile={() => setStep('profile')}
         />
+        </Suspense>
       )}
     </div>
   )

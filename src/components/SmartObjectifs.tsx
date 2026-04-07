@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { SmartObjectif } from '../types'
 
 interface SmartObjectifsProps {
@@ -7,7 +7,7 @@ interface SmartObjectifsProps {
   onUpdate: (objectifs: SmartObjectif[]) => void
 }
 
-export function SmartObjectifs({ objectifs, patientKey, onUpdate }: SmartObjectifsProps) {
+export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientKey, onUpdate }: SmartObjectifsProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [titre, setTitre] = useState('')
   const [cible, setCible] = useState('')
@@ -153,4 +153,4 @@ export function SmartObjectifs({ objectifs, patientKey, onUpdate }: SmartObjecti
       )}
     </div>
   )
-}
+})

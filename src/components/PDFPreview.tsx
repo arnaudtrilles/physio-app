@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { generateAIPDF } from '../utils/pdfGenerator'
 
 interface PDFPreviewProps {
@@ -37,7 +37,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
   )
 }
 
-export function PDFPreview({ patient, zone, markdown: initialMarkdown, pdfTitle, onBack }: PDFPreviewProps) {
+export const PDFPreview = memo(function PDFPreview({ patient, zone, markdown: initialMarkdown, pdfTitle, onBack }: PDFPreviewProps) {
   const [markdown, setMarkdown] = useState(initialMarkdown)
   const [mode, setMode] = useState<'preview' | 'edit'>('preview')
   const [exported, setExported] = useState(false)
@@ -110,4 +110,4 @@ export function PDFPreview({ patient, zone, markdown: initialMarkdown, pdfTitle,
       </div>
     </div>
   )
-}
+})

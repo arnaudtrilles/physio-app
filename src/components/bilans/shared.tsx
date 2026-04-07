@@ -102,6 +102,52 @@ export function AmplitudeInput({ value, onChange }: { value: string; onChange: (
 
 // ─── ForceInput ────────────────────────────────────────────────────────────
 // value: '' = neutral, 'complet' = MRC 5, '0'/'1'/'2'/'3'/'3+'/'4-'/'4'/'4+' = grade
+// ─── OuiNon ────────────────────────────────────────────────────────────────
+export function OuiNon({ label, value, onChange, detail, onDetailChange }: { label: string; value: string; onChange: (v: string) => void; detail?: string; onDetailChange?: (v: string) => void }) {
+  return (
+    <div className="oui-non-group" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="oui-non-label">{label}</span>
+        <div className="oui-non-btns">
+          {['Oui', 'Non'].map(v => (
+            <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+          ))}
+        </div>
+      </div>
+      {value === 'oui' && onDetailChange && (
+        <textarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
+          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
+      )}
+    </div>
+  )
+}
+
+// ─── SectionHeader ─────────────────────────────────────────────────────────
+export function SectionHeader({ title, open, onToggle, color = 'var(--primary)' }: { title: string; open: boolean; onToggle: () => void; color?: string }) {
+  return (
+    <button className="bilan-collapsible-header" onClick={onToggle}>
+      <span className="bilan-collapsible-title" style={{ color }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' }} />
+        {title}
+      </span>
+      <svg className={`bilan-collapsible-chevron${open ? ' open' : ''}`} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+  )
+}
+
+// ─── ScoreRow ──────────────────────────────────────────────────────────────
+export function ScoreRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="oui-non-group">
+      <span className="oui-non-label" style={{ fontSize: '0.85rem' }}>{label}</span>
+      <input value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: 80, textAlign: 'right', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem', color: 'var(--text-main)', padding: '0.1rem 0.3rem' }} placeholder="—" />
+    </div>
+  )
+}
+
 export function ForceInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const isComplet = value === 'complet'
   const [iMode, setIMode] = useState(value !== '' && value !== 'complet')

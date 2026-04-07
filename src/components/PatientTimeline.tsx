@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -237,7 +237,7 @@ const DOT_COLORS: Record<TimelineEvent['kind'], string> = {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function PatientTimeline({ bilans, intermediaires, notesSeance }: PatientTimelineProps) {
+export const PatientTimeline = memo(function PatientTimeline({ bilans, intermediaires, notesSeance }: PatientTimelineProps) {
   const events = useMemo<TimelineEvent[]>(() => {
     const all: TimelineEvent[] = []
 
@@ -320,4 +320,4 @@ export function PatientTimeline({ bilans, intermediaires, notesSeance }: Patient
       })}
     </div>
   )
-}
+})

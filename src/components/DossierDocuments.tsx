@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import type { BilanRecord, PatientDocument } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -188,7 +188,7 @@ function IconBtn({ onClick, title, children, danger }: { onClick: () => void; ti
 // Main component
 // ---------------------------------------------------------------------------
 
-export function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename, onDelete, onAdd }: DossierDocumentsProps) {
+export const DossierDocuments = memo(function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename, onDelete, onAdd }: DossierDocumentsProps) {
   void patientKey
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -419,4 +419,4 @@ export function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename,
       {viewingDoc && <DocViewer doc={viewingDoc} onClose={() => setViewingDoc(null)} />}
     </div>
   )
-}
+})

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { BilanRecord } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -127,7 +128,7 @@ interface BilanResumeModalProps {
   onClose: () => void
 }
 
-export function BilanResumeModal({ record, bilanNum, onClose }: BilanResumeModalProps) {
+export const BilanResumeModal = memo(function BilanResumeModal({ record, bilanNum, onClose }: BilanResumeModalProps) {
   const s = extractSummary(record)
 
   const hasContent = s.evnPire || s.evnMoy || s.douleurType || s.redFlags.length > 0 ||
@@ -286,4 +287,4 @@ export function BilanResumeModal({ record, bilanNum, onClose }: BilanResumeModal
       </div>
     </div>
   )
-}
+})

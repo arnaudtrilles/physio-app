@@ -2,6 +2,7 @@ import { useState, useImperativeHandle, forwardRef, useMemo } from 'react'
 import { Chrono } from './Chrono'
 import { SPPBInteractiveModal } from './SPPBInteractiveModal'
 import { QuestionnaireModal, TINETTI_QUESTIONS, interpretTinetti } from './QuestionnaireModal'
+import { OuiNon } from './shared'
 
 export interface BilanIntermediaireGeriatriqueHandle {
   getData: () => Record<string, unknown>
@@ -45,21 +46,6 @@ function SectionTitle({ num, title, color = 'var(--primary-dark)' }: { num: stri
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: 4 }}>
       <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '2px 7px', borderRadius: 6, letterSpacing: '0.02em' }}>{num}</span>
       <span style={{ fontWeight: 700, color, fontSize: '0.95rem' }}>{title}</span>
-    </div>
-  )
-}
-
-function OuiNon({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="oui-non-group" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="oui-non-label">{label}</span>
-        <div className="oui-non-btns">
-          {['Oui', 'Non'].map(v => (
-            <button key={v} className={`oui-non-btn${value === v.toLowerCase() ? ' active' : ''}`} onClick={() => onChange(value === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

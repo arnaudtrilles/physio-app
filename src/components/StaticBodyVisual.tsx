@@ -1,4 +1,6 @@
-export const StaticBodyVisual = ({ view, zoneData }: { view: 'Face' | 'Dos', zoneData: any }) => {
+import { memo } from 'react'
+
+export const StaticBodyVisual = memo(({ view, zoneData }: { view: 'Face' | 'Dos', zoneData: any }) => {
   const getZoneColor = (zone: string) => {
     const data = zoneData[zone];
     if (!data || !data.saved) return "#0f172a"; // var(--primary-dark)
@@ -70,4 +72,4 @@ export const StaticBodyVisual = ({ view, zoneData }: { view: 'Face' | 'Dos', zon
       </svg>
     );
   }
-};
+})

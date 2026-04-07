@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord } from '../types'
 
 interface DashboardStatsProps {
@@ -27,7 +27,7 @@ function Icon({ type, size = 18, color = 'currentColor' }: { type: 'user' | 'cli
   return null
 }
 
-export function DashboardStats({ bilans, intermediaires, notesSeance }: DashboardStatsProps) {
+export const DashboardStats = memo(function DashboardStats({ bilans, intermediaires, notesSeance }: DashboardStatsProps) {
   const patientsActifs = useMemo(() => {
     const keys = new Set(bilans.map(b => `${b.nom.toUpperCase()} ${b.prenom}`))
     return keys.size
@@ -112,7 +112,7 @@ export function DashboardStats({ bilans, intermediaires, notesSeance }: Dashboar
       )}
     </div>
   )
-}
+})
 
 function StatCard({ label, value, color, iconType }: { label: string; value: string | number; color: string; iconType: 'user' | 'clipboard' | 'trending' | 'calendar' }) {
   return (
