@@ -7,6 +7,25 @@ export interface TherapistProfile {
   autresCompetences?: string
 }
 
+export interface PatientHistoryEntry {
+  type: 'bilan' | 'intermediaire' | 'note_seance'
+  date: string
+  zone: string
+  evn?: number | null
+  data?: Record<string, unknown>
+  noteData?: {
+    eva: string
+    observance: string
+    evolution: string
+    noteSubjective: string
+    interventions: string[]
+    tolerance: string
+    prochaineEtape: string[]
+  }
+  ficheExercice?: { markdown: string } | null
+  analyseIA?: { resume?: string; evolution?: string; focus?: string } | null
+}
+
 export interface BilanContext {
   patient: {
     nom: string
@@ -22,6 +41,7 @@ export interface BilanContext {
   bilanData: Record<string, unknown>
   notesLibres?: string
   therapist?: TherapistProfile
+  patientHistory?: PatientHistoryEntry[]
 }
 
 // ── Anonymization ─────────────────────────────────────────────────────────────
@@ -161,7 +181,7 @@ export function buildFicheExercicePrompt(
   notesSeance: string,
   analyseIA?: { diagnostic: { titre: string }; priseEnCharge: Array<{ titre: string }> } | null
 ): string {
-  const { patient, zone, bilanData } = ctx
+  const { patient, zone, bilanData, patientHistory } = ctx
   const { age, sexe, scrub } = anonymizePatientData(patient)
 
   const douleur = bilanData.douleur as Record<string, unknown> | undefined
@@ -170,6 +190,76 @@ export function buildFicheExercicePrompt(
   const sport = scrub(patient.sport || 'Non renseignée')
   const antecedents = scrub(patient.antecedents || 'Non renseignés')
   const scrubbedNotes = scrub(notesSeance)
+
+  // Build patient history section
+  let historyBlock = ''
+  if (patientHistory && patientHistory.length > 0) {
+    const sorted = [...patientHistory].sort((a, b) => a.date.localeCompare(b.date))
+
+    const bilans = sorted.filter(h => h.type === 'bilan')
+    const intermediaires = sorted.filter(h => h.type === 'intermediaire')
+    const notes = sorted.filter(h => h.type === 'note_seance')
+
+    const parts: string[] = []
+
+    if (bilans.length > 0) {
+      parts.push(`--- BILANS INITIAUX (${bilans.length}) ---`)
+      for (const b of bilans) {
+        const d = b.data?.douleur as Record<string, unknown> | undefined
+        const scores = b.data?.scores as Record<string, unknown> | undefined
+        parts.push(`Bilan du ${b.date} — Zone : ${b.zone} — EVN : ${b.evn ?? 'N/R'}/10`)
+        if (d) parts.push(`  Douleur : type=${d.douleurType ?? 'N/R'}, évolution=${d.situation ?? 'N/R'}, nocturne=${d.douleurNocturne ?? 'N/R'}`)
+        if (scores) parts.push(`  Scores : ${scrub(JSON.stringify(scores))}`)
+      }
+    }
+
+    if (intermediaires.length > 0) {
+      parts.push(`\n--- BILANS INTERMÉDIAIRES (${intermediaires.length}) ---`)
+      for (const b of intermediaires) {
+        parts.push(`Bilan intermédiaire du ${b.date} — Zone : ${b.zone} — EVN : ${b.evn ?? 'N/R'}/10`)
+        if (b.analyseIA?.resume) parts.push(`  Résumé IA : ${scrub(b.analyseIA.resume)}`)
+        if (b.analyseIA?.evolution) parts.push(`  Évolution : ${scrub(b.analyseIA.evolution)}`)
+      }
+    }
+
+    if (notes.length > 0) {
+      parts.push(`\n--- NOTES DE SÉANCE (${notes.length}) ---`)
+      for (const n of notes) {
+        const nd = n.noteData
+        parts.push(`Séance du ${n.date} — Zone : ${n.zone} — EVA : ${nd?.eva ?? 'N/R'}/10`)
+        if (nd?.observance) parts.push(`  Observance exercices : ${nd.observance}`)
+        if (nd?.evolution) parts.push(`  Évolution : ${scrub(nd.evolution)}`)
+        if (nd?.interventions?.length) parts.push(`  Interventions : ${nd.interventions.join(', ')}`)
+        if (nd?.tolerance) parts.push(`  Tolérance : ${nd.tolerance}`)
+        if (nd?.prochaineEtape?.length) parts.push(`  Prochaines étapes : ${nd.prochaineEtape.join(', ')}`)
+        if (n.analyseIA?.focus) parts.push(`  Focus IA : ${scrub(n.analyseIA.focus)}`)
+      }
+    }
+
+    // Previous exercise sheets
+    const withFiches = sorted.filter(h => h.ficheExercice?.markdown)
+    if (withFiches.length > 0) {
+      parts.push(`\n--- FICHES D'EXERCICES PRÉCÉDENTES (${withFiches.length}) ---`)
+      for (const f of withFiches) {
+        parts.push(`Fiche du ${f.date} — Zone : ${f.zone}`)
+        // Include a summary (first 500 chars) to avoid token explosion
+        const md = f.ficheExercice!.markdown
+        parts.push(md.length > 500 ? md.slice(0, 500) + '... [tronqué]' : md)
+      }
+    }
+
+    historyBlock = `\n<historique_patient>
+${parts.join('\n')}
+</historique_patient>
+
+IMPORTANT : Utilise cet historique pour adapter les exercices au niveau actuel du patient. Tiens compte de :
+- L'évolution de la douleur dans le temps
+- L'observance et la tolérance aux exercices précédents
+- Les interventions déjà réalisées en séance
+- La progression globale pour ajuster l'intensité
+- Ne pas répéter des exercices qui n'ont pas fonctionné
+`
+  }
 
   return `<notes_seance_actuelle>
 Zone traitée : ${zone}
@@ -181,7 +271,7 @@ Antécédents : ${antecedents}
 ${analyseIA ? `\nDiagnostic retenu : ${analyseIA.diagnostic.titre}\nObjectifs thérapeutiques : ${analyseIA.priseEnCharge.map(p => p.titre).join(' | ')}` : ''}
 Notes du thérapeute pour cette séance :
 ${scrubbedNotes || '(Non renseignées — générer un programme adapté au diagnostic et à la zone traitée)'}
-</notes_seance_actuelle>`
+</notes_seance_actuelle>${historyBlock}`
 }
 
 // ── Evolution prompt ──────────────────────────────────────────────────────────
@@ -331,6 +421,23 @@ export interface BilanIntermediaireEntry {
   date: string
   evn: number | null
   bilanData: Record<string, unknown>
+  analyseIA?: { titre?: string; description?: string; evolution?: string } | null
+  ficheExercice?: { markdown: string } | null
+}
+
+export interface SeanceHistoryEntry {
+  date: string
+  numSeance: string
+  eva: string
+  observance: string
+  evolution: string
+  interventions: string[]
+  tolerance: string
+  toleranceDetail?: string
+  prochaineEtape: string[]
+  noteSubjective?: string
+  analyseIA?: { resume?: string; evolution?: string; focus?: string; conseil?: string } | null
+  ficheExercice?: { markdown: string } | null
 }
 
 export function buildIntermediairePrompt(
@@ -338,7 +445,8 @@ export function buildIntermediairePrompt(
   zone: string,
   bilanType: string,
   intermData: Record<string, unknown>,
-  historique: BilanIntermediaireEntry[]
+  historique: BilanIntermediaireEntry[],
+  seances?: SeanceHistoryEntry[]
 ): string {
   const { age, sexe, scrub } = anonymizePatientData(patient)
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
@@ -356,22 +464,59 @@ export function buildIntermediairePrompt(
     const d    = b.bilanData.douleur     as Record<string, unknown> | undefined
     const tc2  = b.bilanData.troncCommun as Record<string, unknown> | undefined
     const evn2 = tc2?.evn                as Record<string, unknown> | undefined
+    const scores2 = b.bilanData.scores as Record<string, unknown> | undefined
     const evnPire  = d?.evnPire  ?? evn2?.pireActuel  ?? b.evn ?? 'N/R'
     const evnMieux = d?.evnMieux ?? evn2?.mieuxActuel ?? 'N/R'
     const evnMoy   = d?.evnMoy   ?? evn2?.moyActuel   ?? 'N/R'
-    return `--- ${b.type === 'initial' ? 'Bilan initial' : 'Bilan intermédiaire'} N°${b.num} (${b.date}) ---
-EVN pire : ${evnPire} | EVN mieux : ${evnMieux} | EVN moyen : ${evnMoy}`
+    const lines = [`--- ${b.type === 'initial' ? 'Bilan initial' : 'Bilan intermédiaire'} N°${b.num} (${b.date}) ---`,
+      `EVN pire : ${evnPire} | EVN mieux : ${evnMieux} | EVN moyen : ${evnMoy}`]
+    if (d?.douleurType) lines.push(`Type douleur : ${d.douleurType} | Évolution : ${d.situation ?? 'N/R'} | Nocturne : ${d.douleurNocturne ?? 'N/R'}`)
+    if (scores2 && Object.keys(scores2).length > 0) lines.push(`Scores : ${scrub(JSON.stringify(scores2))}`)
+    if (b.analyseIA?.titre) lines.push(`Analyse IA : ${b.analyseIA.titre}${b.analyseIA.evolution ? ` — ${b.analyseIA.evolution}` : ''}`)
+    if (b.analyseIA?.description) lines.push(`Description : ${scrub(b.analyseIA.description)}`)
+    return lines.join('\n')
   }).join('\n\n')
+
+  // Notes de séance
+  let seancesStr = ''
+  if (seances && seances.length > 0) {
+    const seanceParts = seances.map(s => {
+      const lines = [`--- Séance n°${s.numSeance} (${s.date}) ---`,
+        `EVA : ${s.eva}/10 | Observance : ${s.observance} | Tolérance : ${s.tolerance}${s.toleranceDetail ? ` (${s.toleranceDetail})` : ''}`]
+      if (s.evolution) lines.push(`Évolution : ${scrub(s.evolution)}`)
+      if (s.interventions?.length) lines.push(`Interventions : ${s.interventions.join(', ')}`)
+      if (s.prochaineEtape?.length) lines.push(`Prochaines étapes : ${s.prochaineEtape.join(', ')}`)
+      if (s.noteSubjective) lines.push(`Ressenti patient : ${scrub(s.noteSubjective)}`)
+      if (s.analyseIA?.resume) lines.push(`Analyse IA séance : ${scrub(s.analyseIA.resume)}`)
+      if (s.analyseIA?.focus) lines.push(`Focus IA : ${scrub(s.analyseIA.focus)}`)
+      if (s.analyseIA?.conseil) lines.push(`Conseil IA : ${scrub(s.analyseIA.conseil)}`)
+      return lines.join('\n')
+    })
+    seancesStr = `\n\nNOTES DE SÉANCE ENTRE LES BILANS (${seances.length}) :\n${seanceParts.join('\n\n')}`
+  }
+
+  // Fiches d'exercices prescrites
+  const allFiches = [
+    ...historique.filter(h => h.ficheExercice?.markdown).map(h => ({ date: h.date, md: h.ficheExercice!.markdown })),
+    ...(seances ?? []).filter(s => s.ficheExercice?.markdown).map(s => ({ date: s.date, md: s.ficheExercice!.markdown })),
+  ]
+  let fichesStr = ''
+  if (allFiches.length > 0) {
+    fichesStr = `\n\nFICHES D'EXERCICES PRESCRITES (${allFiches.length}) :\n` + allFiches.map(f => {
+      const md = f.md.length > 400 ? f.md.slice(0, 400) + '... [tronqué]' : f.md
+      return `--- Fiche du ${f.date} ---\n${md}`
+    }).join('\n\n')
+  }
 
   const scoresStr = Object.keys(sc).length > 0 ? JSON.stringify(sc) : 'Non renseignés'
 
-  return `Tu es un physiothérapeute expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique du patient pour cette zone.
+  return `Tu es un physiothérapeute expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique COMPLET du patient pour cette zone : bilans, séances, analyses IA précédentes et exercices prescrits.
 
 PATIENT (anonymisé) : ${ageLine}${sexeLine}
 ZONE : ${zone} (type : ${bilanType})
 
 HISTORIQUE DES BILANS POUR CETTE ZONE :
-${histStr}
+${histStr}${seancesStr}${fichesStr}
 
 BILAN INTERMÉDIAIRE ACTUEL :
 - EVN actuelle — Pire : ${evn.pireActuel ?? 'N/R'} (Initial : ${evn.pireInitial ?? 'N/R'})
@@ -446,7 +591,7 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
     const s = String(v).trim()
     return s !== '' && s !== 'N/R' && s !== 'undefined' ? s : null
   }
-  const line = (label: string, v: unknown) => { const s = defined(v); return s ? `- ${label} : ${s}` : null }
+
 
   // Render any object's filled fields as lines, with optional label map
   const renderSection = (obj: Record<string, unknown> | undefined, labels?: Record<string, string>): string => {

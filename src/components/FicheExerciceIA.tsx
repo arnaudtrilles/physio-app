@@ -93,7 +93,7 @@ export function FicheExerciceIA({ apiKey, context, analyseIA, cached, onResult, 
   const [notesSeance, setNotesSeance] = useState(cached?.notesSeance ?? '')
   const [copied, setCopied] = useState(false)
   const [shared, setShared] = useState(false)
-  const [showTemplates, setShowTemplates] = useState(false)
+
 
   const generate = async () => {
     if (!apiKey) return
@@ -103,6 +103,7 @@ export function FicheExerciceIA({ apiKey, context, analyseIA, cached, onResult, 
       const systemPrompt = `Tu es un physiothérapeute expert en biomécanique et en rééducation fonctionnelle. Ton rôle est de traduire un plan de traitement technique en une fiche d'exercices à domicile claire, professionnelle et sécurisée.
 
 Tu vas recevoir en entrée l'état actuel du patient ainsi que la demande du thérapeute dans la balise <notes_seance_actuelle>.
+Si un historique patient est fourni dans la balise <historique_patient>, tu DOIS l'analyser attentivement pour adapter les exercices : évolution de la douleur, tolérance aux exercices précédents, observance, interventions réalisées, progression globale. Propose des exercices qui s'inscrivent dans la continuité du parcours de soin.
 
 <regles_strictes>
 1. Rédige en français courant mais professionnel. Pas de jargon inaccessible (dis "couché sur le dos" plutôt que "décubitus dorsal"), mais utilise les vrais noms des exercices de kinésithérapie (ex: "Rotation externe en décubitus latéral", "Flexion isométrique contre résistance", "Proprioception unipode sur plan instable", "Étirement capsulaire postérieur en cross-body").

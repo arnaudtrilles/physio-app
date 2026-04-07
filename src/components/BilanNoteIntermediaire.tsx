@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AnalyseIAIntermediaire } from '../types'
 import { buildIntermediairePrompt, parseAnalyseIAIntermediaire } from '../utils/clinicalPrompt'
-import type { BilanIntermediaireEntry } from '../utils/clinicalPrompt'
+import type { BilanIntermediaireEntry, SeanceHistoryEntry } from '../utils/clinicalPrompt'
 import { callGemini, GeminiAuthError } from '../utils/geminiClient'
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   bilanType: string
   intermData: Record<string, unknown>
   historique: BilanIntermediaireEntry[]
+  seances?: SeanceHistoryEntry[]
   cached?: AnalyseIAIntermediaire | null
   onResult: (a: AnalyseIAIntermediaire) => void
   onBack: () => void
@@ -23,7 +24,7 @@ function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
 }
 
 export function BilanNoteIntermediaire({
-  apiKey, patient, zone, bilanType, intermData, historique,
+  apiKey, patient, zone, bilanType, intermData, historique, seances,
   cached, onResult, onBack, onGoToProfile, onFicheExercice,
 }: Props) {
   const [loading, setLoading]   = useState(false)
@@ -38,7 +39,7 @@ export function BilanNoteIntermediaire({
     setLoading(true)
     setError(null)
     try {
-      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique)
+      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances)
       const raw = await callGemini(
         apiKey,
         'Agis comme un physiothérapeute expert. Rédige impérativement en français médical professionnel.',
@@ -79,7 +80,7 @@ export function BilanNoteIntermediaire({
 - Description : ${note.noteDiagnostique.description}
 - Prise en charge : ${note.priseEnChargeAjustee.map(p => p.point).join(' | ')}`
 
-      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique)
+      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances)
       const raw = await callGemini(
         apiKey,
         `Agis comme un physiothérapeute expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,

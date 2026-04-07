@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useSpeechRecognition } from './hooks/useSpeechRecognition'
-import { useLocalStorage } from './hooks/useLocalStorage'
+import { useIndexedDB } from './hooks/useIndexedDB'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
 import { BodySilhouette } from './components/BodySilhouette'
@@ -28,13 +28,13 @@ import type { BilanIntermediaireGeriatriqueHandle } from './components/bilans/Bi
 import { BilanAnalyseIA } from './components/BilanAnalyseIA'
 import { BilanNoteIntermediaire } from './components/BilanNoteIntermediaire'
 import { BilanEvolutionIA } from './components/BilanEvolutionIA'
-import { generatePDF, generateAIPDF } from './utils/pdfGenerator'
+import { generatePDF } from './utils/pdfGenerator'
 import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
-import { buildPDFReportPrompt, buildIntermediairePrompt, parseAnalyseIAIntermediaire } from './utils/clinicalPrompt'
+import { buildPDFReportPrompt } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import { callGemini } from './utils/geminiClient'
-import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, AnalyseIAIntermediaire, FicheExercice, BilanDocument, PatientDocument } from './types'
+import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument } from './types'
 import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
 import { FicheExerciceIA } from './components/FicheExerciceIA'
 import { DocumentMasker } from './components/DocumentMasker'
@@ -75,17 +75,17 @@ const DEFAULT_PROFILE: ProfileData = { nom: 'William', prenom: '', profession: '
 function App() {
   const [step, setStep] = useState<Step>('dashboard')
   const { toasts, showToast, removeToast } = useToast()
-
-  // ── Persistent state ──────────────────────────────────────────────────────────
-  const [db, setDb] = useLocalStorage<BilanRecord[]>('physio_db', DEMO_DB)
-  const [dbIntermediaires, setDbIntermediaires] = useLocalStorage<BilanIntermediaireRecord[]>('physio_intermediaires_db', [])
-  const [dbNotes, setDbNotes] = useLocalStorage<NoteSeanceRecord[]>('physio_notes_seance_db', [])
-  const [dbObjectifs, setDbObjectifs] = useLocalStorage<SmartObjectif[]>('physio_objectifs_db', [])
-  const [dbExerciceBank, setDbExerciceBank] = useLocalStorage<ExerciceBankEntry[]>('physio_exercice_bank', [])
-  const [dbPatientDocs, setDbPatientDocs] = useLocalStorage<PatientDocument[]>('physio_patient_docs', [])
+  // ── Persistent state (IndexedDB — no size limit) ───────────────────────────
+  const [db, setDb, dbLoaded] = useIndexedDB<BilanRecord[]>('physio_db', DEMO_DB)
+  const [dbIntermediaires, setDbIntermediaires, intLoaded] = useIndexedDB<BilanIntermediaireRecord[]>('physio_intermediaires_db', [])
+  const [dbNotes, setDbNotes, notesLoaded] = useIndexedDB<NoteSeanceRecord[]>('physio_notes_seance_db', [])
+  const [dbObjectifs, setDbObjectifs, objLoaded] = useIndexedDB<SmartObjectif[]>('physio_objectifs_db', [])
+  const [dbExerciceBank, setDbExerciceBank, exLoaded] = useIndexedDB<ExerciceBankEntry[]>('physio_exercice_bank', [])
+  const [dbPatientDocs, setDbPatientDocs, docsLoaded] = useIndexedDB<PatientDocument[]>('physio_patient_docs', [])
   const isOnline = useOnlineStatus()
-  const [profile, setProfile] = useLocalStorage<ProfileData>('physio_profile', DEFAULT_PROFILE)
-  const [apiKey, setApiKey] = useLocalStorage<string>('physio_api_key', '')
+  const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
+  const [apiKey, setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
+  const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && profLoaded && keyLoaded
 
   // ── Transient UI state ────────────────────────────────────────────────────────
   const [currentBilanId, setCurrentBilanId] = useState<number | null>(null)
@@ -351,8 +351,8 @@ function App() {
       .filter(r => r.id !== rec.id)
       .sort((a, b) => a.id - b.id)
     const historique: BilanIntermediaireEntry[] = [
-      ...initiaux.map((r, i) => ({ type: 'initial' as const, num: i + 1, date: r.dateBilan, evn: r.evn ?? null, bilanData: r.bilanData ?? {} })),
-      ...interms.map((r, i) => ({ type: 'intermediaire' as const, num: i + 1, date: r.dateBilan, evn: null, bilanData: r.data ?? {} })),
+      ...initiaux.map((r, i) => ({ type: 'initial' as const, num: i + 1, date: r.dateBilan, evn: r.evn ?? null, bilanData: r.bilanData ?? {}, analyseIA: r.analyseIA ? { titre: r.analyseIA.diagnostic.titre, description: r.analyseIA.diagnostic.description } : null, ficheExercice: r.ficheExercice })),
+      ...interms.map((r, i) => ({ type: 'intermediaire' as const, num: i + 1, date: r.dateBilan, evn: null, bilanData: r.data ?? {}, analyseIA: r.analyseIA ? { titre: r.analyseIA.noteDiagnostique.titre, description: r.analyseIA.noteDiagnostique.description, evolution: r.analyseIA.noteDiagnostique.evolution } : null, ficheExercice: r.ficheExercice })),
     ]
     setFormData(prev => ({ ...prev, nom: rec.nom, prenom: rec.prenom, dateNaissance: rec.dateNaissance }))
     setCurrentIntermediaireForNote(rec)
@@ -679,7 +679,8 @@ STRUCTURE (n'inclure que si données présentes) :
   }
 
   const handleExportData = () => {
-    const payload = JSON.stringify({ db, profile, apiKey, exportedAt: new Date().toISOString() }, null, 2)
+    if (!allDataLoaded) { showToast('Chargement en cours, réessayez dans un instant', 'error'); return }
+    const payload = JSON.stringify({ db, dbIntermediaires, dbNotes, dbObjectifs, dbExerciceBank, dbPatientDocs, profile, apiKey, exportedAt: new Date().toISOString() }, null, 2)
     const blob = new Blob([payload], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -698,10 +699,21 @@ STRUCTURE (n'inclure que si données présentes) :
       try {
         const parsed = JSON.parse(ev.target?.result as string)
         if (!parsed.db || !Array.isArray(parsed.db)) throw new Error('Format invalide')
+        console.log('[Import] bilans:', parsed.db?.length, 'notes:', parsed.dbNotes?.length, 'keys:', parsed.dbNotes?.map((n: { patientKey: string }) => n.patientKey))
         setDb(parsed.db)
+        if (parsed.dbIntermediaires) setDbIntermediaires(parsed.dbIntermediaires)
+        if (Array.isArray(parsed.dbNotes)) setDbNotes(parsed.dbNotes)
+        if (parsed.dbObjectifs) setDbObjectifs(parsed.dbObjectifs)
+        if (parsed.dbExerciceBank) setDbExerciceBank(parsed.dbExerciceBank)
+        if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs)
         if (parsed.profile) setProfile(parsed.profile)
         if (parsed.apiKey) { setApiKey(parsed.apiKey); setApiKeyDraft(parsed.apiKey) }
-        showToast(`${parsed.db.length} bilans importés`, 'success')
+        const counts = [
+          `${parsed.db.length} bilans`,
+          parsed.dbIntermediaires?.length ? `${parsed.dbIntermediaires.length} intermédiaires` : '',
+          parsed.dbNotes?.length ? `${parsed.dbNotes.length} séances` : '',
+        ].filter(Boolean).join(', ')
+        showToast(`Importé : ${counts}`, 'success')
       } catch {
         showToast('Fichier invalide', 'error')
       }
@@ -835,7 +847,7 @@ STRUCTURE (n'inclure que si données présentes) :
                       {patients.map(p => {
                         const score = patientGeneralScore(p.key)
                         const scoreColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : '#dc2626'
-                        const scoreBg   = score === null ? '#f1f5f9' : score > 0 ? '#dcfce7' : '#fee2e2'
+
                         const lastBilan = p.records.sort((a, b) => b.id - a.id)[0]
                         return (
                           <div key={p.key} onClick={() => setSelectedPatient(p.key)}
@@ -988,7 +1000,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           const currEvn = record.evn
                           const delta   = (prevEvn != null && currEvn != null) ? improvDelta(prevEvn, currEvn) : null
                           const dColor  = delta === null ? '' : delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8'
-                          const dBg     = delta === null ? '' : delta > 0 ? '#dcfce7' : delta < 0 ? '#fee2e2' : '#f1f5f9'
+
                           const incomplet = record.status === 'incomplet'
                           return (
                             <div key={record.id} style={{ background: 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)' }}>
@@ -1178,7 +1190,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       const score = (!isNaN(evnActNum) && baseEvn != null && baseEvn > 0)
                                         ? improvDelta(baseEvn, evnActNum) : null
                                       const sColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : score < 0 ? '#dc2626' : '#94a3b8'
-                                      const sBg    = score === null ? '' : score > 0 ? '#dcfce7' : score < 0 ? '#fee2e2' : '#f1f5f9'
+
                                       return (
                                       <div key={rec.id} style={{ background: '#fff7ed', border: '1px solid #fed7aa', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
@@ -1413,19 +1425,55 @@ STRUCTURE (n'inclure que si données présentes) :
                                             if (!apiKey) { showToast('Clé API requise', 'error'); return }
                                             showToast('Analyse en cours...', 'success')
                                             try {
-                                              // Build historique from all notes + bilans for this patient/zone
+                                              // Build historique complet from all notes + bilans + intermediaires for this patient/zone
                                               const patKey = note.patientKey
                                               const allNotes = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === zt).sort((a, b) => a.id - b.id)
                                               const allBilans = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
                                               const allInters = dbIntermediaires.filter(r => r.patientKey === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
-                                              const historiqueStr = [
-                                                ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
-                                                ...allInters.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>)?.evn as Record<string, unknown> ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN actuelle ${tc.pireActuel ?? '?'}/10` }),
-                                                ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — ${n.data.interventions.join(', ')} — Tolérance: ${n.data.tolerance}`),
-                                              ].join('\n')
+
+                                              // Bilans détaillés
+                                              const bilansStr = allBilans.map(b => {
+                                                const d = b.bilanData?.douleur as Record<string, unknown> | undefined
+                                                const sc = b.bilanData?.scores as Record<string, unknown> | undefined
+                                                const lines = [`--- Bilan initial ${b.dateBilan} ---`, `EVN : ${b.evn ?? '?'}/10`]
+                                                if (d?.douleurType) lines.push(`Type douleur : ${d.douleurType} | Évolution : ${d.situation ?? 'N/R'} | Nocturne : ${d.douleurNocturne ?? 'N/R'}`)
+                                                if (sc && Object.keys(sc).length > 0) lines.push(`Scores : ${JSON.stringify(sc)}`)
+                                                if (b.analyseIA) lines.push(`Diagnostic IA : ${b.analyseIA.diagnostic.titre} — ${b.analyseIA.diagnostic.description}`)
+                                                if (b.ficheExercice?.markdown) { const md = b.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
+                                                return lines.join('\n')
+                                              }).join('\n\n')
+
+                                              // Bilans intermédiaires détaillés
+                                              const intersStr = allInters.map(r => {
+                                                const tc2 = (r.data?.troncCommun as Record<string, unknown>) ?? {}
+                                                const evn2 = (tc2.evn as Record<string, unknown>) ?? {}
+                                                const lines = [`--- Bilan intermédiaire ${r.dateBilan} ---`, `EVN pire : ${evn2.pireActuel ?? '?'}/10 (initial: ${evn2.pireInitial ?? '?'}) | Évolution globale : ${tc2.evolutionGlobale ?? 'N/R'}`]
+                                                if (r.analyseIA) lines.push(`Diagnostic IA : ${r.analyseIA.noteDiagnostique.titre} — ${r.analyseIA.noteDiagnostique.evolution}`)
+                                                if (r.ficheExercice?.markdown) { const md = r.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
+                                                return lines.join('\n')
+                                              }).join('\n\n')
+
+                                              // Séances détaillées
+                                              const notesStr = allNotes.map(n => {
+                                                const lines = [`--- Séance n°${n.numSeance} (${n.dateSeance}) ---`,
+                                                  `EVA : ${n.data.eva}/10 | Observance : ${n.data.observance} | Tolérance : ${n.data.tolerance}${n.data.toleranceDetail ? ` (${n.data.toleranceDetail})` : ''}`,
+                                                  `Évolution : ${n.data.evolution}`,
+                                                  `Interventions : ${n.data.interventions.join(', ')}`]
+                                                if (n.data.prochaineEtape?.length) lines.push(`Prochaines étapes : ${n.data.prochaineEtape.join(', ')}`)
+                                                if (n.data.noteSubjective) lines.push(`Ressenti patient : ${n.data.noteSubjective}`)
+                                                if (n.analyseIA) {
+                                                  if (n.analyseIA.resume) lines.push(`Analyse IA : ${n.analyseIA.resume}`)
+                                                  if (n.analyseIA.focus) lines.push(`Focus IA : ${n.analyseIA.focus}`)
+                                                  if (n.analyseIA.conseil) lines.push(`Conseil IA : ${n.analyseIA.conseil}`)
+                                                }
+                                                if (n.ficheExercice?.markdown) { const md = n.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
+                                                return lines.join('\n')
+                                              }).join('\n\n')
+
+                                              const historiqueStr = [bilansStr, intersStr, notesStr].filter(Boolean).join('\n\n')
 
                                               const raw = await callGemini(apiKey,
-                                                'Tu es un kinésithérapeute expert. Analyse la séance actuelle dans le contexte de tout l\'historique du patient. Sois concis. Réponds UNIQUEMENT en JSON valide.',
+                                                'Tu es un kinésithérapeute expert. Analyse la séance actuelle dans le contexte de tout l\'historique COMPLET du patient (bilans, bilans intermédiaires, séances précédentes, analyses IA, exercices prescrits). Sois concis. Réponds UNIQUEMENT en JSON valide.',
                                                 `HISTORIQUE COMPLET DU PATIENT (${ZONE_LABELS[zt] ?? zt}) :\n${historiqueStr}\n\nSÉANCE ACTUELLE (n°${note.numSeance}) :\nEVA : ${note.data.eva}/10\nÉvolution : ${note.data.evolution}\nObservance : ${note.data.observance}\nInterventions : ${note.data.interventions.join(', ')}\nDosage : ${note.data.detailDosage}\nTolérance : ${note.data.tolerance} ${note.data.toleranceDetail}\nRessenti : ${note.data.noteSubjective}\nProchaine étape : ${note.data.prochaineEtape.join(', ')}\nNote : ${note.data.notePlan}\n\nRéponds en JSON :\n{"resume":"1-2 phrases résumant la séance","evolution":"1 phrase sur la tendance globale de l\'évolution","vigilance":["point de vigilance 1","point 2 si pertinent"],"focus":"1 phrase sur quoi se focaliser à la prochaine séance","conseil":"1-2 phrases de conseil IA basé sur la direction de la symptomatologie et l\'historique — concret et actionnable"}`,
                                                 2048, true, 'gemini-2.5-flash')
                                               const parsed = JSON.parse(raw)
@@ -1505,7 +1553,6 @@ STRUCTURE (n'inclure que si données présentes) :
                           onClick={() => {
                             const firstRec = bilans[0]
                             setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                            const patKey = selectedPatient ?? ''
                             const zones = Array.from(new Map(bilans.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
                             if (zones.length === 1) {
                               const z = zones[0][1] ?? ''
@@ -2495,25 +2542,23 @@ STRUCTURE (n'inclure que si données présentes) :
           ? (dbNotes.find(r => r.id === currentNoteSeanceId)?.numSeance ?? '?')
           : String(getPatientNotes(patKey).filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType).length + 1)
         return (
-          <div style={{ minHeight: '100vh', background: 'var(--background)', paddingBottom: '6rem' }}>
-            <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--surface)', borderBottom: '1px solid var(--border-color)', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <button onClick={() => { setCurrentNoteSeanceId(null); setCurrentNoteSeanceData(null); setNoteSeanceZone(null); setStep('database') }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', padding: '0.3rem 0.5rem', borderRadius: 'var(--radius-md)' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                Retour
+          <>
+            <header className="screen-header" style={{ marginBottom: '0.5rem' }}>
+              <button className="btn-back" onClick={() => { setCurrentNoteSeanceId(null); setCurrentNoteSeanceData(null); setNoteSeanceZone(null); setStep('database') }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#5b21b6' }}>Note de séance n°{numSeance}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{formData.nom} {formData.prenom} · {ZONE_LABELS[bilanType]}</div>
               </div>
               <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-full)', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe' }}>SOAP</span>
-            </div>
+            </header>
 
-            <div style={{ padding: '1rem' }}>
+            <div className="scroll-area" style={{ paddingBottom: '9rem' }}>
               <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} />
             </div>
 
-            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderTop: '1px solid var(--border-color)', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: 8, zIndex: 100 }}>
+            <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button
                 style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
                 onClick={handleSaveNote}>
@@ -2549,7 +2594,7 @@ STRUCTURE (n'inclure que si données présentes) :
                 Fiche d'exercices
               </button>
             </div>
-          </div>
+          </>
         )
       })()}
 
@@ -2624,6 +2669,21 @@ STRUCTURE (n'inclure que si données présentes) :
           bilanType={currentIntermediaireForNote.bilanType ?? getBilanType(currentIntermediaireForNote.zone ?? '')}
           intermData={currentIntermediaireForNote.data ?? {}}
           historique={currentIntermediaireHistorique}
+          seances={(() => {
+            const patKey = currentIntermediaireForNote.patientKey
+            const bt = currentIntermediaireForNote.bilanType ?? getBilanType(currentIntermediaireForNote.zone ?? '')
+            return dbNotes
+              .filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
+              .sort((a, b) => a.id - b.id)
+              .map(n => ({
+                date: n.dateSeance, numSeance: n.numSeance, eva: n.data.eva, observance: n.data.observance,
+                evolution: n.data.evolution, interventions: n.data.interventions, tolerance: n.data.tolerance,
+                toleranceDetail: n.data.toleranceDetail, prochaineEtape: n.data.prochaineEtape,
+                noteSubjective: n.data.noteSubjective,
+                analyseIA: n.analyseIA ? { resume: n.analyseIA.resume, evolution: n.analyseIA.evolution, focus: n.analyseIA.focus, conseil: n.analyseIA.conseil } : null,
+                ficheExercice: n.ficheExercice,
+              }))
+          })()}
           cached={currentIntermediaireForNote.analyseIA ?? null}
           onResult={(analyse) => {
             setDbIntermediaires(prev => prev.map(r =>
@@ -2706,6 +2766,23 @@ STRUCTURE (n'inclure que si données présentes) :
             bilanData: ficheExerciceContextOverride?.bilanData ?? currentBilanDataOverride ?? getBilanData() ?? {},
             notesLibres: ficheExerciceContextOverride?.notesLibres ?? bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
+            patientHistory: (() => {
+              const patKey = selectedPatient ?? `${formData.nom}_${formData.prenom}_${formData.dateNaissance}`
+              const history: import('./utils/clinicalPrompt').PatientHistoryEntry[] = []
+              // Bilans initiaux
+              for (const b of getPatientBilans(patKey)) {
+                history.push({ type: 'bilan', date: b.dateBilan, zone: b.zone ?? '', evn: b.evn, data: b.bilanData as Record<string, unknown> | undefined, ficheExercice: b.ficheExercice })
+              }
+              // Bilans intermédiaires
+              for (const b of getPatientIntermediaires(patKey)) {
+                history.push({ type: 'intermediaire', date: b.dateBilan, zone: b.zone ?? '', data: b.data, analyseIA: b.analyseIA ? { resume: b.analyseIA.noteDiagnostique.description, evolution: b.analyseIA.noteDiagnostique.evolution } : null, ficheExercice: b.ficheExercice })
+              }
+              // Notes de séance
+              for (const n of getPatientNotes(patKey)) {
+                history.push({ type: 'note_seance', date: n.dateSeance, zone: n.zone ?? '', noteData: n.data, analyseIA: n.analyseIA ? { focus: n.analyseIA.focus } : null, ficheExercice: n.ficheExercice })
+              }
+              return history
+            })(),
           }}
           analyseIA={ficheExerciceContextOverride ? null : currentAnalyseIA}
           cached={

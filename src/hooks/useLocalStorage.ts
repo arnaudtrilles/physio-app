@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react'
 
+type QuotaErrorCallback = (key: string) => void
+let onQuotaError: QuotaErrorCallback | null = null
+
+export function setQuotaErrorHandler(handler: QuotaErrorCallback) {
+  onQuotaError = handler
+}
+
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
@@ -15,7 +22,8 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       window.localStorage.setItem(key, JSON.stringify(storedValue))
     } catch (e) {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        console.error('localStorage quota exceeded')
+        console.error(`localStorage quota exceeded for key: ${key}`)
+        onQuotaError?.(key)
       }
     }
   }, [key, storedValue])
