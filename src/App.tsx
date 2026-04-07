@@ -699,7 +699,6 @@ STRUCTURE (n'inclure que si données présentes) :
       try {
         const parsed = JSON.parse(ev.target?.result as string)
         if (!parsed.db || !Array.isArray(parsed.db)) throw new Error('Format invalide')
-        console.log('[Import] bilans:', parsed.db?.length, 'notes:', parsed.dbNotes?.length, 'keys:', parsed.dbNotes?.map((n: { patientKey: string }) => n.patientKey))
         setDb(parsed.db)
         if (parsed.dbIntermediaires) setDbIntermediaires(parsed.dbIntermediaires)
         if (Array.isArray(parsed.dbNotes)) setDbNotes(parsed.dbNotes)
@@ -708,10 +707,12 @@ STRUCTURE (n'inclure que si données présentes) :
         if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs)
         if (parsed.profile) setProfile(parsed.profile)
         if (parsed.apiKey) { setApiKey(parsed.apiKey); setApiKeyDraft(parsed.apiKey) }
+        const noteKeys = (parsed.dbNotes as Array<{ patientKey: string }> | undefined)?.map(n => n.patientKey) ?? []
+        const uniqueNoteKeys = [...new Set(noteKeys)]
         const counts = [
           `${parsed.db.length} bilans`,
           parsed.dbIntermediaires?.length ? `${parsed.dbIntermediaires.length} intermédiaires` : '',
-          parsed.dbNotes?.length ? `${parsed.dbNotes.length} séances` : '',
+          parsed.dbNotes?.length ? `${parsed.dbNotes.length} séances [${uniqueNoteKeys.join(', ')}]` : '⚠️ 0 séances dans le fichier',
         ].filter(Boolean).join(', ')
         showToast(`Importé : ${counts}`, 'success')
       } catch {
