@@ -1,8 +1,4 @@
 {
-  "framework": null,
-  "installCommand": "npm i -g pnpm && pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm run build",
-  "outputDirectory": "dist",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
