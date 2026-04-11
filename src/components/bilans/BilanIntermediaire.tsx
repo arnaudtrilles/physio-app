@@ -142,12 +142,25 @@ export const BilanIntermediaire = forwardRef<
 
   // ── Module spécifique state ──────────────────────────────────────────────
   const [scores, setScores] = useState<Record<string, string>>({
+    // common shared
+    hadAct: '', hadInit: '', dn4Act: '', dn4Init: '', sensiCAct: '', sensiCInit: '',
+    painDetectAct: '', painDetectInit: '',
+    // cheville
     faamAct: '', faamInit: '', cumberlandAct: '', cumberlandInit: '',
+    // épaule
     ossAct: '', ossInit: '', constantAct: '', constantInit: '', dashAct: '', dashInit: '',
-    koosAct: '', koosInit: '', ikdcAct: '', ikdcInit: '',
+    roweAct: '', roweInit: '',
+    // genou
+    koosAct: '', koosInit: '', fakpsAct: '', fakpsInit: '', ikdcAct: '', ikdcInit: '',
+    aclRsiAct: '', aclRsiInit: '', sf36Act: '', sf36Init: '',
+    // hanche
     hoosAct: '', hoosInit: '', oxfordHipAct: '', oxfordHipInit: '',
+    hagosAct: '', hagosInit: '', efmiAct: '', efmiInit: '',
+    // cervical
     ndiAct: '', ndiInit: '',
+    // lombaire
     startBackAct: '', startBackInit: '', eifelAct: '', eifelInit: '',
+    orebroAct: '', orebroInit: '', fabqAct: '', fabqInit: '',
     ...(_sc as Record<string, string>),
   })
   const updScore = (k: string, v: string) => setScores(p => ({ ...p, [k]: v }))
@@ -160,12 +173,12 @@ export const BilanIntermediaire = forwardRef<
     return base
   }
 
-  const mobCheville = ['Flexion', 'Extension', 'Inversion', 'Éversion']
-  const mobEpaule   = ['Flexion', 'Abduction', 'RE 1', 'RE 2', 'RI 1', 'RI 2']
-  const mobGenou    = ['Flexion', 'Extension', 'RE / RI tibiale']
-  const mobHanche   = ['Flexion', 'Abduction', 'Adduction', 'Extension', 'RE / RI']
-  const mobCervical = ['Flexion / Extension', 'Protrusion / Rétraction', 'Rotation D / G', 'Inclinaison D / G']
-  const mobLombaire = ['Flexion / Extension', 'Glissement Latéral D/G', 'Inclinaison D / G', 'Rotation D / G']
+  const mobCheville = ['Flexion', 'Extension', 'Varus', 'Valgus', 'Inversion', 'Éversion']
+  const mobEpaule   = ['Flexion', 'Abduction', 'Adduction', 'Extension', 'RE 1', 'RE 2', 'RI 1', 'RI 2']
+  const mobGenou    = ['Flexion', 'Extension', 'RI tibiale', 'RE tibiale']
+  const mobHanche   = ['Flexion', 'Abduction', 'Adduction', 'Extension', 'RE', 'RI']
+  const mobCervical = ['Flexion', 'Extension', 'Protrusion', 'Rétraction', 'Rotation D', 'Rotation G', 'Inclinaison D', 'Inclinaison G']
+  const mobLombaire = ['Flexion', 'Extension', 'Glissement Lat. D', 'Glissement Lat. G', 'Inclinaison D', 'Inclinaison G', 'Rotation D', 'Rotation G']
 
   const getMobRows = () => {
     if (bilanType === 'cheville') return mobCheville
@@ -180,6 +193,55 @@ export const BilanIntermediaire = forwardRef<
   const [mob, setMob] = useState(() => initMob(getMobRows()))
   const updateMob = (row: string, field: string, v: string) =>
     setMob(p => ({ ...p, [row]: { ...p[row], [field]: v } }))
+
+  // ── Force comparative (épaule) ───────────────────────────────────────────
+  const FORCE_EPAULE_KEYS: [string, string][] = [
+    ['planScapula90',     'Plan scapula à 90° flexion'],
+    ['re1',               'RE 1'],
+    ['re2StabEpaule',     'RE 2 avec stabilisation'],
+    ['re2StabCharge',     'RE 2 avec stab + charge'],
+    ['re2SansStab',       'RE 2 sans stabilisation'],
+    ['re2SansStabCharge', 'RE 2 sans stab + charge'],
+    ['ri2StabEpaule',     'RI 2 avec stabilisation'],
+    ['ri2StabCharge',     'RI 2 avec stab + charge'],
+    ['ri2SansStab',       'RI 2 sans stabilisation'],
+    ['ri2SansStabCharge', 'RI 2 sans stab + charge'],
+  ]
+  const _fce = (_mod.forceCompareEpaule as Record<string, { initial: string; actuel: string }>) ?? {}
+  const initForceEpaule = () => {
+    const base: Record<string, { initial: string; actuel: string }> = {}
+    FORCE_EPAULE_KEYS.forEach(([k]) => { base[k] = _fce[k] ?? { initial: '', actuel: '' } })
+    return base
+  }
+  const [forceEpaule, setForceEpaule] = useState(initForceEpaule)
+  const updForceEp = (k: string, side: 'initial' | 'actuel', v: string) =>
+    setForceEpaule(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
+
+  // ── Force comparative — Hanche / Genou / Cheville ────────────────────────
+  const FORCE_MI_KEYS: [string, string][] = [
+    ['ilioPsoas', 'Ilio-psoas'], ['quadriceps', 'Quadriceps'],
+    ['ischios', 'Ischio-jambiers'], ['abducteurs', 'Abducteurs'],
+    ['adducteurs', 'Adducteurs'], ['rotateursExt', 'Rotateurs externes'],
+    ['rotateursInt', 'Rotateurs internes'], ['tricepsSural', 'Triceps sural'],
+  ]
+  const FORCE_GENOU_KEYS: [string, string][] = [...FORCE_MI_KEYS, ['tibialAnt', 'Tibial antérieur']]
+  const FORCE_CHEVILLE_KEYS: [string, string][] = [
+    ...FORCE_MI_KEYS,
+    ['tibialAnt', 'Tibial antérieur'], ['tibialPost', 'Tibial postérieur'],
+    ['longFibulaire', 'Long fibulaire'], ['courtFibulaire', 'Court fibulaire'],
+  ]
+  const _fcm = (_mod.forceCompareMI as Record<string, { initial: string; actuel: string }>) ?? {}
+  const initForceMI = (keys: [string, string][]) => {
+    const base: Record<string, { initial: string; actuel: string }> = {}
+    keys.forEach(([k]) => { base[k] = _fcm[k] ?? { initial: '', actuel: '' } })
+    return base
+  }
+  const getForceKeys = () => bilanType === 'genou' ? FORCE_GENOU_KEYS
+    : bilanType === 'cheville' ? FORCE_CHEVILLE_KEYS
+    : FORCE_MI_KEYS
+  const [forceMI, setForceMI] = useState(() => initForceMI(getForceKeys()))
+  const updForceMI = (k: string, side: 'initial' | 'actuel', v: string) =>
+    setForceMI(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
 
   const [oedeme,        setOedeme]        = useState((_mod.oedeme        as string) ?? '')
   const [wbLunge,       setWbLunge]       = useState((_mod.wbLunge        as string) ?? '')
@@ -221,6 +283,8 @@ export const BilanIntermediaire = forwardRef<
         scores, mobilite: mob,
         oedeme, wbLunge, yBalanceAct: yBalance, yBalanceInit, fonctionnel, testsSpec,
         re2Stab, ri2Stab, forceMusc, morpho, mouvementsRepetes: mouvRep, neuroMecano, modifSymptomes: modifSympt,
+        forceCompareEpaule: forceEpaule,
+        forceCompareMI: forceMI,
       },
       synthese: {
         bilanEvolution: bilanEvol, validationObjectifs: validObjSmrt,
@@ -287,6 +351,8 @@ export const BilanIntermediaire = forwardRef<
       if (mod.mouvementsRepetes) setMouvRep(mod.mouvementsRepetes as string)
       if (mod.neuroMecano)  setNeuroMecano(mod.neuroMecano as string)
       if (mod.modifSymptomes) setModifSympt(mod.modifSymptomes as string)
+      if (mod.forceCompareEpaule) setForceEpaule(p => ({ ...p, ...(mod.forceCompareEpaule as Record<string, { initial: string; actuel: string }>) }))
+      if (mod.forceCompareMI) setForceMI(p => ({ ...p, ...(mod.forceCompareMI as Record<string, { initial: string; actuel: string }>) }))
       if (syn.bilanEvolution)      setBilanEvol(syn.bilanEvolution as string)
       if (syn.validationObjectifs) setValidObjSmrt(syn.validationObjectifs as string)
       if (syn.nouveauxObjectifs) {
@@ -526,26 +592,52 @@ export const BilanIntermediaire = forwardRef<
                     {bilanType === 'cheville' && <>
                       <ScoreRow label="FAAM" actuel={scores.faamAct} initial={scores.faamInit} onActuel={v => updScore('faamAct', v)} onInitial={v => updScore('faamInit', v)} />
                       <ScoreRow label="Cumberland Ankle Instability Tool" actuel={scores.cumberlandAct} initial={scores.cumberlandInit} onActuel={v => updScore('cumberlandAct', v)} onInitial={v => updScore('cumberlandInit', v)} />
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
                     </>}
                     {bilanType === 'epaule' && <>
                       <ScoreRow label="Oxford Shoulder Score (OSS)" actuel={scores.ossAct} initial={scores.ossInit} onActuel={v => updScore('ossAct', v)} onInitial={v => updScore('ossInit', v)} />
                       <ScoreRow label="Constant-Murley" actuel={scores.constantAct} initial={scores.constantInit} onActuel={v => updScore('constantAct', v)} onInitial={v => updScore('constantInit', v)} />
                       <ScoreRow label="DASH" actuel={scores.dashAct} initial={scores.dashInit} onActuel={v => updScore('dashAct', v)} onInitial={v => updScore('dashInit', v)} />
+                      <ScoreRow label="Rowe Score" actuel={scores.roweAct} initial={scores.roweInit} onActuel={v => updScore('roweAct', v)} onInitial={v => updScore('roweInit', v)} />
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
+                      <ScoreRow label="Sensibilisation centrale" actuel={scores.sensiCAct} initial={scores.sensiCInit} onActuel={v => updScore('sensiCAct', v)} onInitial={v => updScore('sensiCInit', v)} />
                     </>}
                     {bilanType === 'genou' && <>
                       <ScoreRow label="KOOS" actuel={scores.koosAct} initial={scores.koosInit} onActuel={v => updScore('koosAct', v)} onInitial={v => updScore('koosInit', v)} />
-                      <ScoreRow label="IKDC / ACL-RSI" actuel={scores.ikdcAct} initial={scores.ikdcInit} onActuel={v => updScore('ikdcAct', v)} onInitial={v => updScore('ikdcInit', v)} />
+                      <ScoreRow label="F-AKPS" actuel={scores.fakpsAct} initial={scores.fakpsInit} onActuel={v => updScore('fakpsAct', v)} onInitial={v => updScore('fakpsInit', v)} />
+                      <ScoreRow label="IKDC" actuel={scores.ikdcAct} initial={scores.ikdcInit} onActuel={v => updScore('ikdcAct', v)} onInitial={v => updScore('ikdcInit', v)} />
+                      <ScoreRow label="ACL-RSI" actuel={scores.aclRsiAct} initial={scores.aclRsiInit} onActuel={v => updScore('aclRsiAct', v)} onInitial={v => updScore('aclRsiInit', v)} />
+                      <ScoreRow label="SF-36" actuel={scores.sf36Act} initial={scores.sf36Init} onActuel={v => updScore('sf36Act', v)} onInitial={v => updScore('sf36Init', v)} />
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
                     </>}
                     {bilanType === 'hanche' && <>
                       <ScoreRow label="HOOS" actuel={scores.hoosAct} initial={scores.hoosInit} onActuel={v => updScore('hoosAct', v)} onInitial={v => updScore('hoosInit', v)} />
                       <ScoreRow label="Oxford Hip Score" actuel={scores.oxfordHipAct} initial={scores.oxfordHipInit} onActuel={v => updScore('oxfordHipAct', v)} onInitial={v => updScore('oxfordHipInit', v)} />
+                      <ScoreRow label="HAGOS" actuel={scores.hagosAct} initial={scores.hagosInit} onActuel={v => updScore('hagosAct', v)} onInitial={v => updScore('hagosInit', v)} />
+                      <ScoreRow label="EFMI" actuel={scores.efmiAct} initial={scores.efmiInit} onActuel={v => updScore('efmiAct', v)} onInitial={v => updScore('efmiInit', v)} />
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
+                      <ScoreRow label="Sensibilisation centrale" actuel={scores.sensiCAct} initial={scores.sensiCInit} onActuel={v => updScore('sensiCAct', v)} onInitial={v => updScore('sensiCInit', v)} />
                     </>}
                     {bilanType === 'cervical' && <>
                       <ScoreRow label="NDI (Neck Disability Index)" actuel={scores.ndiAct} initial={scores.ndiInit} onActuel={v => updScore('ndiAct', v)} onInitial={v => updScore('ndiInit', v)} />
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
+                      <ScoreRow label="Pain Detect" actuel={scores.painDetectAct} initial={scores.painDetectInit} onActuel={v => updScore('painDetectAct', v)} onInitial={v => updScore('painDetectInit', v)} />
+                      <ScoreRow label="Sensibilisation centrale" actuel={scores.sensiCAct} initial={scores.sensiCInit} onActuel={v => updScore('sensiCAct', v)} onInitial={v => updScore('sensiCInit', v)} />
                     </>}
                     {bilanType === 'lombaire' && <>
                       <ScoreRow label="Start Back Screening Tool" actuel={scores.startBackAct} initial={scores.startBackInit} onActuel={v => updScore('startBackAct', v)} onInitial={v => updScore('startBackInit', v)} />
-                      <ScoreRow label="EIFEL / Roland Morris / FABQ" actuel={scores.eifelAct} initial={scores.eifelInit} onActuel={v => updScore('eifelAct', v)} onInitial={v => updScore('eifelInit', v)} />
+                      <ScoreRow label="Örebro" actuel={scores.orebroAct} initial={scores.orebroInit} onActuel={v => updScore('orebroAct', v)} onInitial={v => updScore('orebroInit', v)} />
+                      <ScoreRow label="FABQ" actuel={scores.fabqAct} initial={scores.fabqInit} onActuel={v => updScore('fabqAct', v)} onInitial={v => updScore('fabqInit', v)} />
+                      <ScoreRow label="EIFEL / Roland Morris" actuel={scores.eifelAct} initial={scores.eifelInit} onActuel={v => updScore('eifelAct', v)} onInitial={v => updScore('eifelInit', v)} />
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
+                      <ScoreRow label="Pain Detect" actuel={scores.painDetectAct} initial={scores.painDetectInit} onActuel={v => updScore('painDetectAct', v)} onInitial={v => updScore('painDetectInit', v)} />
+                      <ScoreRow label="Sensibilisation centrale" actuel={scores.sensiCAct} initial={scores.sensiCInit} onActuel={v => updScore('sensiCAct', v)} onInitial={v => updScore('sensiCInit', v)} />
                     </>}
                   </div>
 
@@ -578,32 +670,101 @@ export const BilanIntermediaire = forwardRef<
 
                   {bilanType === 'epaule' && (
                     <>
-                      <label style={lblStyle}>Force musculaire — RE 2 avec/sans stabilisation : Initial → Actuel</label>
-                      <input value={re2Stab} onChange={e => setRe2Stab(e.target.value)} style={inputStyle} placeholder="Ex : MRC 3 → MRC 4+" />
-                      <label style={lblStyle}>Force musculaire — RI 2 avec/sans stabilisation : Initial → Actuel</label>
-                      <input value={ri2Stab} onChange={e => setRi2Stab(e.target.value)} style={inputStyle} placeholder="Ex : MRC 4- → MRC 4+" />
+                      <label style={lblStyle}>Force musculaire (MRC) — Initial → Actuel</label>
+                      <div style={{ overflowX: 'auto', marginBottom: 10 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--secondary)' }}>
+                              {['Test', 'Initial', 'Actuel'].map(h => (
+                                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.72rem', borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {FORCE_EPAULE_KEYS.map(([k, lbl]) => (
+                              <tr key={k}>
+                                <td style={{ padding: '5px 8px', fontSize: '0.78rem', color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{lbl}</td>
+                                <td style={{ padding: '3px 4px' }}>
+                                  <input value={forceEpaule[k]?.initial ?? ''} onChange={e => updForceEp(k, 'initial', e.target.value)}
+                                    placeholder="—" style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.78rem', color: 'var(--text-main)', padding: '2px 4px', outline: 'none', opacity: 0.7 }} />
+                                </td>
+                                <td style={{ padding: '3px 4px' }}>
+                                  <input value={forceEpaule[k]?.actuel ?? ''} onChange={e => updForceEp(k, 'actuel', e.target.value)}
+                                    placeholder="—" style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.78rem', color: 'var(--text-main)', padding: '2px 4px', outline: 'none' }} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <label style={lblStyle}>Modification des symptômes (tests scapulaires, neuromusculaires, positionnels)</label>
+                      <textarea value={modifSympt} onChange={e => setModifSympt(e.target.value)} style={taStyle}
+                        placeholder="Assistance scapulaire, stabilisation scapula, activation coiffe, modification position cervicale/thoracique… (Mieux/Pareil/Pire)" />
+
+                      <label style={lblStyle}>Examen des mouvements répétés</label>
+                      <textarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} style={taStyle}
+                        placeholder="Marqueurs avant procédure, évolution centralisation/périphérisation…" />
+
+                      <label style={lblStyle}>Neurologique & mécanosensibilité (ULTT 1-4)</label>
+                      <textarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} style={taStyle}
+                        placeholder="Réflexes, déficit moteur, sensibilité, ULTT 1 (médian), ULTT 2 (médian), ULTT 3 (radial), ULTT 4 (ulnaire)…" />
                     </>
                   )}
 
-                  {(bilanType === 'genou' || bilanType === 'hanche') && (
+                  {(bilanType === 'genou' || bilanType === 'hanche' || bilanType === 'cheville') && (
                     <>
-                      <label style={lblStyle}>Force musculaire (initial vs actuel)</label>
-                      <textarea value={forceMusc} onChange={e => setForceMusc(e.target.value)} style={taStyle}
-                        placeholder={bilanType === 'genou' ? 'Quadriceps, Ischios-jambiers, Triceps sural…' : 'Ilio-psoas, Abducteurs, Rotateurs…'} />
-                    </>
-                  )}
+                      <label style={lblStyle}>Force musculaire (MRC) — Initial → Actuel</label>
+                      <div style={{ overflowX: 'auto', marginBottom: 10 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--secondary)' }}>
+                              {['Muscle', 'Initial', 'Actuel'].map(h => (
+                                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.72rem', borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getForceKeys().map(([k, lbl]) => (
+                              <tr key={k}>
+                                <td style={{ padding: '5px 8px', fontSize: '0.78rem', color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{lbl}</td>
+                                <td style={{ padding: '3px 4px' }}>
+                                  <input value={forceMI[k]?.initial ?? ''} onChange={e => updForceMI(k, 'initial', e.target.value)}
+                                    placeholder="—" style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.78rem', color: 'var(--text-main)', padding: '2px 4px', outline: 'none', opacity: 0.7 }} />
+                                </td>
+                                <td style={{ padding: '3px 4px' }}>
+                                  <input value={forceMI[k]?.actuel ?? ''} onChange={e => updForceMI(k, 'actuel', e.target.value)}
+                                    placeholder="—" style={{ width: '100%', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.78rem', color: 'var(--text-main)', padding: '2px 4px', outline: 'none' }} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
 
-                  {bilanType === 'hanche' && (
-                    <>
                       <label style={lblStyle}>Modification des symptômes</label>
                       <textarea value={modifSympt} onChange={e => setModifSympt(e.target.value)} style={taStyle}
-                        placeholder="Activation abducteurs (Mieux/Pareil/Pire) ? Modification position lombo-pelvienne ?" />
+                        placeholder={
+                          bilanType === 'hanche' ? 'Activation abducteurs, modification position lombo-pelvienne / MI, taping, chaussage… (Mieux/Pareil/Pire)' :
+                          bilanType === 'genou' ? 'Modification appui, alignement MI, taping rotulien… (Mieux/Pareil/Pire)' :
+                          'Stabilisation cheville, taping, modification appui… (Mieux/Pareil/Pire)'
+                        } />
+
+                      <label style={lblStyle}>Examen des mouvements répétés</label>
+                      <textarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} style={taStyle}
+                        placeholder="Marqueurs avant procédure, évolution…" />
+
+                      <label style={lblStyle}>Neurologique & mécanosensibilité</label>
+                      <textarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} style={taStyle}
+                        placeholder="Réflexes, déficit moteur, sensibilité, Lasègue / PKB / Slump…" />
                     </>
                   )}
 
                   {bilanType === 'cheville' && (
                     <>
-                      <label style={lblStyle}>Weight Bearing Lunge Test</label>
+                      <label style={lblStyle}>Œdème — Technique en 8 (Initial → Actuel)</label>
+                      <input value={oedeme} onChange={e => setOedeme(e.target.value)} style={inputStyle} placeholder="Ex : 28 cm (initial : 30 cm)" />
+                      <label style={lblStyle}>Weight Bearing Lunge Test (initial → actuel)</label>
                       <input value={wbLunge} onChange={e => setWbLunge(e.target.value)} style={inputStyle} placeholder="Résultat actuel / initial" />
                       <label style={lblStyle}>Y Balance Test — Actuel vs Initial</label>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
@@ -634,10 +795,12 @@ export const BilanIntermediaire = forwardRef<
                   <label style={lblStyle}>Tests spécifiques (évolution des tests initialement positifs)</label>
                   <textarea value={testsSpec} onChange={e => setTestsSpec(e.target.value)} style={taStyle}
                     placeholder={
-                      bilanType === 'cheville' ? 'Antero Lateral Drawer, Squeeze test… Positifs / Négatifs' :
-                      bilanType === 'epaule'   ? 'Bear Hug, Apprehension test… Positifs / Négatifs' :
-                      bilanType === 'genou'    ? 'Lachman, Tiroirs, LCL, LCM — évolution laxité/douleur…' :
-                      bilanType === 'hanche'   ? 'FABER, FADDIR, Thomas — positifs / négatifs' :
+                      bilanType === 'cheville' ? 'ALTD, RALTD, Talar Tilt, Kleiger, Squeeze, Grinding, Molloy, Spring Ligament… (Positifs / Négatifs / évolution)' :
+                      bilanType === 'epaule'   ? "Bear Hug, Belly Press, ER Lag Sign, O'Brien, Cross-Arm, Apprehension/Relocation, Sulcus, Jerk, CKCUEST, ULRT, UQ-YBT… (positifs / négatifs / évolution)" :
+                      bilanType === 'genou'    ? 'Lachman, Tiroirs A/P, LCL, LCM, Thessaly, Renne, Noble, Hoffa… (évolution laxité/douleur)' :
+                      bilanType === 'hanche'   ? 'Cluster Laslett, Ober, Thomas, FADDIR, FABER, Cluster Sultive, HEER… (positifs / négatifs)' :
+                      bilanType === 'cervical' ? 'Spurling, Distraction, Adson, Roos, TA…' :
+                      bilanType === 'lombaire' ? 'Cluster Laslett, Extension-Rotation, Prone Instability, TA…' :
                       'Tests spécifiques…'
                     } />
                 </>

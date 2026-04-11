@@ -31,7 +31,7 @@ const BilanEvolutionIA = lazy(() => import('./components/BilanEvolutionIA').then
 import { generatePDF } from './utils/pdfGenerator'
 import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
-import { buildPDFReportPrompt } from './utils/clinicalPrompt'
+import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import { callGemini } from './utils/geminiClient'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument } from './types'
@@ -129,6 +129,10 @@ function App() {
   const [noteSeanceZone, setNoteSeanceZone] = useState<string | null>(null)
   const [showNoteSeanceZoneSelector, setShowNoteSeanceZoneSelector] = useState(false)
   const [deletingNoteSeanceId, setDeletingNoteSeanceId] = useState<number | null>(null)
+  const [showAddPatientChoice, setShowAddPatientChoice] = useState(false)
+  const [deletingPatientKey, setDeletingPatientKey] = useState<string | null>(null)
+  const [showQuickAddPatient, setShowQuickAddPatient] = useState(false)
+  const [quickAddData, setQuickAddData] = useState({ nom: '', prenom: '', dateNaissance: '', zone: '', evn: '', pathologie: '', notes: '' })
   const [pdfPreviewMarkdown, setPdfPreviewMarkdown] = useState('')
   const [pdfPreviewZone, setPdfPreviewZone] = useState('')
   const [pdfPreviewTitle, setPdfPreviewTitle] = useState('')
@@ -214,29 +218,63 @@ function App() {
     // Scores fonctionnels module spécifique — initial depuis le bilan initial
     const modScores: Record<string, string> = {}
     if (bilanType === 'cheville') {
+      if (initScores.faam) modScores.faamInit = initScores.faam
       if (initScores.ffaam) modScores.faamInit = initScores.ffaam
       if (initScores.cait) modScores.cumberlandInit = initScores.cait
+      if (initScores.had) modScores.hadInit = initScores.had
+      if (initScores.dn4) modScores.dn4Init = initScores.dn4
     } else if (bilanType === 'epaule') {
       if (initScores.scoreOSS) modScores.ossInit = initScores.scoreOSS
       if (initScores.scoreConstant) modScores.constantInit = initScores.scoreConstant
       if (initScores.scoreDASH) modScores.dashInit = initScores.scoreDASH
+      if (initScores.scoreRowe) modScores.roweInit = initScores.scoreRowe
+      if (initScores.scoreHAD) modScores.hadInit = initScores.scoreHAD
+      if (initScores.scoreDN4) modScores.dn4Init = initScores.scoreDN4
+      if (initScores.scoreSensibilisation) modScores.sensiCInit = initScores.scoreSensibilisation
     } else if (bilanType === 'genou') {
       if (initScores.koos) modScores.koosInit = initScores.koos
+      if (initScores.fakps) modScores.fakpsInit = initScores.fakps
       if (initScores.ikdc) modScores.ikdcInit = initScores.ikdc
+      if (initScores.aclRsi) modScores.aclRsiInit = initScores.aclRsi
+      if (initScores.sf36) modScores.sf36Init = initScores.sf36
+      if (initScores.had) modScores.hadInit = initScores.had
+      if (initScores.dn4) modScores.dn4Init = initScores.dn4
     } else if (bilanType === 'hanche') {
       if (initScores.hoos) modScores.hoosInit = initScores.hoos
       if (initScores.oxfordHip) modScores.oxfordHipInit = initScores.oxfordHip
+      if (initScores.hagos) modScores.hagosInit = initScores.hagos
+      if (initScores.efmi) modScores.efmiInit = initScores.efmi
+      if (initScores.had) modScores.hadInit = initScores.had
+      if (initScores.dn4) modScores.dn4Init = initScores.dn4
+      if (initScores.sensibilisation) modScores.sensiCInit = initScores.sensibilisation
     } else if (bilanType === 'cervical') {
       if (initScores.ndi) modScores.ndiInit = initScores.ndi
+      if (initScores.had) modScores.hadInit = initScores.had
+      if (initScores.dn4) modScores.dn4Init = initScores.dn4
+      if (initScores.painDetect) modScores.painDetectInit = initScores.painDetect
+      if (initScores.sensibilisation) modScores.sensiCInit = initScores.sensibilisation
     } else if (bilanType === 'lombaire') {
       if (initScores.startBack) modScores.startBackInit = initScores.startBack
+      if (initScores.orebro) modScores.orebroInit = initScores.orebro
+      if (initScores.fabq) modScores.fabqInit = initScores.fabq
       if (initScores.eifel) modScores.eifelInit = initScores.eifel
+      if (initScores.had) modScores.hadInit = initScores.had
+      if (initScores.dn4) modScores.dn4Init = initScores.dn4
+      if (initScores.painDetect) modScores.painDetectInit = initScores.painDetect
+      if (initScores.sensibilisation) modScores.sensiCInit = initScores.sensibilisation
     }
 
-    // PSFS initial — epaule a 3 activités séparées, les autres un seul score
-    const psfsInit1 = bilanType === 'epaule' ? String(initScores.psfs1 ?? '') : String(initScores.psfs ?? '')
-    const psfsInit2 = bilanType === 'epaule' ? String(initScores.psfs2 ?? '') : ''
-    const psfsInit3 = bilanType === 'epaule' ? String(initScores.psfs3 ?? '') : ''
+    // PSFS initial — nouvelle structure (array d'items) si présente, sinon legacy
+    const psfsArray = first.bilanData?.psfs as Array<{ label?: string; score?: string; notes?: string }> | undefined
+    const psfsInit1 = Array.isArray(psfsArray) && psfsArray[0]?.score ? String(psfsArray[0].score)
+      : bilanType === 'epaule' ? String(initScores.psfs1 ?? '') : String(initScores.psfs ?? '')
+    const psfsInit2 = Array.isArray(psfsArray) && psfsArray[1]?.score ? String(psfsArray[1].score)
+      : bilanType === 'epaule' ? String(initScores.psfs2 ?? '') : ''
+    const psfsInit3 = Array.isArray(psfsArray) && psfsArray[2]?.score ? String(psfsArray[2].score)
+      : bilanType === 'epaule' ? String(initScores.psfs3 ?? '') : ''
+    const psfsLabel1 = Array.isArray(psfsArray) && psfsArray[0]?.label ? String(psfsArray[0].label) : String(initScores.psfs1Label ?? '')
+    const psfsLabel2 = Array.isArray(psfsArray) && psfsArray[1]?.label ? String(psfsArray[1].label) : String(initScores.psfs2Label ?? '')
+    const psfsLabel3 = Array.isArray(psfsArray) && psfsArray[2]?.label ? String(psfsArray[2].label) : String(initScores.psfs3Label ?? '')
 
     return {
       troncCommun: {
@@ -255,9 +293,9 @@ function App() {
           init1: psfsInit1,
           init2: psfsInit2,
           init3: psfsInit3,
-          nom1: String(lastPs.nom1 ?? ''),
-          nom2: String(lastPs.nom2 ?? ''),
-          nom3: String(lastPs.nom3 ?? ''),
+          nom1: String(lastPs.nom1 ?? psfsLabel1 ?? ''),
+          nom2: String(lastPs.nom2 ?? psfsLabel2 ?? ''),
+          nom3: String(lastPs.nom3 ?? psfsLabel3 ?? ''),
         },
       },
       moduleSpecifique: {
@@ -829,7 +867,13 @@ STRUCTURE (n'inclure que si données présentes) :
           <div className="scroll-area">
             {!selectedPatient ? (
               <>
-                <div style={{marginBottom: '1.5rem'}}>
+                <div style={{marginBottom: '1rem'}}>
+                  <button
+                    onClick={() => setShowAddPatientChoice(true)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.92rem', border: '1.5px solid var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Ajouter un patient
+                  </button>
                   <div style={{ position: 'relative' }}>
                     <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -846,45 +890,110 @@ STRUCTURE (n'inclure que si données présentes) :
                     if (!patientsMap.has(key)) patientsMap.set(key, { key, nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance, pathologie: r.pathologie, avatarBg: r.avatarBg, records: [] })
                     patientsMap.get(key)!.records.push(r)
                   })
-                  const patients = Array.from(patientsMap.values()).filter(p => p.key.toLowerCase().includes(searchQuery.toLowerCase()))
+                  const patients = Array.from(patientsMap.values()).filter(p => p.key.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => a.key.localeCompare(b.key, 'fr'))
                   if (patients.length === 0) return <div className="empty-state"><p>Aucun dossier trouvé.</p></div>
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '5rem' }}>
-                      {patients.map(p => {
-                        const score = patientGeneralScore(p.key)
-                        const scoreColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : '#dc2626'
 
-                        const lastBilan = p.records.sort((a, b) => b.id - a.id)[0]
-                        return (
-                          <div key={p.key} onClick={() => setSelectedPatient(p.key)}
-                            style={{ background: 'var(--surface)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
-                              <div style={{ width: 46, height: 46, borderRadius: '50%', background: p.avatarBg || 'var(--primary)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1rem' }}>
-                                {(p.nom[0] || '?')}{(p.prenom[0] || '?')}
-                              </div>
-                              <div>
-                                <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '1rem', marginBottom: '0.15rem' }}>{p.key}</div>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                  {lastBilan?.zone || p.pathologie || 'Zone non renseignée'} · {p.records.length} bilan(s)
-                                </div>
-                              </div>
+                  // Group patients by first letter
+                  const grouped = new Map<string, typeof patients>()
+                  patients.forEach(p => {
+                    const letter = (p.nom[0] || '?').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').charAt(0)
+                    const key = /[A-Z]/.test(letter) ? letter : '#'
+                    if (!grouped.has(key)) grouped.set(key, [])
+                    grouped.get(key)!.push(p)
+                  })
+                  const letters = Array.from(grouped.keys()).sort((a, b) => a === '#' ? 1 : b === '#' ? -1 : a.localeCompare(b))
+
+                  return (
+                    <div style={{ display: 'flex', position: 'relative' }}>
+                      {/* Patient list */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: '5rem', paddingRight: '1.75rem' }}>
+                        {/* Patient count */}
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500, marginBottom: '0.75rem', letterSpacing: '0.02em' }}>
+                          {patients.length} patient{patients.length > 1 ? 's' : ''}
+                        </div>
+                        {letters.map(letter => (
+                          <div key={letter} id={`patient-section-${letter}`}>
+                            {/* Letter header */}
+                            <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', background: 'var(--secondary)', marginBottom: '0.25rem' }}>
+                              <span style={{ width: 28, height: 28, borderRadius: 'var(--radius-md)', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem', flexShrink: 0 }}>{letter}</span>
+                              <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                             </div>
-                            {score !== null
-                              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: '0.82rem', color: scoreColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
-                                  {score > 0 ? (
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                                  ) : score < 0 ? (
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                  ) : (
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                  )}
-                                  {Math.abs(score)}%
-                                </span>
-                              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                            }
+                            {/* Patients in this letter group */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                              {grouped.get(letter)!.map(p => {
+                                const score = patientGeneralScore(p.key)
+                                const scoreColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : '#dc2626'
+                                const lastBilan = [...p.records].sort((a, b) => b.id - a.id)[0]
+                                return (
+                                  <div key={p.key} onClick={() => setSelectedPatient(p.key)}
+                                    style={{ background: 'var(--surface)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.1s' }}
+                                    onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.98)')}
+                                    onPointerUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+                                    onPointerLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
+                                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: `linear-gradient(135deg, ${p.avatarBg || 'var(--primary)'}, ${p.avatarBg || 'var(--primary)'}dd)`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.92rem', boxShadow: `0 2px 8px ${p.avatarBg || 'var(--primary)'}40` }}>
+                                        {(p.nom[0] || '?')}{(p.prenom[0] || '?')}
+                                      </div>
+                                      <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.key}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>{lastBilan?.zone || p.pathologie || 'Zone non renseignée'}</span>
+                                          {p.records.every(r => r.status === 'incomplet' && !r.bilanData)
+                                            ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.62rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap' }}>Sans bilan</span>
+                                            : <span style={{ whiteSpace: 'nowrap' }}> · {p.records.filter(r => r.status === 'complet' || r.bilanData).length} bilan(s)</span>
+                                          }
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {score !== null
+                                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.78rem', color: scoreColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
+                                          {score > 0 ? (
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                          ) : score < 0 ? (
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                          ) : (
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                          )}
+                                          {Math.abs(score)}%
+                                        </span>
+                                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                    }
+                                  </div>
+                                )
+                              })}
+                            </div>
                           </div>
-                        )
-                      })}
+                        ))}
+                      </div>
+
+                      {/* Alphabet sidebar */}
+                      {!searchQuery && letters.length > 1 && (
+                        <div
+                          style={{ position: 'sticky', top: 0, right: 0, height: 'fit-content', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '0.35rem 0.15rem', zIndex: 20, alignSelf: 'flex-start' }}
+                          onTouchMove={e => {
+                            const touch = e.touches[0]
+                            const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
+                            if (el?.dataset?.letter) {
+                              const section = document.getElementById(`patient-section-${el.dataset.letter}`)
+                              section?.scrollIntoView({ behavior: 'auto', block: 'start' })
+                            }
+                          }}
+                        >
+                          {letters.map(l => (
+                            <button key={l} data-letter={l}
+                              onClick={() => {
+                                const section = document.getElementById(`patient-section-${l}`)
+                                section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                              }}
+                              style={{ width: 20, height: 20, borderRadius: 'var(--radius-full)', border: 'none', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.62rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'background 0.15s, color 0.15s' }}
+                              onPointerEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white' }}
+                              onPointerLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--primary)' }}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
                 })()}
@@ -892,8 +1001,10 @@ STRUCTURE (n'inclure que si données présentes) :
             ) : (
               <>
                 {(() => {
-                  const bilans = getPatientBilans(selectedPatient)
-                  const firstR = bilans[0]
+                  const allPatientRecords = getPatientBilans(selectedPatient)
+                  const firstR = allPatientRecords[0]
+                  const isPlaceholder = (r: BilanRecord) => r.status === 'incomplet' && !r.bilanData
+                  const bilans = allPatientRecords.filter(r => !isPlaceholder(r))
                   return (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -905,6 +1016,14 @@ STRUCTURE (n'inclure que si données présentes) :
                           <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{firstR?.pathologie || ''}</div>
                         </div>
                       </div>
+
+                      {/* ── Banner sans bilan ────────────────── */}
+                      {bilans.length === 0 && (
+                        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius-lg)', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem', color: '#92400e' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          <span>Aucun bilan initial — vous pouvez en créer un à tout moment via le bouton ci-dessous.</span>
+                        </div>
+                      )}
 
                       {/* ── Objectifs SMART ────────────────── */}
                       <div style={{ marginBottom: '0.75rem' }}>
@@ -1555,9 +1674,9 @@ STRUCTURE (n'inclure que si données présentes) :
                         {/* Note de séance pleine largeur */}
                         <button
                           onClick={() => {
-                            const firstRec = bilans[0]
+                            const firstRec = allPatientRecords[0]
                             setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                            const zones = Array.from(new Map(bilans.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
+                            const zones = Array.from(new Map(allPatientRecords.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
                             if (zones.length === 1) {
                               const z = zones[0][1] ?? ''
                               setNoteSeanceZone(z)
@@ -1575,10 +1694,10 @@ STRUCTURE (n'inclure que si données présentes) :
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
                             onClick={() => {
-                              const firstRec = bilans[0]
+                              const firstRec = allPatientRecords[0]
                               setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
                               const patKey = selectedPatient ?? ''
-                              const zones = Array.from(new Map(bilans.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
+                              const zones = Array.from(new Map(allPatientRecords.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
                               if (zones.length === 1) {
                                 const z = zones[0][1] ?? ''
                                 setBilanIntermediaireZone(z)
@@ -1594,7 +1713,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           </button>
                           <button
                             onClick={() => {
-                              const firstRec = bilans[0]
+                              const firstRec = allPatientRecords[0]
                               setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
                               setPatientMode('existing')
                               setSelectedBodyZone(null)
@@ -1644,12 +1763,64 @@ STRUCTURE (n'inclure que si données présentes) :
                             setDbPatientDocs(prev => [...prev, { ...doc, id, patientKey: selectedPatient ?? '' }])
                           }}
                         />
+
+                        {/* ── Supprimer le patient ────────────── */}
+                        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                          <button
+                            onClick={() => setDeletingPatientKey(selectedPatient)}
+                            style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'transparent', border: '1.5px solid #fca5a5', color: '#dc2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                            Supprimer ce patient
+                          </button>
+                        </div>
                       </div>
                     </>
                   )
                 })()}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete patient confirmation ─────────────────────────────────────────── */}
+      {deletingPatientKey && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1.5rem' }}>
+          <div style={{ background: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius-xl)', width: '100%', maxWidth: '360px', boxShadow: 'var(--shadow-2xl)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Supprimer le patient</h3>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{deletingPatientKey}</p>
+              </div>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.5, margin: '0 0 1.25rem' }}>
+              Cette action supprimera <strong>définitivement</strong> tous les bilans, notes de séance, bilans intermédiaires et documents associés à ce patient.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => setDeletingPatientKey(null)}
+                style={{ flex: 1, padding: '0.7rem', borderRadius: 'var(--radius-lg)', background: 'var(--secondary)', border: '1px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  const patKey = deletingPatientKey
+                  setDb(prev => prev.filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() !== patKey))
+                  setDbIntermediaires(prev => prev.filter(r => r.patientKey !== patKey))
+                  setDbNotes(prev => prev.filter(r => r.patientKey !== patKey))
+                  setDbObjectifs(prev => prev.filter(r => r.patientKey !== patKey))
+                  setDbPatientDocs(prev => prev.filter(r => r.patientKey !== patKey))
+                  setDeletingPatientKey(null)
+                  setSelectedPatient(null)
+                  showToast('Patient supprimé', 'success')
+                }}
+                style={{ flex: 1, padding: '0.7rem', borderRadius: 'var(--radius-lg)', background: '#dc2626', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer' }}>
+                Supprimer
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2213,6 +2384,154 @@ STRUCTURE (n'inclure que si données présentes) :
         </div>
       )}
 
+      {/* ── Add patient choice popup ──────────────────────────────────────────── */}
+      {showAddPatientChoice && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1.5rem' }}>
+          <div style={{ background: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius-xl)', width: '100%', maxWidth: '380px', boxShadow: 'var(--shadow-2xl)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 className="title-section" style={{ margin: 0, fontSize: '1.05rem' }}>Ajouter un patient</h3>
+              <button onClick={() => setShowAddPatientChoice(false)} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button
+                onClick={() => { setShowAddPatientChoice(false); resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
+                style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', border: '2px solid var(--primary)', background: 'var(--secondary)', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  Bilan initial complet
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>Nouveau patient vu pour la première fois — parcours complet avec bilan</div>
+              </button>
+              <button
+                onClick={() => { setShowAddPatientChoice(false); setQuickAddData({ nom: '', prenom: '', dateNaissance: '', zone: '', evn: '', pathologie: '', notes: '' }); setShowQuickAddPatient(true) }}
+                style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', border: '2px solid #10b981', background: '#ecfdf5', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ fontWeight: 700, color: '#065f46', fontSize: '0.95rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                  Patient existant (sans bilan)
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#6b7280', lineHeight: 1.4 }}>Patient déjà suivi — ajout rapide pour notes de séance</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Quick-add patient bottom sheet ──────────────────────────────────────── */}
+      {showQuickAddPatient && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', width: '100%', maxWidth: '430px', boxShadow: 'var(--shadow-2xl)', maxHeight: '85vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 className="title-section" style={{ margin: 0, fontSize: '1.05rem' }}>Ajout rapide</h3>
+              <button onClick={() => setShowQuickAddPatient(false)} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Nom & Prénom */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Nom *</label>
+                  <input type="text" className="input-luxe" placeholder="Ex: Dupont"
+                    value={quickAddData.nom} onChange={(e) => setQuickAddData(prev => ({ ...prev, nom: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Prénom *</label>
+                  <input type="text" className="input-luxe" placeholder="Ex: Jean"
+                    value={quickAddData.prenom} onChange={(e) => setQuickAddData(prev => ({ ...prev, prenom: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Date de naissance (optionnel) */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Date de naissance <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optionnel)</span></label>
+                <input type="date" className="input-luxe"
+                  value={quickAddData.dateNaissance} onChange={(e) => setQuickAddData(prev => ({ ...prev, dateNaissance: e.target.value }))} />
+              </div>
+
+              {/* Zone corporelle */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Zone corporelle *</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {BODY_ZONES.map(zone => (
+                    <button key={zone}
+                      onClick={() => setQuickAddData(prev => ({ ...prev, zone }))}
+                      style={{ padding: '0.45rem 0.85rem', borderRadius: 'var(--radius-full)', border: quickAddData.zone === zone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: quickAddData.zone === zone ? 'var(--secondary)' : 'transparent', color: quickAddData.zone === zone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: quickAddData.zone === zone ? 600 : 400, fontSize: '0.78rem', cursor: 'pointer' }}>
+                      {zone}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* EVN Slider */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                  Douleur (EVN) <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optionnel)</span>
+                  {quickAddData.evn && <strong style={{ color: 'var(--danger)', fontSize: '1.1rem', marginLeft: 8 }}>{quickAddData.evn}/10</strong>}
+                </label>
+                <input type="range" min="0" max="10" step="1"
+                  value={quickAddData.evn || '0'}
+                  onChange={(e) => setQuickAddData(prev => ({ ...prev, evn: e.target.value }))}
+                  style={{ width: '100%', accentColor: 'var(--danger)', marginTop: '0.25rem' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                  <span>0 — Aucune</span>
+                  <span>10 — Maximale</span>
+                </div>
+              </div>
+
+              {/* Pathologie */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Pathologie / Motif <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optionnel)</span></label>
+                <input type="text" className="input-luxe" placeholder="Ex: Tendinopathie coiffe des rotateurs"
+                  value={quickAddData.pathologie} onChange={(e) => setQuickAddData(prev => ({ ...prev, pathologie: e.target.value }))} />
+              </div>
+
+              {/* Notes complémentaires */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Notes complémentaires <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optionnel)</span></label>
+                <textarea className="input-luxe" rows={3} placeholder="Contexte, antécédents, où en est le traitement..."
+                  value={quickAddData.notes} onChange={(e) => setQuickAddData(prev => ({ ...prev, notes: e.target.value }))}
+                  style={{ resize: 'vertical' }} />
+              </div>
+            </div>
+
+            {/* Bouton valider */}
+            <button
+              disabled={!quickAddData.nom.trim() || !quickAddData.prenom.trim() || !quickAddData.zone}
+              onClick={() => {
+                const AVATAR_COLORS = ['#3b82f6', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
+                const avatarBg = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
+                const newId = Math.max(0, ...db.map(r => r.id)) + 1
+                const record: BilanRecord = {
+                  id: newId,
+                  nom: quickAddData.nom.trim(),
+                  prenom: quickAddData.prenom.trim(),
+                  dateBilan: new Date().toLocaleDateString('fr-FR'),
+                  dateNaissance: quickAddData.dateNaissance || '',
+                  zoneCount: 1,
+                  zone: quickAddData.zone,
+                  pathologie: quickAddData.pathologie.trim() || undefined,
+                  avatarBg,
+                  status: 'incomplet',
+                  bilanType: getBilanType(quickAddData.zone),
+                  evn: quickAddData.evn ? Number(quickAddData.evn) : undefined,
+                  notes: quickAddData.notes.trim() || undefined,
+                }
+                setDb(prev => [...prev, record])
+                setShowQuickAddPatient(false)
+                const patKey = `${quickAddData.nom.trim().toUpperCase()} ${quickAddData.prenom.trim()}`.trim()
+                setSelectedPatient(patKey)
+                showToast('Patient ajouté', 'success')
+              }}
+              style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: (!quickAddData.nom.trim() || !quickAddData.prenom.trim() || !quickAddData.zone) ? '#d1d5db' : '#10b981', color: 'white', fontWeight: 700, fontSize: '0.95rem', border: 'none', cursor: (!quickAddData.nom.trim() || !quickAddData.prenom.trim() || !quickAddData.zone) ? 'not-allowed' : 'pointer', marginTop: '1.25rem' }}>
+              Ajouter le patient
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Identity step ──────────────────────────────────────────────────────── */}
       {step === 'identity' && (
         <div className="identity-screen fade-in">
@@ -2367,7 +2686,7 @@ STRUCTURE (n'inclure que si données présentes) :
             </button>
             <div style={{ flex: 1 }}>
               <h2 className="title-section" style={{ marginBottom: 0 }}>{BILAN_ZONE_LABELS[getBilanType(selectedBodyZone ?? '')]}</h2>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{selectedBodyZone} · {formData.prenom} {formData.nom}</p>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{selectedBodyZone} · {formData.prenom} {formData.nom}{(() => { const a = formData.dateNaissance ? computeAge(formData.dateNaissance) : null; return a !== null ? ` · ${a} ans` : '' })()}</p>
             </div>
             <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

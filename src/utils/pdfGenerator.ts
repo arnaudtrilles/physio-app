@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { computeAge } from './clinicalPrompt';
 
 // ── Nettoyage texte pour jsPDF (Helvetica ne supporte pas certains caractères) ─
 const sanitize = (text: string): string =>
@@ -35,10 +36,12 @@ const DOULEUR_LABELS: Record<string, string> = {
   evnPire: 'EVN — Pire', evnMieux: 'EVN — Mieux', evnMoy: 'EVN — Moyenne',
   douleurType: 'Type', nocturne: 'Nocturne', derouillage: 'Dérouillage matinal',
   debutSymptomes: 'Début des symptômes', facteurDeclenchant: 'Facteur déclenchant',
+  mecanismeLesionnel: 'Mécanisme lésionnel',
   localisationInitiale: 'Localisation initiale', localisationActuelle: 'Localisation actuelle',
   situation: 'Évolution', douleurNocturne: 'Douleur nocturne',
   douleurNocturneType: 'Type nocturne', insomniante: 'Insomniante',
   derouillageMatinal: 'Dérouillage matinal', derouillageTemps: 'Durée dérouillage',
+  derouillageFrequence: 'Fréquence dérouillage',
   mouvementsEmpirent: 'Mouvements aggravants', mouvementsSoulagent: 'Mouvements soulageants',
 }
 
@@ -48,8 +51,22 @@ const FLAG_LABELS: Record<string, string> = {
   fievre: 'Fièvre', pertePoids: 'Perte de poids', atcdCancer: 'ATCD cancer',
   sommeilQuantite: 'Sommeil quantité', sommeilQualite: 'Sommeil qualité',
   tabagisme: 'Tabagisme', perteAppetit: "Perte d'appétit",
+  fatigueRF: 'Fatigue inexpliquée', fatigueInexpliquee: 'Fatigue inexpliquée',
   fonctionVesicale: 'Fonction vésicale', fonctionAnale: 'Fonction anale',
+  fonctionVesicaleAnale: 'Fonction vésicale / anale',
+  fonctionVesicaleStatus: 'Fonction vésicale (statut)',
+  fonctionVesicaleSymptomes: 'Symptômes vésicaux',
   selleAnesthesie: 'Anesthésie en selle',
+  troublesMotricite: 'Troubles motricité MS', troublesMarche: 'Troubles de la marche',
+  cephalees: 'Céphalées', cephaleesIntenses: 'Céphalées plus intenses',
+  csIs: 'Utilisation prolongée CS / IS',
+  douleurThoracique: 'Douleur thoracique', douleurDigestion: 'Douleur aggravée digestion',
+  douleurTouxEternuement: 'Douleur toux / éternuement',
+  // 5D 3N
+  dizziness: 'Dizziness (vertiges)', dropAttacks: 'Drop attacks', diplopie: 'Diplopie',
+  dysarthrie: 'Dysarthrie', dysphagie: 'Dysphagie', nystagmus: 'Nystagmus',
+  nausees: 'Nausée / vomissements', numbness: 'Numbness',
+  // Yellow
   croyances: 'Croyances', croyancesOrigine: 'Croyances — origine', croyancesTtt: 'Croyances — TTT',
   catastrophisme: 'Catastrophisme', fearAvoidance: 'Peur-évitement',
   peurEvitement: 'Peur-évitement', peurEvitementMouvements: 'Mouvements évités',
@@ -57,24 +74,133 @@ const FLAG_LABELS: Record<string, string> = {
   flexibilitePsy: 'Flexibilité psychologique', strategieCoping: 'Stratégies de coping',
   hypervigilance: 'Hypervigilance', anxiete: 'Anxiété', depression: 'Dépression',
   coping: 'Coping', had: 'HAD',
+  // Blue/Black
   at: 'Arrêt de travail', enAt: 'En AT', antecedentsAt: 'ATCD AT',
+  antecedentsAtDetails: 'ATCD AT — détails',
   stressTravail: 'Stress travail', stressNiveau: 'Stress (/100)',
   conditionsSocio: 'Conditions socio-éco', conditionsSocioEco: 'Conditions socio-éco',
   travailExigeant: 'Travail exigeant', sousEstime: 'Sentiment sous-estimé',
+  sousEstimeCollegues: 'Sous-estimé — collègues', sousEstimeDirection: 'Sous-estimé — direction',
   manqueControle: 'Manque de contrôle', travailAggrave: 'Travail aggrave',
   politiqueFlexible: "Politique d'entreprise flexible",
   difficultesAcces: "Difficulté d'accès aux soins", litige: 'Litige / indemnisation',
 }
 
 const SCORE_LABELS: Record<string, string> = {
-  ffaam: 'F-FAAM', cait: 'CAIT', psfs: 'PSFS', psfs1: 'PSFS 1', psfs2: 'PSFS 2', psfs3: 'PSFS 3',
-  koos: 'KOOS', fakps: 'F-AKPS', ikdc: 'IKDC', aclRsi: 'ACL-RSI',
+  ffaam: 'F-FAAM', faam: 'F-FAAM', cait: 'CAIT',
+  psfs: 'PSFS', psfs1: 'PSFS 1 — score', psfs2: 'PSFS 2 — score', psfs3: 'PSFS 3 — score',
+  psfs1Label: 'PSFS 1 — activité', psfs2Label: 'PSFS 2 — activité', psfs3Label: 'PSFS 3 — activité',
+  psfs1Notes: 'PSFS 1 — notes', psfs2Notes: 'PSFS 2 — notes', psfs3Notes: 'PSFS 3 — notes',
+  koos: 'KOOS', fakps: 'F-AKPS', ikdc: 'IKDC', aclRsi: 'ACL-RSI', sf36: 'SF-36',
   hoos: 'HOOS', oxfordHip: 'Oxford Hip', hagos: 'HAGOS', efmi: 'EFMI', isc: 'ISC',
-  ndi: 'NDI', painDetect: 'Pain DETECT',
+  ndi: 'NDI', painDetect: 'Pain DETECT', sensibilisation: 'Sensibilisation centrale',
   startBack: 'Start Back', orebro: 'Örebro', fabq: 'FABQ', eifel: 'EIFEL',
   scoreOSS: 'OSS', scoreConstant: 'Constant-Murley', scoreDASH: 'DASH', scoreRowe: 'Rowe',
   scoreHAD: 'HAD', scoreDN4: 'DN4', scoreSensibilisation: 'Sensibilisation Centrale',
-  had: 'HAD', dn4: 'DN4', autresScores: 'Autres', notes: 'Notes',
+  had: 'HAD', dn4: 'DN4', autres: 'Autres', autresScores: 'Autres', notes: 'Notes',
+}
+
+const EXAM_LABELS: Record<string, string> = {
+  morfho: 'Morphostatique', morpho: 'Morphostatique', oedeme: 'Œdème',
+  // morpho sub-keys
+  rachis: 'Attitude rachis', mi: 'Attitude MI', corrigeable: 'Corrigeable',
+  modifPosture: 'Modification posture', deformation: 'Déformation', shift: 'Shift latéral',
+  attitude: 'Attitude', teteEnAvant: 'Tête en avant', torticolis: 'Torticolis',
+  torticolisCorrigeable: 'Torticolis corrigeable',
+  morphoRachisCervical: 'Rachis cervical', morphoRachisThoracique: 'Rachis thoracique',
+  morphoCeintureScap: 'Ceinture scapulaire',
+  // observation
+  amyotrophie: 'Amyotrophie', amyotrophieLoc: 'Amyotrophie — localisation',
+  boiterie: 'Boiterie marche', autre: 'Autre observation',
+  amyoDeltoide: 'Amyo. deltoïde', amyoFosseSupraInfra: 'Amyo. fosse supra/infra-épineuse',
+  amyoPeriScapulaire: 'Amyo. péri-scapulaire',
+  // Mobilité add'l
+  mobiliteRachisCervical: 'Mobilité rachis cervical', mobiliteRachisThoracique: 'Mobilité rachis thoracique',
+  mobiliteAutresZones: 'Autres zones', autresZones: 'Autres zones',
+  genoux: 'Mobilité genoux', chevilles: 'Mobilité chevilles',
+  // Modif sympt
+  testAssistanceScap: 'Test assistance scapulaire', stabilisationScapula: 'Stabilisation scapula',
+  testRetractionScap: 'Test rétraction scapulaire', testTrapezeSup: 'Test trapèze supérieur',
+  serrerPoings: 'Serrer les poings', ajoutResistance: 'Ajout de résistance',
+  activationCoiffe: 'Activation coiffe', pasAvantPrealable: 'Pas en avant préalable',
+  diminutionLevier: 'Diminution bras de levier',
+  modifPositionThoracique: 'Modif. position thoracique', modifPositionCervicale: 'Modif. position cervicale',
+  positionLomboPelvienne: 'Modif. position lombo-pelvienne', positionMI: 'Modif. position MI',
+  activationAbducteurs: 'Activation abducteurs', activationTransverse: 'Activation transverse',
+  repartitionPoids: 'Modif. répartition poids', diminutionRom: 'Diminution ROM',
+  chaineOuverteFermee: 'Chaîne ouverte vs fermée', taping: 'Application taping',
+  chaussage: 'Modif. chaussage',
+}
+
+const FORCE_LABELS: Record<string, string> = {
+  // épaule
+  planScapula90: 'Plan scapula 90°', re1: 'RE 1', re2StabEpaule: 'RE2 stab épaule',
+  re2StabCharge: 'RE2 stab + charge', re2SansStab: 'RE2 sans stab',
+  re2SansStabCharge: 'RE2 sans stab + charge', ri2StabEpaule: 'RI2 stab épaule',
+  ri2StabCharge: 'RI2 stab + charge', ri2SansStab: 'RI2 sans stab',
+  ri2SansStabCharge: 'RI2 sans stab + charge',
+  // MI
+  ilioPsoas: 'Ilio-psoas', quadriceps: 'Quadriceps', ischios: 'Ischio-jambiers',
+  abducteurs: 'Abducteurs', adducteurs: 'Adducteurs',
+  rotateursExt: 'Rotateurs externes', rotateursInt: 'Rotateurs internes',
+  tricepsSural: 'Triceps sural', tibialAnt: 'Tibial antérieur',
+  tibialPost: 'Tibial postérieur', longFibulaire: 'Long fibulaire', courtFibulaire: 'Court fibulaire',
+  // Abdo
+  transverse: 'Transverse', droitsAbdomen: 'Droits abdomen', obliques: 'Obliques',
+}
+
+const NEURO_LABELS: Record<string, string> = {
+  reflexes: 'Réflexes', reflexesAutres: 'Réflexes — autres',
+  reflexeBicipital: 'Réflexe bicipital (C5-C6)', reflexeBrachioRadial: 'Réflexe brachio-radial (C6)',
+  reflexeTricipital: 'Réflexe tricipital (C7)', reflexeQuadriciptal: 'Réflexe quadricipital',
+  reflexeQuadricipital: 'Réflexe quadricipital', reflexeAchilleen: 'Réflexe achilléen', reflexeAchileen: 'Réflexe achilléen',
+  babinski: 'Babinski', hoffman: 'Hoffman', deficitMoteur: 'Déficit moteur',
+  sensibilite: 'Sensibilité', sensibiliteNociceptive: 'Sensibilité nociceptive',
+  sensibiliteThermique: 'Sensibilité thermique', sensibiliteEpicritique: 'Sensibilité épicritique',
+  troublesSensitifsNotes: 'Troubles sensitifs (schéma)',
+  // Niveaux lombaires
+  deficitL2: 'Déficit L2', deficitL3: 'Déficit L3', deficitL4: 'Déficit L4',
+  deficitL5: 'Déficit L5', deficitS1: 'Déficit S1', deficitS2: 'Déficit S2',
+  deficitS3S4: 'Déficit S3-S4',
+  // Niveaux cervicaux
+  deficitC4: 'Déficit C4', deficitC5: 'Déficit C5', deficitC6: 'Déficit C6',
+  deficitC7: 'Déficit C7', deficitC8: 'Déficit C8', deficitT1: 'Déficit T1',
+  // ULTT
+  ultt1: 'ULTT 1 — Médian', ultt2: 'ULTT 2 — Médian',
+  ultt3: 'ULTT 3 — Radial', ultt4: 'ULTT 4 — Ulnaire',
+  // Mécano
+  lasegue: 'Lasègue', pkb: 'PKB', slump: 'Slump',
+}
+
+const TESTS_LABELS: Record<string, string> = {
+  // Épaule
+  bearHug: 'Bear Hug', bellyPress: 'Belly Press', externalRotLagSign: 'External Rotation Lag Sign',
+  obrien: "O'Brien", palpationAC: 'Palpation AC', crossArm: 'Cross-Arm',
+  abdHorizResist: 'Abduction horiz. résistance',
+  apprehensionRelocation: 'Apprehension / Relocation', signeSulcus: 'Signe du Sulcus', jerkTest: 'Jerk Test',
+  ckcuest: 'CKCUEST', ulrt: 'ULRT', uqYbt: 'UQ-YBT', setPset: 'SET / PSET', smbtSasspt: 'SMBT / SASSPT',
+  autresTestsFonctionnels: 'Autres tests fonctionnels',
+  // Genou
+  lachman: 'Lachman', tiroirAnt: 'Tiroir antérieur', tiroirPost: 'Tiroir postérieur',
+  lcl: 'Lig. collat. latéral (LCL)', lcm: 'Lig. collat. médial (LCM)',
+  thessaly: 'Thessaly', renne: 'Renne', noble: 'Noble', vague: 'Vague rotulien', hoffa: 'Hoffa',
+  // Hanche
+  faddir: 'FADDIR', faber: 'FABER', thomas: 'Thomas', ober: 'Ober',
+  clusterLaslett: 'Cluster Laslett', clusterSultive: 'Cluster Sultive',
+  heer: 'HEER', abdHeer: 'ABD-HEER',
+  // Cervical
+  spurling: 'Spurling', distraction: 'Distraction', adson: 'Adson', roos: 'Roos', ta: 'TA',
+  // Lombaire
+  extensionRotation: 'Extension-Rotation', proneInstability: 'Prone Instability',
+  // Cheville (talo-crurale, syndesmose, etc.)
+  altd: 'ALTD', raltd: 'RALTD', talarTiltVarus: 'Talar Tilt varus', talarTiltValgus: 'Talar Tilt valgus',
+  kleiger: 'Kleiger', fibularTranslation: 'Fibular Translation',
+  tiroirTalienTransversal: 'Tiroir talien transversal', squeeze: 'Squeeze',
+  grinding: 'Grinding', impaction: 'Impaction', longFlechisseurHallux: 'Long fléchisseur hallux',
+  molloy: 'Molloy', varusFd: 'Varus FD', valgusFd: 'Valgus FD', cisaillementFd: 'Cisaillement FD',
+  neutralHeel: 'Neutral Heel — Spring Lig.', adductionSupination: 'Adduction-Supination',
+  abductionPronation: 'Abduction-Pronation',
+  autres: 'Autres tests',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -248,9 +374,11 @@ export const generatePDF = async (
   doc.setDrawColor(...C.light)
   doc.roundedRect(ML, y - 2, MW, 22, 2, 2, 'S')
 
+  const age = patientId.dateNaissance ? computeAge(patientId.dateNaissance) : null
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(12)
-  doc.text(`${(patientId.nom ?? '').toUpperCase()} ${patientId.prenom ?? ''}`, ML + 6, y + 5)
+  const headline = `${(patientId.nom ?? '').toUpperCase()} ${patientId.prenom ?? ''}${age !== null ? ` - ${age} ans` : ''}`
+  doc.text(headline, ML + 6, y + 5)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
@@ -361,12 +489,31 @@ export const generatePDF = async (
     // Ottawa (cheville)
     if (d.ottawa) {
       const entries = renderObj(d.ottawa as Record<string, unknown>, {
+        // Legacy keys
         malleoleExternePalpation: 'Malléole externe', malleoleInternePalpation: 'Malléole interne',
         naviculairePalpation: 'Naviculaire', base5ePalpation: 'Base 5e métatarsien',
         appuiImpossible: 'Appui impossible',
+        // New keys
+        malleoleMediale: 'Malléole médiale', malleoleLaterale: 'Malléole latérale',
+        cinquiemeMetatarsien: 'Base 5e métatarsien', naviculaire: 'Naviculaire',
+        appuiUnipodal: 'Appui unipodal impossible',
       })
       if (entries.length > 0) {
         subTitle("Critères d'Ottawa")
+        entries.forEach(e => field(e.label, e.value))
+        y += 2
+      }
+    }
+
+    // Antécédents d'entorse (cheville)
+    if (d.antecedentsEntorse) {
+      const entries = renderObj(d.antecedentsEntorse as Record<string, unknown>, {
+        precedentes: 'Précédentes entorses', precedentesMemeCheville: 'Même cheville',
+        precedentesCombien: 'Combien', precedentesType: 'Type',
+        autreCheville: 'Autre cheville', autreChevilleCombien: 'Combien (autre)', autreChevilleType: 'Type (autre)',
+      })
+      if (entries.length > 0) {
+        subTitle("Antécédents d'entorse")
         entries.forEach(e => field(e.label, e.value))
         y += 2
       }
@@ -395,61 +542,116 @@ export const generatePDF = async (
     // Examen clinique
     if (d.examClinique) {
       const ec = d.examClinique as Record<string, unknown>
+      // Helper: render a sub-section table from an APGD or simple Record
+      const renderSubGroup = (title: string, obj: unknown, labels: Record<string, string> = {}) => {
+        if (!obj || typeof obj !== 'object') return
+        const entries: { label: string; value: string }[] = []
+        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+          if (v && typeof v === 'object') {
+            // APGD row { ag, ad, pg, pd } or { gauche, droite } or { initial, actuel } or { perte, symptomes }
+            const r = v as Record<string, string>
+            const parts: string[] = []
+            if (r.ag || r.ad || r.pg || r.pd) {
+              if (r.ag || r.ad) parts.push(`A: G ${r.ag || '—'} / D ${r.ad || '—'}`)
+              if (r.pg || r.pd) parts.push(`P: G ${r.pg || '—'} / D ${r.pd || '—'}`)
+            } else if (r.gauche || r.droite) {
+              parts.push(`G ${r.gauche || '—'} / D ${r.droite || '—'}`)
+            } else if (r.perte || r.symptomes) {
+              if (r.perte) parts.push(`Perte: ${r.perte}`)
+              if (r.symptomes) parts.push(r.symptomes)
+            }
+            if (parts.length > 0) {
+              entries.push({ label: labels[k] ?? k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), value: parts.join(' · ') })
+            }
+          } else {
+            const display = fmt(v)
+            if (display) entries.push({ label: labels[k] ?? k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), value: display })
+          }
+        }
+        if (entries.length === 0) return
+        check(8)
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(8)
+        doc.setTextColor(...C.muted)
+        doc.text(title, ML + 6, y)
+        doc.setTextColor(...C.text)
+        y += 4
+        entries.forEach(e => field(e.label, e.value, 4))
+      }
+
+      subTitle('Examen clinique')
+      // Top-level simple fields (legacy morfho string, oedeme string)
       const simpleEntries: { label: string; value: string }[] = []
       for (const [k, v] of Object.entries(ec)) {
-        if (k === 'mobilite' || k === 'force') continue
+        if (typeof v === 'object') continue
         const display = fmt(v)
-        if (display) simpleEntries.push({ label: k === 'morfho' ? 'Morphostatique' : k === 'oedeme' ? 'Œdème' : k === 'notes' ? 'Notes' : k, value: display })
+        if (display) simpleEntries.push({ label: EXAM_LABELS[k] ?? k, value: display })
       }
-      const mobEntries: { label: string; value: string }[] = []
-      if (ec.mobilite) {
-        for (const [k, v] of Object.entries(ec.mobilite as Record<string, unknown>)) {
-          const display = fmt(v)
-          if (display) mobEntries.push({ label: k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), value: display })
-        }
-      }
+      simpleEntries.forEach(e => field(e.label, e.value))
+      // Structured sub-groups
+      renderSubGroup('Morphostatique', ec.morpho, EXAM_LABELS)
+      renderSubGroup('Observation', ec.observation, EXAM_LABELS)
+      renderSubGroup('Œdème', ec.oedeme, EXAM_LABELS)
+      renderSubGroup('Mobilité (legacy)', ec.mobilite, EXAM_LABELS)
+      renderSubGroup('Mobilité — Épaule', ec.mobiliteEpaule, EXAM_LABELS)
+      renderSubGroup('Mobilité — Hanche', ec.mobiliteHanche, EXAM_LABELS)
+      renderSubGroup('Mobilité — Genou', ec.mobiliteGenou, EXAM_LABELS)
+      renderSubGroup('Mobilité — Cheville', ec.mobiliteCheville, EXAM_LABELS)
+      renderSubGroup('Mobilité — Rachis lombaire', ec.mobiliteLombaire, EXAM_LABELS)
+      renderSubGroup('Mobilité — Rachis cervical', ec.mobiliteCervical, EXAM_LABELS)
+      renderSubGroup('Mobilité — Autres', ec.mobAutres, EXAM_LABELS)
+      renderSubGroup('Zones adjacentes', ec.zones, EXAM_LABELS)
+      renderSubGroup('Fonctionnel', ec.fonctionnel, EXAM_LABELS)
+      renderSubGroup('WBLT', ec.wblt, EXAM_LABELS)
+      renderSubGroup('Modifications des symptômes', ec.modifSymp, EXAM_LABELS)
+      renderSubGroup('Force (legacy)', ec.force, FORCE_LABELS)
+      y += 2
+    }
+
+    // Force musculaire (nouvelle structure)
+    if (d.forceMusculaire) {
+      const fm = d.forceMusculaire as Record<string, unknown>
       const forceEntries: { label: string; value: string }[] = []
-      if (ec.force) {
-        for (const [k, v] of Object.entries(ec.force as Record<string, unknown>)) {
-          const display = fmt(v)
-          if (display) forceEntries.push({ label: k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), value: display })
+      if (fm.force && typeof fm.force === 'object') {
+        for (const [k, v] of Object.entries(fm.force as Record<string, unknown>)) {
+          const r = v as { gauche?: string; droite?: string }
+          if (r.gauche || r.droite) {
+            forceEntries.push({ label: FORCE_LABELS[k] ?? k, value: `G ${r.gauche || '—'} / D ${r.droite || '—'}` })
+          }
         }
       }
-      if (simpleEntries.length + mobEntries.length + forceEntries.length > 0) {
-        subTitle('Examen clinique')
-        simpleEntries.forEach(e => field(e.label, e.value))
-        if (mobEntries.length > 0) {
+      const abdoEntries: { label: string; value: string }[] = []
+      if (fm.abdo && typeof fm.abdo === 'object') {
+        for (const [k, v] of Object.entries(fm.abdo as Record<string, unknown>)) {
+          const display = fmt(v)
+          if (display) abdoEntries.push({ label: FORCE_LABELS[k] ?? k, value: display })
+        }
+      }
+      const otherEntries = renderObj(
+        Object.fromEntries(Object.entries(fm).filter(([k]) => !['force', 'abdo'].includes(k))),
+        { autresForce: 'Autres tests force', marqueursAvant: 'Mvts répétés — marqueurs', resultats: 'Mvts répétés — résultats' }
+      )
+      if (forceEntries.length + abdoEntries.length + otherEntries.length > 0) {
+        subTitle('Force musculaire')
+        forceEntries.forEach(e => field(e.label, e.value))
+        if (abdoEntries.length > 0) {
           check(8)
           doc.setFont('helvetica', 'italic')
           doc.setFontSize(8)
           doc.setTextColor(...C.muted)
-          doc.text('Mobilité articulaire', ML + 6, y)
+          doc.text('Muscles abdominaux', ML + 6, y)
           doc.setTextColor(...C.text)
           y += 4
-          mobEntries.forEach(e => field(e.label, e.value, 4))
+          abdoEntries.forEach(e => field(e.label, e.value, 4))
         }
-        if (forceEntries.length > 0) {
-          check(8)
-          doc.setFont('helvetica', 'italic')
-          doc.setFontSize(8)
-          doc.setTextColor(...C.muted)
-          doc.text('Force musculaire', ML + 6, y)
-          doc.setTextColor(...C.text)
-          y += 4
-          forceEntries.forEach(e => field(e.label, e.value, 4))
-        }
+        otherEntries.forEach(e => field(e.label, e.value))
         y += 2
       }
     }
 
-    // Neurologique (cervical, lombaire)
+    // Neurologique
     if (d.neurologique) {
-      const entries = renderObj(d.neurologique as Record<string, unknown>, {
-        reflexeBicipital: 'Réflexe bicipital', reflexeBrachioRadial: 'Réflexe brachio-radial',
-        reflexeTricipital: 'Réflexe tricipital', reflexeQuadricipital: 'Réflexe quadricipital',
-        reflexeAchileen: 'Réflexe achilléen', babinski: 'Babinski',
-        deficitMoteur: 'Déficit moteur', sensibilite: 'Sensibilité', hoffman: 'Hoffman',
-      })
+      const entries = renderObj(d.neurologique as Record<string, unknown>, NEURO_LABELS)
       if (entries.length > 0) {
         subTitle('Examen neurologique')
         entries.forEach(e => field(e.label, e.value))
@@ -459,10 +661,7 @@ export const generatePDF = async (
 
     // Mécanosensibilité
     if (d.mecanosensibilite) {
-      const entries = renderObj(d.mecanosensibilite as Record<string, unknown>, {
-        lasegue: 'Lasègue', pkb: 'PKB', slump: 'Slump',
-        ultt1: 'ULTT 1', ultt2: 'ULTT 2', ultt3: 'ULTT 3', ultt4: 'ULTT 4',
-      })
+      const entries = renderObj(d.mecanosensibilite as Record<string, unknown>, NEURO_LABELS)
       if (entries.length > 0) {
         subTitle('Mécanosensibilité')
         entries.forEach(e => field(e.label, e.value))
@@ -470,21 +669,63 @@ export const generatePDF = async (
       }
     }
 
-    // Tests spécifiques
-    if (d.tests) {
-      const entries = renderObj(d.tests as Record<string, unknown>, {
-        lachman: 'Lachman', tiroir: 'Tiroir', lcl: 'LCL', lcm: 'LCM',
-        thessaly: 'Thessaly', renne: 'Renne', noble: 'Noble', vague: 'Vague',
-        hoffa: 'Hoffa', faddir: 'FADDIR', faber: 'FABER', thomas: 'Thomas', ober: 'Ober',
-        spurling: 'Spurling', distraction: 'Distraction', adson: 'Adson', roos: 'Roos',
-        altd: 'ALTD', raltd: 'RALTD', squeeze: 'Squeeze', grinding: 'Grinding',
-        clusterLaslett: 'Cluster Laslett', clusterSultive: 'Cluster Sultive',
-        extensionRotation: 'Extension-Rotation', proneInstability: 'Prone Instability',
-        ta: 'TA', notes: 'Notes',
-      })
+    // Mouvements répétés (tableau dynamique : array)
+    if (Array.isArray(d.mouvementsRepetes) && d.mouvementsRepetes.length > 0) {
+      const rows = d.mouvementsRepetes as Array<{ mouvement?: string; avant?: string; apres?: string }>
+      const filled = rows.filter(r => r.mouvement || r.avant || r.apres)
+      if (filled.length > 0) {
+        subTitle('Mouvements répétés')
+        filled.forEach((r, i) => {
+          field(`Mvt ${i + 1}`, `${r.mouvement || '—'} | avant: ${r.avant || '—'} | après: ${r.apres || '—'}`)
+        })
+        y += 2
+      }
+    }
+
+    // Tests ligamentaires (genou)
+    if (d.testsLigamentaires) {
+      const entries = renderObj(d.testsLigamentaires as Record<string, unknown>, TESTS_LABELS)
+      if (entries.length > 0) {
+        subTitle('Tests ligamentaires')
+        entries.forEach(e => field(e.label, e.value))
+        y += 2
+      }
+    }
+
+    // Tests spécifiques (legacy `tests` ou nouvelle clé `testsSpecifiques`)
+    if (d.tests || d.testsSpecifiques) {
+      const src = (d.testsSpecifiques ?? d.tests) as Record<string, unknown>
+      const entries = renderObj(src, TESTS_LABELS)
       if (entries.length > 0) {
         subTitle('Tests spécifiques')
         entries.forEach(e => field(e.label, e.value))
+        y += 2
+      }
+    }
+
+    // Équilibre (cheville)
+    if (d.equilibre) {
+      const entries = renderObj(d.equilibre as Record<string, unknown>, {
+        footLiftGauche: 'Foot Lift G', footLiftDroite: 'Foot Lift D',
+        bessGauche: 'BESS G /60', bessDroite: 'BESS D /60',
+        yBalanceGauche: 'Y Balance G', yBalanceDroite: 'Y Balance D',
+      })
+      if (entries.length > 0) {
+        subTitle('Équilibre postural')
+        entries.forEach(e => field(e.label, e.value))
+        y += 2
+      }
+    }
+
+    // PSFS (nouvelle structure : array)
+    if (Array.isArray(d.psfs) && d.psfs.length > 0) {
+      const items = d.psfs as Array<{ label?: string; score?: string; notes?: string }>
+      const filled = items.filter(i => i.label || i.score || i.notes)
+      if (filled.length > 0) {
+        subTitle('Patient Specific Functional Scale (PSFS)')
+        filled.forEach((it, i) => {
+          field(`Activité ${i + 1}`, `${it.label || '—'} — ${it.score || '—'}/10${it.notes ? ` (${it.notes})` : ''}`)
+        })
         y += 2
       }
     }
@@ -501,15 +742,40 @@ export const generatePDF = async (
 
     // Contrat kiné
     const contrat = d.contrat ?? d.contratKine
-    if (contrat) {
-      const entries = renderObj(contrat as Record<string, unknown>, {
-        objectifs: 'Objectifs', objectifsSMART: 'Objectifs SMART',
-        autoReedo: 'Auto-rééducation', autoReeducation: 'Auto-rééducation',
-        frequenceDuree: 'Fréquence / Durée', conseils: 'Conseils',
-      })
+    if (contrat && typeof contrat === 'object') {
+      const c = contrat as Record<string, unknown>
+      // New structure: objectifs is an array of {titre, cible, dateCible}
+      const objSrc = Array.isArray(c.objectifs) ? c.objectifs : Array.isArray(c.objectifsItems) ? c.objectifsItems : null
+      const entries: { label: string; value: string }[] = []
+      if (Array.isArray(objSrc) && objSrc.length > 0) {
+        const items = objSrc as Array<{ titre?: string; cible?: string; dateCible?: string }>
+        items.forEach((o, i) => {
+          if (o.titre) entries.push({ label: `Objectif ${i + 1}`, value: o.titre + (o.cible ? ` — ${o.cible}` : '') + (o.dateCible ? ` (${o.dateCible})` : '') })
+        })
+      } else if (typeof c.objectifs === 'string') {
+        entries.push({ label: 'Objectifs', value: c.objectifs })
+      } else if (typeof c.objectifsSMART === 'string') {
+        entries.push({ label: 'Objectifs SMART', value: c.objectifsSMART })
+      }
+      const auto = fmt(c.autoReeducation ?? c.autoReedo)
+      if (auto) entries.push({ label: 'Auto-rééducation', value: auto })
+      const freq = fmt(c.frequenceDuree)
+      if (freq) entries.push({ label: 'Fréquence / Durée', value: freq })
+      const cnsLegacy = fmt(c.conseils)
+      if (cnsLegacy) entries.push({ label: 'Conseils', value: cnsLegacy })
       if (entries.length > 0) {
         subTitle('Contrat thérapeutique')
         entries.forEach(e => field(e.label, e.value))
+        y += 2
+      }
+    }
+
+    // Conseils & recommandations (nouvelle section dédiée)
+    if (d.conseils && typeof d.conseils === 'object') {
+      const recos = fmt((d.conseils as Record<string, unknown>).recos)
+      if (recos) {
+        subTitle('Conseils & recommandations')
+        field('Recommandations', recos)
         y += 2
       }
     }

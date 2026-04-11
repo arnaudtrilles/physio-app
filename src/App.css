@@ -636,6 +636,45 @@
 }
 .mobility-table input:focus { outline: none; border-bottom: 1px solid var(--primary); }
 
+/* PSFS thin slider */
+.psfs-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: var(--border-color);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+}
+.psfs-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--psfs-accent, var(--primary));
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.psfs-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.psfs-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--psfs-accent, var(--primary));
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+.psfs-slider::-moz-range-track {
+  height: 2px;
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
 /* API key field */
 .api-key-field {
   font-family: 'Courier New', monospace;

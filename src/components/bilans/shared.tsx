@@ -138,12 +138,78 @@ export function SectionHeader({ title, open, onToggle, color = 'var(--primary)' 
 }
 
 // ─── ScoreRow ──────────────────────────────────────────────────────────────
-export function ScoreRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+export interface ScoreRowResult {
+  display?: string
+  interpretation?: string
+  subscores?: Record<string, number | string>
+  color?: 'green' | 'orange' | 'red' | 'gray'
+}
+
+export function ScoreRow({ label, value, onChange, onOpenQuestionnaire, result }: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  onOpenQuestionnaire?: () => void
+  result?: ScoreRowResult
+}) {
+  const colorFor = (c?: string): string =>
+    c === 'green' ? '#059669' : c === 'orange' ? '#d97706' : c === 'red' ? '#dc2626' : 'var(--text-muted)'
+
+  const hasResult = result && (result.display || result.interpretation || result.subscores)
+
   return (
-    <div className="oui-non-group">
-      <span className="oui-non-label" style={{ fontSize: '0.85rem' }}>{label}</span>
-      <input value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: 80, textAlign: 'right', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem', color: 'var(--text-main)', padding: '0.1rem 0.3rem' }} placeholder="—" />
+    <div style={{ borderBottom: hasResult ? '1px solid var(--border-color)' : undefined, paddingBottom: hasResult ? 8 : 0, marginBottom: hasResult ? 6 : 0 }}>
+      <div className="oui-non-group" style={{ borderBottom: 'none', marginBottom: 0 }}>
+        <span className="oui-non-label" style={{ fontSize: '0.85rem' }}>{label}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {!hasResult && (
+            <input value={value} onChange={e => onChange(e.target.value)}
+              style={{ width: 80, textAlign: 'right', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem', color: 'var(--text-main)', padding: '0.1rem 0.3rem' }} placeholder="—" />
+          )}
+          {onOpenQuestionnaire && (
+            <button
+              onClick={onOpenQuestionnaire}
+              title="Remplir le questionnaire interactif"
+              style={{
+                background: hasResult ? 'var(--secondary)' : 'var(--primary)',
+                color: hasResult ? 'var(--primary)' : 'white',
+                border: hasResult ? '1px solid var(--primary)' : 'none',
+                borderRadius: 6, padding: '3px 8px', fontSize: '0.7rem', fontWeight: 600,
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, lineHeight: 1,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+              </svg>
+              {hasResult ? 'Modifier' : 'Remplir'}
+            </button>
+          )}
+        </div>
+      </div>
+      {hasResult && (
+        <div style={{ marginTop: 6, paddingLeft: 2 }}>
+          {result?.display && (
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: colorFor(result.color), fontVariantNumeric: 'tabular-nums' }}>
+              {result.display}
+            </div>
+          )}
+          {result?.interpretation && (
+            <div style={{ fontSize: '0.7rem', color: colorFor(result.color), marginTop: 1 }}>
+              {result.interpretation}
+            </div>
+          )}
+          {result?.subscores && Object.keys(result.subscores).length > 0 && (
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
+              {Object.entries(result.subscores).map(([k, v]) => (
+                <span key={k} style={{ display: 'inline-block', marginRight: 8 }}>
+                  <strong style={{ fontWeight: 600 }}>{k}:</strong> {v}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
 import { SmartObjectifsInline } from './SmartObjectifsInline'
-import { OuiNon, SectionHeader, ScoreRow } from './bilans/shared'
+import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow } from './bilans/shared'
+import { useQuestionnaires } from './bilans/questionnaires/useQuestionnaires'
+import { TestInfoButton } from './bilans/testInfo/TestInfoButton'
 
 export interface BilanEpauleHandle {
   getData: () => Record<string, unknown>
@@ -16,6 +18,11 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
   const _bb = (initialData?.blueBlackFlags as Record<string, unknown>) ?? {}
   const _sc = (initialData?.scores        as Record<string, unknown>) ?? {}
   const _ck = (initialData?.contratKine   as Record<string, unknown>) ?? {}
+  const _ex = (initialData?.examClinique  as Record<string, unknown>) ?? {}
+  const _fo = (initialData?.forceMusculaire as Record<string, unknown>) ?? {}
+  const _nr = (initialData?.neurologique  as Record<string, unknown>) ?? {}
+  const _ts = (initialData?.testsSpecifiques as Record<string, unknown>) ?? {}
+  const _cn = (initialData?.conseils      as Record<string, unknown>) ?? {}
 
   const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
@@ -92,6 +99,8 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
     oss: (_sc.scoreOSS as string) ?? '', constant: (_sc.scoreConstant as string) ?? '',
     dash: (_sc.scoreDASH as string) ?? '', rowe: (_sc.scoreRowe as string) ?? '',
     psfs1: (_sc.psfs1 as string) ?? '', psfs2: (_sc.psfs2 as string) ?? '', psfs3: (_sc.psfs3 as string) ?? '',
+    psfs1Label: (_sc.psfs1Label as string) ?? '', psfs2Label: (_sc.psfs2Label as string) ?? '', psfs3Label: (_sc.psfs3Label as string) ?? '',
+    psfs1Notes: (_sc.psfs1Notes as string) ?? '', psfs2Notes: (_sc.psfs2Notes as string) ?? '', psfs3Notes: (_sc.psfs3Notes as string) ?? '',
     had: (_sc.scoreHAD as string) ?? '', dn4: (_sc.scoreDN4 as string) ?? '',
     sensibilisation: (_sc.scoreSensibilisation as string) ?? '', autres: (_sc.autresScores as string) ?? '',
   })
@@ -107,14 +116,135 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
   const [autoReeducation, setAutoReeducation] = useState(boolToStr(_ck.autoReeducation))
   const [frequenceDuree, setFrequenceDuree]   = useState((_ck.frequenceDuree as string) ?? '')
 
+  // ── Questionnaires interactifs ──
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, Record<string, unknown>>>(
+    (initialData?.questionnaireAnswers as Record<string, Record<string, unknown>>) ?? {}
+  )
+  const [questionnaireResults, setQuestionnaireResults] = useState<Record<string, import('./bilans/questionnaires/useQuestionnaires').StoredResult>>(
+    (initialData?.questionnaireResults as Record<string, import('./bilans/questionnaires/useQuestionnaires').StoredResult>) ?? {}
+  )
+  const questionnaires = useQuestionnaires(
+    (k, v) => setScores(p => ({ ...p, [k]: v })),
+    questionnaireAnswers, setQuestionnaireAnswers,
+    questionnaireResults, setQuestionnaireResults,
+  )
+
+  // ── Examen clinique : morphostatique / observation / mobilité / modifications ──
+  const [morphoRachisCervical, setMorphoRachisCervical]     = useState((_ex.morphoRachisCervical as string) ?? '')
+  const [morphoRachisThoracique, setMorphoRachisThoracique] = useState((_ex.morphoRachisThoracique as string) ?? '')
+  const [morphoCeintureScap, setMorphoCeintureScap]         = useState((_ex.morphoCeintureScap as string) ?? '')
+  const [modificationPosture, setModificationPosture]       = useState((_ex.modificationPosture as string) ?? '')
+  const [amyoDeltoide, setAmyoDeltoide]                     = useState((_ex.amyoDeltoide as string) ?? '')
+  const [amyoFosseSupraInfra, setAmyoFosseSupraInfra]       = useState((_ex.amyoFosseSupraInfra as string) ?? '')
+  const [amyoPeriScapulaire, setAmyoPeriScapulaire]         = useState((_ex.amyoPeriScapulaire as string) ?? '')
+
+  const MOBILITE_KEYS: [string, string][] = [
+    ['flexion',   'Flexion'],     ['abduction', 'Abduction'],
+    ['adduction', 'Adduction'],   ['extension', 'Extension'],
+    ['re1', 'RE1'], ['re2', 'RE2'], ['ri1', 'RI1'], ['ri2', 'RI2'],
+  ]
+  const emptyMob = () => MOBILITE_KEYS.reduce((a, [k]) => ({ ...a, [k]: { ag: '', ad: '', pg: '', pd: '' } }), {} as Record<string, { ag: string; ad: string; pg: string; pd: string }>)
+  const [mob, setMob] = useState<Record<string, { ag: string; ad: string; pg: string; pd: string }>>({
+    ...emptyMob(),
+    ...((_ex.mobilite as Record<string, { ag: string; ad: string; pg: string; pd: string }>) ?? {}),
+  })
+  const updateMob = (k: string, side: 'ag' | 'ad' | 'pg' | 'pd', v: string) =>
+    setMob(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
+
+  const [mobiliteRachisCervical, setMobiliteRachisCervical]     = useState((_ex.mobiliteRachisCervical as string) ?? '')
+  const [mobiliteRachisThoracique, setMobiliteRachisThoracique] = useState((_ex.mobiliteRachisThoracique as string) ?? '')
+  const [mobiliteAutresZones, setMobiliteAutresZones]           = useState((_ex.mobiliteAutresZones as string) ?? '')
+
+  const [modifSymp, setModifSymp] = useState<Record<string, string>>({
+    testAssistanceScap: '', stabilisationScapula: '', testRetractionScap: '', testTrapezeSup: '',
+    serrerPoings: '', ajoutResistance: '', activationCoiffe: '', pasAvantPrealable: '', diminutionLevier: '',
+    modifPositionThoracique: '', modifPositionCervicale: '',
+    ...((_ex.modifSymp as Record<string, string>) ?? {}),
+  })
+  const updateModifSymp = (k: string, v: string) => setModifSymp(p => ({ ...p, [k]: v }))
+
+  // ── Force musculaire ──
+  const FORCE_KEYS: [string, string][] = [
+    ['planScapula90',     'Plan de la scapula à 90° de flexion'],
+    ['re1Force',          'RE1'],
+    ['re2StabEpaule',     'RE2 avec stabilisation de l’épaule'],
+    ['re2StabCharge',     'RE2 avec stabilisation + charge'],
+    ['re2SansStab',       'RE2 sans stabilisation'],
+    ['re2SansStabCharge', 'RE2 sans stabilisation + charge'],
+    ['ri2StabEpaule',     'RI2 avec stabilisation de l’épaule'],
+    ['ri2StabCharge',     'RI2 avec stabilisation + charge'],
+    ['ri2SansStab',       'RI2 sans stabilisation'],
+    ['ri2SansStabCharge', 'RI2 sans stabilisation + charge'],
+  ]
+  const emptyForce = () => FORCE_KEYS.reduce((a, [k]) => ({ ...a, [k]: { gauche: '', droite: '' } }), {} as Record<string, { gauche: string; droite: string }>)
+  const [force, setForce] = useState<Record<string, { gauche: string; droite: string }>>({
+    ...emptyForce(),
+    ...((_fo.force as Record<string, { gauche: string; droite: string }>) ?? {}),
+  })
+  const updateForce = (k: string, side: 'gauche' | 'droite', v: string) =>
+    setForce(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
+  const [autresTestsForce, setAutresTestsForce] = useState((_fo.autresTestsForce as string) ?? '')
+
+  // Mouvements répétés
+  const [marqueursAvant, setMarqueursAvant]       = useState((_fo.marqueursAvant as string) ?? '')
+  const [resultatsMvtRep, setResultatsMvtRep]     = useState((_fo.resultatsMvtRep as string) ?? '')
+
+  // ── Neurologique + Mécanosensibilité ──
+  const [reflexes, setReflexes]               = useState((_nr.reflexes as string) ?? '')
+  const [forceNeuro, setForceNeuro]           = useState((_nr.force as string) ?? (_nr.deficitMoteur as string) ?? '')
+  const [sensibilite, setSensibilite]         = useState((_nr.sensibilite as string) ?? '')
+  const [hoffmanTromner, setHoffmanTromner]   = useState((_nr.hoffmanTromner as string) ?? (_nr.hoffman as string) ?? '')
+  const [reversibilite, setReversibilite]     = useState((_nr.reversibilite as string) ?? '')
+  const [comportement, setComportement]       = useState((_nr.comportement as string) ?? '')
+  const [palpationNerfs, setPalpationNerfs]   = useState((_nr.palpationNerfs as string) ?? '')
+  const [nerfSousPression, setNerfSousPression] = useState(boolToStr(_nr.nerfSousPression))
+  const [nerfMalade, setNerfMalade]           = useState(boolToStr(_nr.nerfMalade))
+  const [nerfPrecisions, setNerfPrecisions]   = useState((_nr.nerfPrecisions as string) ?? '')
+  const [troublesSensitifsNotes, setTroublesSensitifsNotes] = useState((_nr.troublesSensitifsNotes as string) ?? '')
+  const [nerfMedian, setNerfMedian]           = useState((_nr.nerfMedian as string) ?? (_nr.ultt1 as string) ?? '')
+  const [nerfUlnaire, setNerfUlnaire]         = useState((_nr.nerfUlnaire as string) ?? (_nr.ultt4 as string) ?? '')
+  const [nerfRadial, setNerfRadial]           = useState((_nr.nerfRadial as string) ?? (_nr.ultt3 as string) ?? '')
+
+  // ── Tests spécifiques ──
+  const [testsSpec, setTestsSpec] = useState<Record<string, string>>({
+    bearHug: '', bellyPress: '', externalRotLagSign: '',
+    obrien: '', palpationAC: '', crossArm: '', abdHorizResist: '',
+    apprehensionRelocation: '', signeSulcus: '', jerkTest: '',
+    ckcuest: '', ulrt: '', uqYbt: '', setPset: '', smbtSasspt: '',
+    autresTestsFonctionnels: '',
+    ...((_ts as Record<string, string>) ?? {}),
+  })
+  const updateTestSpec = (k: string, v: string) => setTestsSpec(p => ({ ...p, [k]: v }))
+
+  // ── Conseils ──
+  const [conseilsRecos, setConseilsRecos] = useState((_cn.conseilsRecos as string) ?? '')
+
   useImperativeHandle(ref, () => ({
     getData: () => ({
       douleur: { debutSymptomes, facteurDeclenchant, localisationInitiale, localisationActuelle, evnPire, evnMieux, evnMoy, douleurType, situation, douleurNocturne, douleurNocturneType, insomniante, derouillageMatinal, derouillageTemps, mouvementsEmpirent, mouvementsSoulagent },
       redFlags: { tttMedical, antecedents, comorbidites, sommeilQuantite, sommeilQualite, cinqD3N, imageries, ...rf },
       yellowFlags: { croyancesOrigine, croyancesTtt, attentes, autoEfficacite, flexibilitePsy, strategieCoping, peurEvitementMouvements, ...yf },
       blueBlackFlags: { stressNiveau, antecedentsAtDetails, ...bb },
-      scores: { scoreOSS: scores.oss, scoreConstant: scores.constant, scoreDASH: scores.dash, scoreRowe: scores.rowe, psfs1: scores.psfs1, psfs2: scores.psfs2, psfs3: scores.psfs3, scoreHAD: scores.had, scoreDN4: scores.dn4, scoreSensibilisation: scores.sensibilisation, autresScores: scores.autres },
+      scores: { scoreOSS: scores.oss, scoreConstant: scores.constant, scoreDASH: scores.dash, scoreRowe: scores.rowe, psfs1: scores.psfs1, psfs2: scores.psfs2, psfs3: scores.psfs3, psfs1Label: scores.psfs1Label, psfs2Label: scores.psfs2Label, psfs3Label: scores.psfs3Label, psfs1Notes: scores.psfs1Notes, psfs2Notes: scores.psfs2Notes, psfs3Notes: scores.psfs3Notes, scoreHAD: scores.had, scoreDN4: scores.dn4, scoreSensibilisation: scores.sensibilisation, autresScores: scores.autres },
       contratKine: { objectifsSMART: objectifsSMART.map(o => o.titre + (o.cible ? ` — ${o.cible}` : '')).join('\n'), objectifsSMARTItems: objectifsSMART, autoReeducation, frequenceDuree },
+      examClinique: {
+        morphoRachisCervical, morphoRachisThoracique, morphoCeintureScap, modificationPosture,
+        amyoDeltoide, amyoFosseSupraInfra, amyoPeriScapulaire,
+        mobilite: mob, mobiliteRachisCervical, mobiliteRachisThoracique, mobiliteAutresZones,
+        modifSymp,
+      },
+      forceMusculaire: { force, autresTestsForce, marqueursAvant, resultatsMvtRep },
+      neurologique: {
+        reflexes, force: forceNeuro, sensibilite, hoffmanTromner,
+        reversibilite, comportement, palpationNerfs,
+        nerfSousPression, nerfMalade, nerfPrecisions,
+        troublesSensitifsNotes,
+        nerfMedian, nerfUlnaire, nerfRadial,
+      },
+      testsSpecifiques: testsSpec,
+      conseils: { conseilsRecos },
+      questionnaireAnswers,
+      questionnaireResults,
     }),
     setData: (data: Record<string, unknown>) => {
       const d   = (data.douleur        as Record<string, unknown>) ?? {}
@@ -185,6 +315,12 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
         ...(scD.psfs1 !== undefined               ? { psfs1: scD.psfs1 as string } : {}),
         ...(scD.psfs2 !== undefined               ? { psfs2: scD.psfs2 as string } : {}),
         ...(scD.psfs3 !== undefined               ? { psfs3: scD.psfs3 as string } : {}),
+        ...(scD.psfs1Label !== undefined          ? { psfs1Label: scD.psfs1Label as string } : {}),
+        ...(scD.psfs2Label !== undefined          ? { psfs2Label: scD.psfs2Label as string } : {}),
+        ...(scD.psfs3Label !== undefined          ? { psfs3Label: scD.psfs3Label as string } : {}),
+        ...(scD.psfs1Notes !== undefined          ? { psfs1Notes: scD.psfs1Notes as string } : {}),
+        ...(scD.psfs2Notes !== undefined          ? { psfs2Notes: scD.psfs2Notes as string } : {}),
+        ...(scD.psfs3Notes !== undefined          ? { psfs3Notes: scD.psfs3Notes as string } : {}),
         ...(scD.scoreHAD !== undefined            ? { had: scD.scoreHAD as string } : {}),
         ...(scD.scoreDN4 !== undefined            ? { dn4: scD.scoreDN4 as string } : {}),
         ...(scD.scoreSensibilisation !== undefined ? { sensibilisation: scD.scoreSensibilisation as string } : {}),
@@ -194,6 +330,51 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
       else if (typeof ckD.objectifsSMART === 'string' && (ckD.objectifsSMART as string).trim()) setObjectifsSMART([{ id: Date.now(), titre: (ckD.objectifsSMART as string).trim(), cible: '', dateCible: '' }])
       if (ckD.autoReeducation !== undefined) setAutoReeducation(boolToStr(ckD.autoReeducation))
       if (ckD.frequenceDuree !== undefined)  setFrequenceDuree(ckD.frequenceDuree as string)
+
+      const exD = (data.examClinique     as Record<string, unknown>) ?? {}
+      const foD = (data.forceMusculaire  as Record<string, unknown>) ?? {}
+      const nrD = (data.neurologique     as Record<string, unknown>) ?? {}
+      const tsD = (data.testsSpecifiques as Record<string, unknown>) ?? {}
+      const cnD = (data.conseils         as Record<string, unknown>) ?? {}
+      if (exD.morphoRachisCervical   !== undefined) setMorphoRachisCervical(exD.morphoRachisCervical as string)
+      if (exD.morphoRachisThoracique !== undefined) setMorphoRachisThoracique(exD.morphoRachisThoracique as string)
+      if (exD.morphoCeintureScap     !== undefined) setMorphoCeintureScap(exD.morphoCeintureScap as string)
+      if (exD.modificationPosture    !== undefined) setModificationPosture(exD.modificationPosture as string)
+      if (exD.amyoDeltoide           !== undefined) setAmyoDeltoide(exD.amyoDeltoide as string)
+      if (exD.amyoFosseSupraInfra    !== undefined) setAmyoFosseSupraInfra(exD.amyoFosseSupraInfra as string)
+      if (exD.amyoPeriScapulaire     !== undefined) setAmyoPeriScapulaire(exD.amyoPeriScapulaire as string)
+      if (exD.mobilite               !== undefined) setMob(p => ({ ...p, ...(exD.mobilite as Record<string, { ag: string; ad: string; pg: string; pd: string }>) }))
+      if (exD.mobiliteRachisCervical !== undefined) setMobiliteRachisCervical(exD.mobiliteRachisCervical as string)
+      if (exD.mobiliteRachisThoracique !== undefined) setMobiliteRachisThoracique(exD.mobiliteRachisThoracique as string)
+      if (exD.mobiliteAutresZones    !== undefined) setMobiliteAutresZones(exD.mobiliteAutresZones as string)
+      if (exD.modifSymp              !== undefined) setModifSymp(p => ({ ...p, ...(exD.modifSymp as Record<string, string>) }))
+      if (foD.force                  !== undefined) setForce(p => ({ ...p, ...(foD.force as Record<string, { gauche: string; droite: string }>) }))
+      if (foD.autresTestsForce       !== undefined) setAutresTestsForce(foD.autresTestsForce as string)
+      if (foD.marqueursAvant         !== undefined) setMarqueursAvant(foD.marqueursAvant as string)
+      if (foD.resultatsMvtRep        !== undefined) setResultatsMvtRep(foD.resultatsMvtRep as string)
+      if (nrD.reflexes               !== undefined) setReflexes(nrD.reflexes as string)
+      if (nrD.force                  !== undefined) setForceNeuro(nrD.force as string)
+      else if (nrD.deficitMoteur     !== undefined) setForceNeuro(nrD.deficitMoteur as string)
+      if (nrD.sensibilite            !== undefined) setSensibilite(nrD.sensibilite as string)
+      if (nrD.hoffmanTromner         !== undefined) setHoffmanTromner(nrD.hoffmanTromner as string)
+      else if (nrD.hoffman           !== undefined) setHoffmanTromner(nrD.hoffman as string)
+      if (nrD.reversibilite          !== undefined) setReversibilite(nrD.reversibilite as string)
+      if (nrD.comportement           !== undefined) setComportement(nrD.comportement as string)
+      if (nrD.palpationNerfs         !== undefined) setPalpationNerfs(nrD.palpationNerfs as string)
+      if (nrD.nerfSousPression       !== undefined) setNerfSousPression(boolToStr(nrD.nerfSousPression))
+      if (nrD.nerfMalade             !== undefined) setNerfMalade(boolToStr(nrD.nerfMalade))
+      if (nrD.nerfPrecisions         !== undefined) setNerfPrecisions(nrD.nerfPrecisions as string)
+      if (nrD.troublesSensitifsNotes !== undefined) setTroublesSensitifsNotes(nrD.troublesSensitifsNotes as string)
+      if (nrD.nerfMedian             !== undefined) setNerfMedian(nrD.nerfMedian as string)
+      else if (nrD.ultt1             !== undefined) setNerfMedian(nrD.ultt1 as string)
+      if (nrD.nerfUlnaire            !== undefined) setNerfUlnaire(nrD.nerfUlnaire as string)
+      else if (nrD.ultt4             !== undefined) setNerfUlnaire(nrD.ultt4 as string)
+      if (nrD.nerfRadial             !== undefined) setNerfRadial(nrD.nerfRadial as string)
+      else if (nrD.ultt3             !== undefined) setNerfRadial(nrD.ultt3 as string)
+      if (Object.keys(tsD).length > 0) setTestsSpec(p => ({ ...p, ...(tsD as Record<string, string>) }))
+      if (cnD.conseilsRecos          !== undefined) setConseilsRecos(cnD.conseilsRecos as string)
+      if (data.questionnaireAnswers) setQuestionnaireAnswers(data.questionnaireAnswers as Record<string, Record<string, unknown>>)
+      if (data.questionnaireResults) setQuestionnaireResults(data.questionnaireResults as Record<string, import('./bilans/questionnaires/useQuestionnaires').StoredResult>)
     },
   }))
 
@@ -204,8 +385,13 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
         { id: 'redFlags',      title: 'Red Flags 🚩',           color: '#dc2626' },
         { id: 'yellowFlags',   title: 'Yellow Flags 🟡',        color: '#d97706' },
         { id: 'blueBlackFlags',title: 'Blue / Black Flags',     color: '#7c3aed' },
+        { id: 'examClinique',  title: 'Examen clinique',        color: 'var(--primary)' },
+        { id: 'force',         title: 'Force musculaire',       color: 'var(--primary)' },
+        { id: 'neuro',         title: 'Neurologique & mécanosensibilité', color: 'var(--primary)' },
+        { id: 'testsSpec',     title: 'Tests spécifiques',      color: 'var(--primary)' },
         { id: 'scores',        title: 'Scores fonctionnels',    color: 'var(--primary)' },
         { id: 'contrat',       title: 'Contrat kiné',           color: '#059669' },
+        { id: 'conseils',      title: 'Conseils & recommandations', color: '#059669' },
       ].map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} />
@@ -388,20 +574,66 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
               {sec.id === 'scores' && (
                 <>
                   {([
-                    ['oss',           "Score d'Oxford Épaule (OSS)"],
-                    ['constant',      'Constant-Murley'],
-                    ['dash',          'DASH'],
-                    ['rowe',          'Rowe score'],
-                    ['had',           'Échelle HAD'],
-                    ['dn4',           'DN4'],
-                    ['sensibilisation','Sensibilisation Centrale'],
-                  ] as [string, string][]).map(([k, lbl]) => (
-                    <ScoreRow key={k} label={lbl} value={scores[k]} onChange={v => updateScore(k, v)} />
+                    ['oss',           "Score d'Oxford Épaule (OSS)", 'oss'],
+                    ['constant',      'Constant-Murley',              'constant'],
+                    ['dash',          'DASH',                          'dash'],
+                    ['rowe',          'Rowe score',                    'rowe'],
+                    ['had',           'Échelle HAD',                   'had'],
+                    ['dn4',           'DN4',                           'dn4'],
+                    ['sensibilisation','Sensibilisation Centrale',     'csi'],
+                  ] as [string, string, string][]).map(([k, lbl, qId]) => (
+                    <ScoreRow key={k} label={lbl} value={scores[k]} onChange={v => updateScore(k, v)}
+                      onOpenQuestionnaire={() => questionnaires.open(qId, k)}
+                      result={questionnaires.getResult(k, qId)} />
                   ))}
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', margin: '10px 0 4px' }}>Patient Specific Functional Scale (PSFS)</label>
-                  {([['psfs1','Activité 1'],['psfs2','Activité 2'],['psfs3','Activité 3']] as [string, string][]).map(([k, lbl]) => (
-                    <ScoreRow key={k} label={lbl} value={scores[k]} onChange={v => updateScore(k, v)} />
-                  ))}
+                  <div style={{ margin: '14px 0 8px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Patient Specific Functional Scale
+                    </label>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>0 = incapable · 10 = niveau normal</span>
+                  </div>
+                  {[1, 2, 3].map(i => {
+                    const kScore = `psfs${i}`
+                    const kLabel = `psfs${i}Label`
+                    const kNotes = `psfs${i}Notes`
+                    const score = scores[kScore]
+                    const scoreNum = score === '' ? null : Math.max(0, Math.min(10, Number(score)))
+                    const accent = scoreNum === null ? 'var(--text-muted)' : scoreNum >= 7 ? '#059669' : scoreNum >= 4 ? '#d97706' : '#dc2626'
+                    return (
+                      <div key={i} style={{ background: 'var(--secondary)', borderRadius: 'var(--radius-lg)', padding: '0.9rem 1rem', marginBottom: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', flexShrink: 0 }}>0{i}</span>
+                          <input
+                            value={scores[kLabel] ?? ''}
+                            onChange={e => updateScore(kLabel, e.target.value)}
+                            placeholder={`Activité ${i} — ex: enfiler une veste, dormir sur le côté…`}
+                            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-main)', outline: 'none', padding: 0 }}
+                          />
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 1, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 600, color: accent, lineHeight: 1, minWidth: 18, textAlign: 'right' }}>{scoreNum ?? '—'}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>
+                          </div>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={10}
+                          step={1}
+                          value={scoreNum ?? 0}
+                          onChange={e => updateScore(kScore, e.target.value)}
+                          className="psfs-slider"
+                          style={{ width: '100%', ['--psfs-accent' as string]: accent }}
+                        />
+                        <textarea
+                          value={scores[kNotes] ?? ''}
+                          onChange={e => updateScore(kNotes, e.target.value)}
+                          placeholder="Notes (contexte, évolution, conditions…)"
+                          rows={1}
+                          style={{ width: '100%', marginTop: 8, padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'transparent', border: 'none', borderTop: '1px solid var(--border-color)', borderRadius: 0, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }}
+                        />
+                      </div>
+                    )
+                  })}
                   <div style={{ marginTop: 8 }}>
                     <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autre(s) Score(s)</label>
                     <textarea value={scores.autres} onChange={e => updateScore('autres', e.target.value)} placeholder="Nom et score…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
@@ -420,10 +652,249 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                 </>
               )}
 
+              {sec.id === 'examClinique' && (
+                <>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Morphostatique</p>
+                  {([
+                    ['Attitude du rachis cervical',    morphoRachisCervical,   setMorphoRachisCervical,   'Antéprojection, rectitude…'],
+                    ['Attitude du rachis thoracique',  morphoRachisThoracique, setMorphoRachisThoracique, 'Cyphose, rectitude…'],
+                    ['Attitude de la ceinture scapulaire', morphoCeintureScap, setMorphoCeintureScap,     'Enroulement, sonnette…'],
+                  ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
+                    <div key={lbl} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                      <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Modification de la posture</label>
+                    {(['Pire', 'Pareil', 'Mieux']).map(v => (
+                      <button key={v} className={`choix-btn${modificationPosture === v.toLowerCase() ? ' active' : ''}`} onClick={() => setModificationPosture(modificationPosture === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+                    ))}
+                  </div>
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Observation — amyotrophies</p>
+                  {([
+                    ['Deltoïde',                       amyoDeltoide,        setAmyoDeltoide],
+                    ['Fosse supra / infra-épineuse',   amyoFosseSupraInfra, setAmyoFosseSupraInfra],
+                    ['Péri-scapulaire',                amyoPeriScapulaire,  setAmyoPeriScapulaire],
+                  ] as [string, string, (v: string) => void][]).map(([lbl, val, setter]) => (
+                    <div key={lbl} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                      <input value={val} onChange={e => setter(e.target.value)} placeholder="Observation…" style={inputStyle} />
+                    </div>
+                  ))}
+
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'block', margin: '14px 0 6px' }}>Mobilité (°)</label>
+                  <table className="mobility-table">
+                    <thead>
+                      <tr>
+                        <th rowSpan={2}>Mouvement</th>
+                        <th colSpan={2} style={{ textAlign: 'center' }}>Active</th>
+                        <th colSpan={2} style={{ textAlign: 'center' }}>Passive</th>
+                      </tr>
+                      <tr>
+                        <th style={{ textAlign: 'center' }}>G</th>
+                        <th style={{ textAlign: 'center' }}>D</th>
+                        <th style={{ textAlign: 'center' }}>G</th>
+                        <th style={{ textAlign: 'center' }}>D</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MOBILITE_KEYS.map(([k, lbl]) => (
+                        <tr key={k}>
+                          <td>{lbl}</td>
+                          <td><AmplitudeInput value={mob[k].ag} onChange={v => updateMob(k, 'ag', v)} /></td>
+                          <td><AmplitudeInput value={mob[k].ad} onChange={v => updateMob(k, 'ad', v)} /></td>
+                          <td><AmplitudeInput value={mob[k].pg} onChange={v => updateMob(k, 'pg', v)} /></td>
+                          <td><AmplitudeInput value={mob[k].pd} onChange={v => updateMob(k, 'pd', v)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis cervical</label>
+                    <input value={mobiliteRachisCervical} onChange={e => setMobiliteRachisCervical(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis thoracique</label>
+                    <input value={mobiliteRachisThoracique} onChange={e => setMobiliteRachisThoracique(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres zones</label>
+                    <textarea value={mobiliteAutresZones} onChange={e => setMobiliteAutresZones(e.target.value)} placeholder="Coude, poignet…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  </div>
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Modifications des symptômes</p>
+                  {([
+                    ['testAssistanceScap',   "Test d'assistance scapulaire"],
+                    ['stabilisationScapula', 'Stabilisation de la scapula'],
+                    ['testRetractionScap',   'Test de rétraction scapulaire'],
+                    ['testTrapezeSup',       'Test du trapèze supérieur'],
+                    ['serrerPoings',         'Serrer les poings'],
+                    ['ajoutResistance',      'Ajout de résistance'],
+                    ['activationCoiffe',     'Activation spécifique de la coiffe'],
+                    ['pasAvantPrealable',    'Pas en avant préalable'],
+                    ['diminutionLevier',     'Diminution du bras de levier'],
+                    ['modifPositionThoracique', 'Modification de la position thoracique'],
+                    ['modifPositionCervicale',  'Modification de la position cervicale'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                      <input value={modifSymp[k] ?? ''} onChange={e => updateModifSymp(k, e.target.value)} placeholder="Résultat / observation…" style={inputStyle} />
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {sec.id === 'force' && (
+                <>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', margin: '0 0 6px' }}>
+                    Force musculaire <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>(échelle MRC)</span><MRCInfo />
+                  </label>
+                  <table className="mobility-table">
+                    <thead><tr><th>Test</th><th style={{ textAlign: 'center' }}>Gauche</th><th style={{ textAlign: 'center' }}>Droite</th></tr></thead>
+                    <tbody>
+                      {FORCE_KEYS.map(([k, lbl]) => (
+                        <tr key={k}>
+                          <td>{lbl}</td>
+                          <td><ForceInput value={force[k].gauche} onChange={v => updateForce(k, 'gauche', v)} /></td>
+                          <td><ForceInput value={force[k].droite} onChange={v => updateForce(k, 'droite', v)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests de force</label>
+                    <textarea value={autresTestsForce} onChange={e => setAutresTestsForce(e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  </div>
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Examen des mouvements répétés</p>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Marqueurs avant procédure</label>
+                  <input value={marqueursAvant} onChange={e => setMarqueursAvant(e.target.value)} placeholder="Douleur, amplitude…" style={inputStyle} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Résultats</label>
+                  <textarea value={resultatsMvtRep} onChange={e => setResultatsMvtRep(e.target.value)} placeholder="Centralisation, périphérisation…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                </>
+              )}
+
+              {sec.id === 'neuro' && (
+                <>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Examen neurologique</p>
+                  {([
+                    ['Réflexes',          reflexes,       setReflexes,       'Bicipital, tricipital, stylo-radial…'],
+                    ['Force',             forceNeuro,     setForceNeuro,     'Territoire concerné…'],
+                    ['Sensibilité',       sensibilite,    setSensibilite,    'Pinceau / Monofilaments / Roulette / NeuroPen / Chaud-Froid…'],
+                    ['Hoffman / Tromner', hoffmanTromner, setHoffmanTromner, '+ / -'],
+                  ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
+                    <div key={lbl} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                        {lbl}
+                        {lbl === 'Hoffman / Tromner' && (<><TestInfoButton testKey="hoffman" /><TestInfoButton testKey="tromner" /></>)}
+                      </label>
+                      <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
+                    </div>
+                  ))}
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Réversibilité</label>
+                  <input value={reversibilite} onChange={e => setReversibilite(e.target.value)} placeholder="Oui / Non — Force, Pinceau/Monofilaments…" style={inputStyle} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Comportement</label>
+                  <input value={comportement} onChange={e => setComportement(e.target.value)} placeholder="Utile / Inutile — Type…" style={inputStyle} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Palpation Nerf(s)</label>
+                  <input value={palpationNerfs} onChange={e => setPalpationNerfs(e.target.value)} placeholder="Douleur, lequel…" style={inputStyle} />
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>Nerf / Racine</p>
+                  <OuiNon label="Sous pression" value={nerfSousPression} onChange={setNerfSousPression} />
+                  <OuiNon label="Malade" value={nerfMalade} onChange={setNerfMalade} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Précision(s)</label>
+                  <input value={nerfPrecisions} onChange={e => setNerfPrecisions(e.target.value)} placeholder="—" style={inputStyle} />
+
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', margin: '12px 0 4px' }}>Schéma des troubles sensitifs</label>
+                  <textarea value={troublesSensitifsNotes} onChange={e => setTroublesSensitifsNotes(e.target.value)} placeholder="Localisation, qualité (fourmillements, engourdissement…)" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Mécanosensibilité</p>
+                  {([
+                    ['Nerf médian',  'nerfMedian',  nerfMedian,  setNerfMedian],
+                    ['Nerf ulnaire', 'nerfUlnaire', nerfUlnaire, setNerfUlnaire],
+                    ['Nerf radial',  'nerfRadial',  nerfRadial,  setNerfRadial],
+                  ] as [string, string, string, (v: string) => void][]).map(([lbl, tKey, val, setter]) => (
+                    <div key={lbl} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={tKey} /></label>
+                      <input value={val} onChange={e => setter(e.target.value)} placeholder="+ / − / reproduction symptômes…" style={inputStyle} />
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {sec.id === 'testsSpec' && (
+                <>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Rupture de coiffe</p>
+                  {([
+                    ['bearHug',            'Bear Hug Test'],
+                    ['bellyPress',         'Belly Press Test'],
+                    ['externalRotLagSign', 'External Rotation Lag Sign'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={k} /></label>
+                      <input value={testsSpec[k] ?? ''} onChange={e => updateTestSpec(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
+                    </div>
+                  ))}
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Cluster acromio-claviculaire</p>
+                  {([
+                    ['obrien',            "O'Brien"],
+                    ['palpationAC',       'Palpation AC'],
+                    ['crossArm',          'Cross-Arm'],
+                    ['abdHorizResist',    'Abduction horizontale contre résistance'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} className="oui-non-group">
+                      <span className="oui-non-label">{lbl}<TestInfoButton testKey={k} /></span>
+                      <div className="oui-non-btns">
+                        {(['+', '−'] as const).map(v => {
+                          const stored = v === '+' ? 'positif' : 'negatif'
+                          return (
+                            <button key={v} className={`oui-non-btn${testsSpec[k] === stored ? ' active' : ''}`} onClick={() => updateTestSpec(k, testsSpec[k] === stored ? '' : stored)}>{v}</button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Instabilité</p>
+                  {([
+                    ['apprehensionRelocation', 'Apprehension / Relocation Test'],
+                    ['signeSulcus',            'Test du signe du Sulcus'],
+                    ['jerkTest',               'Jerk Test'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={k} /></label>
+                      <input value={testsSpec[k] ?? ''} onChange={e => updateTestSpec(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
+                    </div>
+                  ))}
+
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Tests fonctionnels</p>
+                  {([
+                    ['ckcuest',     'CKCUEST'],
+                    ['ulrt',        'ULRT'],
+                    ['uqYbt',       'UQ-YBT'],
+                    ['setPset',     'SET / PSET'],
+                    ['smbtSasspt',  'SMBT / SASSPT'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={k} /></label>
+                      <input value={testsSpec[k] ?? ''} onChange={e => updateTestSpec(k, e.target.value)} placeholder="Score / résultat…" style={inputStyle} />
+                    </div>
+                  ))}
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests</label>
+                  <textarea value={testsSpec.autresTestsFonctionnels ?? ''} onChange={e => updateTestSpec('autresTestsFonctionnels', e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                </>
+              )}
+
+              {sec.id === 'conseils' && (
+                <>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Conseils & recommandations au patient</label>
+                  <textarea value={conseilsRecos} onChange={e => setConseilsRecos(e.target.value)} placeholder="Hygiène de vie, gestion de la charge, exercices à privilégier, signes d'alerte…" rows={6} style={{ ...inputStyle, resize: 'vertical', minHeight: 140 }} />
+                </>
+              )}
+
             </div>
           )}
         </div>
       ))}
+      {questionnaires.modal}
     </div>
   )
 })

@@ -46,7 +46,7 @@ export interface BilanContext {
 
 // ── Anonymization ─────────────────────────────────────────────────────────────
 
-function computeAge(dateNaissance: string): number | null {
+export function computeAge(dateNaissance: string): number | null {
   // Accepts dd/mm/yyyy or yyyy-mm-dd
   let date: Date | null = null
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateNaissance)) {

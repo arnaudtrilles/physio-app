@@ -1,269 +1,482 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
-import { SmartObjectifsInline } from '../SmartObjectifsInline'
 import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow } from './shared'
+import { useQuestionnaires } from './questionnaires/useQuestionnaires'
+import { TestInfoButton } from './testInfo/TestInfoButton'
+import {
+  DouleurSection, RedFlagsSection, YellowFlagsSection, BlueBlackFlagsSection,
+  ContratKineSection, ConseilsSection, PSFSCards,
+  MobiliteRachisTable, initMobiliteRachis,
+  StatusSymptomes,
+  emptyDouleur, mergeDouleur,
+  emptyRedFlags, mergeRedFlags,
+  emptyYellow, mergeYellow,
+  emptyBlueBlack, mergeBlueBlack,
+  emptyContrat, mergeContrat,
+  emptyPsfs, mergePsfs,
+  initMobAPGD,
+  inputStyle, lblStyle, sectionTitleStyle, subTitleStyle,
+  type DouleurState, type RedFlagsState, type YellowFlagsState, type BlueBlackState,
+  type ContratState, type PsfsItem, type MobAPGDState, type MobiliteRachisState, type MobiliteRachisRow,
+} from './bilanSections'
 
 export interface BilanGenouHandle {
   getData: () => Record<string, unknown>
   setData: (d: Record<string, unknown>) => void
 }
 
+const MOB_GENOU_KEYS: [string, string][] = [
+  ['flexion', 'Flexion'], ['extension', 'Extension'],
+  ['riTibiale', 'RI tibiale'], ['reTibiale', 'RE tibiale'],
+]
+const MOB_HANCHE_KEYS: [string, string][] = [
+  ['flexion', 'Flexion'], ['abduction', 'Abduction'], ['adduction', 'Adduction'],
+  ['extension', 'Extension'], ['re', 'Rotation externe'], ['ri', 'Rotation interne'],
+]
+const MOB_LOMB_KEYS: [string, string][] = [
+  ['flexion', 'Flexion'], ['extension', 'Extension'],
+  ['glissementLatD', 'Glissement latéral D'], ['glissementLatG', 'Glissement latéral G'],
+  ['inclinaisonD', 'Inclinaison D'], ['inclinaisonG', 'Inclinaison G'],
+  ['rotationD', 'Rotation D'], ['rotationG', 'Rotation G'],
+]
+const FORCE_KEYS: [string, string][] = [
+  ['ilioPsoas', 'Ilio-psoas'], ['quadriceps', 'Quadriceps'],
+  ['ischios', 'Ischio-jambiers'], ['abducteurs', 'Abducteurs'],
+  ['adducteurs', 'Adducteurs'], ['rotateursExt', 'Rotateurs externes'],
+  ['rotateursInt', 'Rotateurs internes'], ['tricepsSural', 'Triceps sural'],
+  ['tibialAnt', 'Tibial antérieur'],
+]
+const ABDO_KEYS: [string, string][] = [
+  ['transverse', 'Transverse'], ['droitsAbdomen', 'Droits de l’abdomen'], ['obliques', 'Obliques'],
+]
+
 export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
-  const _d  = (initialData?.douleur        as Record<string, unknown>) ?? {}
-  const _rf = (initialData?.redFlags       as Record<string, unknown>) ?? {}
-  const _yf = (initialData?.yellowFlags    as Record<string, unknown>) ?? {}
-  const _bb = (initialData?.blueBlackFlags as Record<string, unknown>) ?? {}
-  const _ec = (initialData?.examClinique   as Record<string, unknown>) ?? {}
-  const _t  = (initialData?.tests         as Record<string, unknown>) ?? {}
-  const _sc = (initialData?.scores        as Record<string, unknown>) ?? {}
-  const _ct = (initialData?.contrat       as Record<string, unknown>) ?? {}
+  const init = initialData ?? {}
+
+  const [douleur, setDouleur] = useState<DouleurState>(() => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))
+  const [redFlags, setRedFlags] = useState<RedFlagsState>(() => mergeRedFlags((init.redFlags as Record<string, unknown>) ?? {}))
+  const [yellow, setYellow] = useState<YellowFlagsState>(() => mergeYellow((init.yellowFlags as Record<string, unknown>) ?? {}))
+  const [blueBlack, setBlueBlack] = useState<BlueBlackState>(() => mergeBlueBlack((init.blueBlackFlags as Record<string, unknown>) ?? {}))
+  const [contrat, setContrat] = useState<ContratState>(() => mergeContrat((init.contrat as Record<string, unknown>) ?? {}))
+  const [psfs, setPsfs] = useState<PsfsItem[]>(() => mergePsfs((init.psfs as unknown) ?? emptyPsfs()))
+
+  // Examen clinique
+  const _ec = (init.examClinique as Record<string, unknown>) ?? {}
+  const [morpho, setMorpho] = useState<Record<string, string>>({
+    rachis: '', mi: '', corrigeable: '', modifPosture: '',
+    ...((_ec.morpho as Record<string, string>) ?? {}),
+  })
+  const setMorphoField = (k: string, v: string) => setMorpho(p => ({ ...p, [k]: v }))
+
+  const [observation, setObservation] = useState<Record<string, string>>({
+    amyotrophie: '', amyotrophieLoc: '', autre: '',
+    ...((_ec.observation as Record<string, string>) ?? {}),
+  })
+  const setObs = (k: string, v: string) => setObservation(p => ({ ...p, [k]: v }))
+
+  const [mobGenou, setMobGenou] = useState<MobAPGDState>(() => initMobAPGD(MOB_GENOU_KEYS.map(([k]) => k), (_ec.mobiliteGenou as MobAPGDState)))
+  const updMobG = (k: string, side: 'ag' | 'ad' | 'pg' | 'pd', v: string) =>
+    setMobGenou(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
+
+  const [mobHanche, setMobHanche] = useState<MobAPGDState>(() => initMobAPGD(MOB_HANCHE_KEYS.map(([k]) => k), (_ec.mobiliteHanche as MobAPGDState)))
+  const updMobH = (k: string, side: 'ag' | 'ad' | 'pg' | 'pd', v: string) =>
+    setMobHanche(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
+
+  const [mobLombaire, setMobLombaire] = useState<MobiliteRachisState>(() => initMobiliteRachis(MOB_LOMB_KEYS.map(([k]) => k), (_ec.mobiliteLombaire as MobiliteRachisState)))
+  const updMobL = (k: string, patch: Partial<MobiliteRachisRow>) => setMobLombaire(p => ({ ...p, [k]: { ...p[k], ...patch } }))
+
+  const [mobAutres, setMobAutres] = useState<Record<string, string>>({
+    chevilles: '', autresZones: '',
+    ...((_ec.mobAutres as Record<string, string>) ?? {}),
+  })
+  const setMobA = (k: string, v: string) => setMobAutres(p => ({ ...p, [k]: v }))
+
+  const [fonctionnel, setFonctionnel] = useState<Record<string, string>>({
+    accroupissement: '', accroupissementSympt: '',
+    course: '', courseSympt: '',
+    sauts: '', sautsSympt: '',
+    autres: '',
+    ...((_ec.fonctionnel as Record<string, string>) ?? {}),
+  })
+  const setFonc = (k: string, v: string) => setFonctionnel(p => ({ ...p, [k]: v }))
+
+  // Force musculaire
+  const _fo = (init.forceMusculaire as Record<string, unknown>) ?? {}
+  const initForce = () => {
+    const base: Record<string, { gauche: string; droite: string }> = {}
+    FORCE_KEYS.forEach(([k]) => { base[k] = { gauche: '', droite: '' } })
+    return { ...base, ...((_fo.force as Record<string, { gauche: string; droite: string }>) ?? {}) }
+  }
+  const [force, setForce] = useState<Record<string, { gauche: string; droite: string }>>(initForce)
+  const updForce = (k: string, side: 'gauche' | 'droite', v: string) =>
+    setForce(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
+
+  const [abdo, setAbdo] = useState<Record<string, string>>(() => {
+    const base: Record<string, string> = {}
+    ABDO_KEYS.forEach(([k]) => { base[k] = '' })
+    return { ...base, ...((_fo.abdo as Record<string, string>) ?? {}) }
+  })
+  const updAbdo = (k: string, v: string) => setAbdo(p => ({ ...p, [k]: v }))
+
+  const [autresForce, setAutresForce] = useState((_fo.autresForce as string) ?? '')
+  const [mvtRepMarqueurs, setMvtRepMarqueurs] = useState((_fo.marqueursAvant as string) ?? '')
+  const [mvtRepResultats, setMvtRepResultats] = useState((_fo.resultats as string) ?? '')
+
+  // Tests ligamentaires
+  const _tl = (init.testsLigamentaires as Record<string, unknown>) ?? {}
+  const [ligTests, setLigTests] = useState<Record<string, string>>({
+    lachman: '', tiroirAnt: '', tiroirPost: '', lcl: '', lcm: '', autres: '',
+    ...((_tl as Record<string, string>) ?? {}),
+  })
+  const setLT = (k: string, v: string) => setLigTests(p => ({ ...p, [k]: v }))
+
+  // Neuro
+  const _nr = (init.neurologique as Record<string, unknown>) ?? {}
+  const [neuro, setNeuro] = useState<Record<string, string>>({
+    reflexes: '', force: '', sensibilite: '', babinski: '', troublesSensitifsNotes: '',
+    reversibilite: '', comportement: '', palpationNerfs: '',
+    nerfSousPression: '', nerfMalade: '',
+    ...((_nr as Record<string, string>) ?? {}),
+  })
+  const setN = (k: string, v: string) => setNeuro(p => ({ ...p, [k]: v }))
+
+  const _me = (init.mecanosensibilite as Record<string, unknown>) ?? {}
+  const [mecano, setMecano] = useState<Record<string, string>>({
+    lasegue: '', pkb: '', slump: '', nerfCutaneLateralCuisse: '',
+    ...((_me as Record<string, string>) ?? {}),
+  })
+  const setMe = (k: string, v: string) => setMecano(p => ({ ...p, [k]: v }))
+
+  // Tests spécifiques
+  const _ts = (init.testsSpecifiques as Record<string, unknown>) ?? {}
+  const [tests, setTests] = useState<Record<string, string>>({
+    thessaly: '', renne: '', noble: '', vague: '', hoffa: '', autres: '',
+    ...((_ts as Record<string, string>) ?? {}),
+  })
+  const setT = (k: string, v: string) => setTests(p => ({ ...p, [k]: v }))
+
+  // Scores
+  const _sc = (init.scores as Record<string, unknown>) ?? {}
+  const [scores, setScores] = useState<Record<string, string>>({
+    koos: '', fakps: '', ikdc: '', aclRsi: '', sf36: '', had: '', dn4: '', autres: '',
+    ...((_sc as Record<string, string>) ?? {}),
+  })
+  const updScore = (k: string, v: string) => setScores(p => ({ ...p, [k]: v }))
+
+  const [conseils, setConseils] = useState((init.conseils as { recos?: string })?.recos ?? '')
+
+  const [qAnswers, setQAnswers] = useState<Record<string, Record<string, unknown>>>(
+    (init.questionnaireAnswers as Record<string, Record<string, unknown>>) ?? {}
+  )
+  const [qResults, setQResults] = useState<Record<string, import('./questionnaires/useQuestionnaires').StoredResult>>(
+    (init.questionnaireResults as Record<string, import('./questionnaires/useQuestionnaires').StoredResult>) ?? {}
+  )
+  const questionnaires = useQuestionnaires(updScore, qAnswers, setQAnswers, qResults, setQResults)
 
   const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.92rem',
-    color: 'var(--text-main)', background: 'var(--secondary)',
-    border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
-  }
-
-  const [evnPire, setEvnPire] = useState((_d.evnPire as string) ?? '')
-  const [evnMieux, setEvnMieux] = useState((_d.evnMieux as string) ?? '')
-  const [evnMoy, setEvnMoy] = useState((_d.evnMoy as string) ?? '')
-  const [douleurType, setDouleurType] = useState((_d.douleurType as string) ?? '')
-  const [nocturne, setNocturne] = useState((_d.nocturne as string) ?? '')
-
-  const [rf, setRf] = useState<Record<string, string>>({
-    tttMedical: '', antecedents: '', comorbidites: '', imageries: '', traumatisme: '', fievre: '', pertePoids: '', atcdCancer: '',
-    ...(_rf as Record<string, string>),
-  })
-
-  const [yf, setYf] = useState<Record<string, string>>({
-    croyances: '', catastrophisme: '', fearAvoidance: '', coping: '', had: '',
-    ...(_yf as Record<string, string>),
-  })
-
-  const [bbf, setBbf] = useState<Record<string, string>>({ at: '', stressTravail: '', conditionsSocio: '', ...(_bb as Record<string, string>) })
-
-  const [morfho, setMorfho] = useState((_ec.morfho as string) ?? '')
-  const [mob, setMob] = useState<Record<string, { gauche: string; droite: string }>>({
-    flexionGenou: { gauche: '', droite: '' },
-    extensionGenou: { gauche: '', droite: '' },
-    flexionHanche: { gauche: '', droite: '' },
-    extensionHanche: { gauche: '', droite: '' },
-    ...(_ec.mobilite as Record<string, { gauche: string; droite: string }> ?? {}),
-  })
-  const updateMob = (mvt: string, side: 'gauche' | 'droite', v: string) => setMob(p => ({ ...p, [mvt]: { ...p[mvt], [side]: v } }))
-
-  const [force, setForce] = useState<Record<string, { gauche: string; droite: string }>>({
-    quadriceps: { gauche: '', droite: '' },
-    ischios:    { gauche: '', droite: '' },
-    abducteurs: { gauche: '', droite: '' },
-    adducteurs: { gauche: '', droite: '' },
-    ...(_ec.force as Record<string, { gauche: string; droite: string }> ?? {}),
-  })
-  const updateForce = (m: string, side: 'gauche' | 'droite', v: string) => setForce(p => ({ ...p, [m]: { ...p[m], [side]: v } }))
-
-  const [tests, setTests] = useState<Record<string, string>>({
-    lachman: '', tiroir: '', lcl: '', lcm: '',
-    thessaly: '', renne: '', noble: '', vague: '', hoffa: '',
-    lasegue: '', pkb: '', slump: '',
-    ...(_t as Record<string, string>),
-  })
-  const updateTest = (k: string, v: string) => setTests(p => ({ ...p, [k]: v }))
-
-  const [scores, setScores] = useState<Record<string, string>>({
-    koos: '', fakps: '', ikdc: '', aclRsi: '', psfs: '', had: '', dn4: '',
-    ...(_sc as Record<string, string>),
-  })
-  const updateScore = (k: string, v: string) => setScores(p => ({ ...p, [k]: v }))
-
-  const [objectifs, setObjectifs] = useState<Array<{id: number; titre: string; cible: string; dateCible: string}>>(
-    Array.isArray(_ct.objectifs) ? _ct.objectifs as Array<{id: number; titre: string; cible: string; dateCible: string}>
-    : typeof _ct.objectifs === 'string' && (_ct.objectifs as string).trim()
-      ? [{ id: Date.now(), titre: (_ct.objectifs as string).trim(), cible: '', dateCible: '' }]
-      : []
-  )
-  const [autoReedo, setAutoReedo] = useState((_ct.autoReedo as string) ?? '')
-  const [conseils, setConseils] = useState((_ct.conseils as string) ?? '')
-
   useImperativeHandle(ref, () => ({
     getData: () => ({
-      douleur: { evnPire, evnMieux, evnMoy, douleurType, nocturne },
-      redFlags: rf, yellowFlags: yf, blueBlackFlags: bbf,
-      examClinique: { morfho, mobilite: mob, force },
-      tests, scores,
-      contrat: { objectifs: objectifs.map(o => o.titre + (o.cible ? ` — ${o.cible}` : '')).join('\n'), objectifsItems: objectifs, autoReedo, conseils },
+      douleur, redFlags, yellowFlags: yellow, blueBlackFlags: blueBlack,
+      examClinique: { morpho, observation, mobiliteGenou: mobGenou, mobiliteHanche: mobHanche, mobiliteLombaire: mobLombaire, mobAutres, fonctionnel },
+      forceMusculaire: { force, abdo, autresForce, marqueursAvant: mvtRepMarqueurs, resultats: mvtRepResultats },
+      testsLigamentaires: ligTests,
+      neurologique: neuro,
+      mecanosensibilite: mecano,
+      testsSpecifiques: tests,
+      scores,
+      psfs,
+      contrat,
+      conseils: { recos: conseils },
+      questionnaireAnswers: qAnswers,
+      questionnaireResults: qResults,
     }),
-    setData: (data: Record<string, unknown>) => {
-      const d  = (data.douleur        as Record<string, unknown>) ?? {}
-      const rf = (data.redFlags       as Record<string, unknown>) ?? {}
-      const yf = (data.yellowFlags    as Record<string, unknown>) ?? {}
-      const bb = (data.blueBlackFlags as Record<string, unknown>) ?? {}
-      const ec = (data.examClinique   as Record<string, unknown>) ?? {}
-      const t  = (data.tests         as Record<string, unknown>) ?? {}
-      const sc = (data.scores        as Record<string, unknown>) ?? {}
-      const ct = (data.contrat       as Record<string, unknown>) ?? {}
-      if (d.evnPire !== undefined)     setEvnPire(d.evnPire as string)
-      if (d.evnMieux !== undefined)    setEvnMieux(d.evnMieux as string)
-      if (d.evnMoy !== undefined)      setEvnMoy(d.evnMoy as string)
-      if (d.douleurType !== undefined) setDouleurType(d.douleurType as string)
-      if (d.nocturne !== undefined)    setNocturne(d.nocturne as string)
-      if (Object.keys(rf).length > 0)  setRf(p => ({ ...p, ...rf as Record<string, string> }))
-      if (Object.keys(yf).length > 0)  setYf(p => ({ ...p, ...yf as Record<string, string> }))
-      if (Object.keys(bb).length > 0)  setBbf(p => ({ ...p, ...bb as Record<string, string> }))
-      if (ec.morfho !== undefined)     setMorfho(ec.morfho as string)
-      if (ec.mobilite !== undefined)   setMob(ec.mobilite as Record<string, { gauche: string; droite: string }>)
-      if (ec.force !== undefined)      setForce(ec.force as Record<string, { gauche: string; droite: string }>)
-      if (Object.keys(t).length > 0)   setTests(p => ({ ...p, ...t as Record<string, string> }))
-      if (Object.keys(sc).length > 0)  setScores(p => ({ ...p, ...sc as Record<string, string> }))
-      if (ct.objectifsItems !== undefined) setObjectifs(ct.objectifsItems as Array<{id: number; titre: string; cible: string; dateCible: string}>)
-      else if (typeof ct.objectifs === 'string' && (ct.objectifs as string).trim()) setObjectifs([{ id: Date.now(), titre: (ct.objectifs as string).trim(), cible: '', dateCible: '' }])
-      if (ct.autoReedo !== undefined)  setAutoReedo(ct.autoReedo as string)
-      if (ct.conseils !== undefined)   setConseils(ct.conseils as string)
+    setData: (d: Record<string, unknown>) => {
+      if (d.douleur)        setDouleur(mergeDouleur(d.douleur as Record<string, unknown>))
+      if (d.redFlags)       setRedFlags(mergeRedFlags(d.redFlags as Record<string, unknown>))
+      if (d.yellowFlags)    setYellow(mergeYellow(d.yellowFlags as Record<string, unknown>))
+      if (d.blueBlackFlags) setBlueBlack(mergeBlueBlack(d.blueBlackFlags as Record<string, unknown>))
+      if (d.contrat)        setContrat(mergeContrat(d.contrat as Record<string, unknown>))
+      if (d.psfs)           setPsfs(mergePsfs(d.psfs))
+      const ec = (d.examClinique as Record<string, unknown>) ?? {}
+      if (ec.morpho)            setMorpho(p => ({ ...p, ...(ec.morpho as Record<string, string>) }))
+      if (ec.observation)       setObservation(p => ({ ...p, ...(ec.observation as Record<string, string>) }))
+      if (ec.mobiliteGenou)     setMobGenou(p => ({ ...p, ...(ec.mobiliteGenou as MobAPGDState) }))
+      if (ec.mobiliteHanche)    setMobHanche(p => ({ ...p, ...(ec.mobiliteHanche as MobAPGDState) }))
+      if (ec.mobiliteLombaire)  setMobLombaire(p => ({ ...p, ...(ec.mobiliteLombaire as MobiliteRachisState) }))
+      if (ec.mobAutres)         setMobAutres(p => ({ ...p, ...(ec.mobAutres as Record<string, string>) }))
+      if (ec.fonctionnel)       setFonctionnel(p => ({ ...p, ...(ec.fonctionnel as Record<string, string>) }))
+      const fo = (d.forceMusculaire as Record<string, unknown>) ?? {}
+      if (fo.force)        setForce(p => ({ ...p, ...(fo.force as Record<string, { gauche: string; droite: string }>) }))
+      if (fo.abdo)         setAbdo(p => ({ ...p, ...(fo.abdo as Record<string, string>) }))
+      if (fo.autresForce !== undefined)    setAutresForce(fo.autresForce as string)
+      if (fo.marqueursAvant !== undefined) setMvtRepMarqueurs(fo.marqueursAvant as string)
+      if (fo.resultats !== undefined)      setMvtRepResultats(fo.resultats as string)
+      if (d.testsLigamentaires)  setLigTests(p => ({ ...p, ...(d.testsLigamentaires as Record<string, string>) }))
+      if (d.neurologique)        setNeuro(p => ({ ...p, ...(d.neurologique as Record<string, string>) }))
+      if (d.mecanosensibilite)   setMecano(p => ({ ...p, ...(d.mecanosensibilite as Record<string, string>) }))
+      if (d.testsSpecifiques)    setTests(p => ({ ...p, ...(d.testsSpecifiques as Record<string, string>) }))
+      if (d.scores)              setScores(p => ({ ...p, ...(d.scores as Record<string, string>) }))
+      const cn = (d.conseils as Record<string, unknown>) ?? {}
+      if (cn.recos !== undefined) setConseils(cn.recos as string)
+      if (d.questionnaireAnswers) setQAnswers(d.questionnaireAnswers as Record<string, Record<string, unknown>>)
+      if (d.questionnaireResults) setQResults(d.questionnaireResults as Record<string, import('./questionnaires/useQuestionnaires').StoredResult>)
     },
   }))
 
-  const FORCE_LABELS: Record<string, string> = {
-    quadriceps: 'Quadriceps', ischios: 'Ischio-jambiers',
-    abducteurs: 'Abducteurs hanche', adducteurs: 'Adducteurs hanche',
-  }
+  const sections = [
+    { id: 'douleur',       title: 'Douleur',                          color: 'var(--primary)' },
+    { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#dc2626' },
+    { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                   color: '#d97706' },
+    { id: 'blueBlackFlags',title: 'Blue / Black Flags',                color: '#7c3aed' },
+    { id: 'examClinique',  title: 'Examen clinique',                   color: 'var(--primary)' },
+    { id: 'force',         title: 'Force musculaire',                  color: 'var(--primary)' },
+    { id: 'ligamentaires', title: 'Tests ligamentaires',               color: 'var(--primary)' },
+    { id: 'neuro',         title: 'Neurologique & mécanosensibilité',  color: 'var(--primary)' },
+    { id: 'testsSpec',     title: 'Tests spécifiques',                 color: 'var(--primary)' },
+    { id: 'scores',        title: 'Scores fonctionnels',               color: 'var(--primary)' },
+    { id: 'contrat',       title: 'Contrat kiné',                      color: '#059669' },
+    { id: 'conseils',      title: 'Conseils & recommandations',        color: '#059669' },
+  ]
+
+  const renderMobApgdTable = (rows: [string, string][], state: MobAPGDState, upd: (k: string, side: 'ag' | 'ad' | 'pg' | 'pd', v: string) => void) => (
+    <table className="mobility-table">
+      <thead>
+        <tr><th rowSpan={2}>Mouvement</th><th colSpan={2} style={{ textAlign: 'center' }}>Active</th><th colSpan={2} style={{ textAlign: 'center' }}>Passive</th></tr>
+        <tr><th style={{ textAlign: 'center' }}>G</th><th style={{ textAlign: 'center' }}>D</th><th style={{ textAlign: 'center' }}>G</th><th style={{ textAlign: 'center' }}>D</th></tr>
+      </thead>
+      <tbody>
+        {rows.map(([k, lbl]) => (
+          <tr key={k}>
+            <td>{lbl}</td>
+            <td><AmplitudeInput value={state[k].ag} onChange={v => upd(k, 'ag', v)} /></td>
+            <td><AmplitudeInput value={state[k].ad} onChange={v => upd(k, 'ad', v)} /></td>
+            <td><AmplitudeInput value={state[k].pg} onChange={v => upd(k, 'pg', v)} /></td>
+            <td><AmplitudeInput value={state[k].pd} onChange={v => upd(k, 'pd', v)} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 
   return (
     <div>
-      {[
-        { id: 'douleur', title: 'Douleur', color: 'var(--primary)' },
-        { id: 'redFlags', title: 'Red Flags', color: '#dc2626' },
-        { id: 'yellowFlags', title: 'Yellow Flags', color: '#d97706' },
-        { id: 'blueBlackFlags', title: 'Blue / Black Flags', color: '#7c3aed' },
-        { id: 'examClinique', title: 'Examen clinique', color: 'var(--primary)' },
-        { id: 'tests', title: 'Tests spécifiques', color: 'var(--primary)' },
-        { id: 'scores', title: 'Scores fonctionnels', color: 'var(--primary)' },
-        { id: 'contrat', title: 'Contrat kiné', color: '#059669' },
-      ].map(sec => (
+      {sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
               {sec.id === 'douleur' && (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-                    {[['EVN Pire', evnPire, setEvnPire], ['EVN Mieux', evnMieux, setEvnMieux], ['EVN Moy.', evnMoy, setEvnMoy]].map(([lbl, val, setter]) => (
-                      <div key={lbl as string}>
-                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl as string}</label>
-                        <input type="number" min="0" max="10" value={val as string} onChange={e => (setter as (v: string) => void)(e.target.value)}
-                          style={{ ...inputStyle, textAlign: 'center', marginBottom: 0 }} placeholder="0-10" />
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    {['Constante', 'Intermittente'].map(v => (
-                      <button key={v} className={`choix-btn${douleurType === v ? ' active' : ''}`} onClick={() => setDouleurType(douleurType === v ? '' : v)}>{v}</button>
-                    ))}
-                  </div>
-                  <OuiNon label="Douleur nocturne" value={nocturne} onChange={setNocturne} />
-                </>
+                <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} />
               )}
-
               {sec.id === 'redFlags' && (
-                <>
-                  {[['tttMedical','TTT médical actuel'],['antecedents','Antécédents'],['comorbidites','Comorbidités'],
-                    ['imageries','Imagerie(s)'],['traumatisme','Traumatisme récent'],['fievre','Fièvre inexpliquée'],
-                    ['pertePoids','Perte de poids inexpliquée'],['atcdCancer','ATCD de cancer']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={rf[k]} onChange={v => setRf(p => ({ ...p, [k]: v }))} detail={rf[k + '_detail']} onDetailChange={v => setRf(p => ({ ...p, [k + '_detail']: v }))} />
-                  ))}
-                </>
+                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }))} variant="lower" />
               )}
-
               {sec.id === 'yellowFlags' && (
-                <>
-                  {[['croyances','Croyances maladaptatives'],['catastrophisme','Catastrophisme'],
-                    ['fearAvoidance','Fear-avoidance'],['coping','Coping passif'],['had','Score HAD pathologique']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} detail={yf[k + '_detail']} onDetailChange={v => setYf(p => ({ ...p, [k + '_detail']: v }))} />
-                  ))}
-                </>
+                <YellowFlagsSection state={yellow} onChange={p => setYellow(s => ({ ...s, ...p }))} />
               )}
-
               {sec.id === 'blueBlackFlags' && (
-                <>
-                  {[['at','Accident de travail'],['stressTravail','Stress au travail'],['conditionsSocio','Conditions socio-économiques précaires']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={bbf[k]} onChange={v => setBbf(p => ({ ...p, [k]: v }))} detail={bbf[k + '_detail']} onDetailChange={v => setBbf(p => ({ ...p, [k + '_detail']: v }))} />
-                  ))}
-                </>
+                <BlueBlackFlagsSection state={blueBlack} onChange={p => setBlueBlack(s => ({ ...s, ...p }))} />
               )}
 
               {sec.id === 'examClinique' && (
                 <>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Morphostatique</label>
-                  <textarea value={morfho} onChange={e => setMorfho(e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={2} placeholder="Valgus / varus / recurvatum / genu flexum…" />
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'block', margin: '12px 0 6px' }}>Mobilité active/passive (°)</label>
-                  <table className="mobility-table">
-                    <thead><tr><th>Mouvement</th><th>Gauche</th><th>Droite</th></tr></thead>
-                    <tbody>
-                      {[['flexionGenou','Flexion genou'],['extensionGenou','Extension genou'],['flexionHanche','Flexion hanche'],['extensionHanche','Extension hanche']].map(([k, lbl]) => (
-                        <tr key={k}><td>{lbl}</td>
-                          <td><AmplitudeInput value={mob[k].gauche} onChange={v => updateMob(k, 'gauche', v)} /></td>
-                          <td><AmplitudeInput value={mob[k].droite} onChange={v => updateMob(k, 'droite', v)} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', margin: '12px 0 6px' }}>
-                    Force musculaire <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>(échelle MRC)</span><MRCInfo />
-                  </label>
-                  <table className="mobility-table">
-                    <thead><tr><th>Muscle</th><th>Gauche</th><th>Droite</th></tr></thead>
-                    <tbody>
-                      {Object.entries(FORCE_LABELS).map(([k, lbl]) => (
-                        <tr key={k}><td>{lbl}</td>
-                          <td><ForceInput value={force[k].gauche} onChange={v => updateForce(k, 'gauche', v)} /></td>
-                          <td><ForceInput value={force[k].droite} onChange={v => updateForce(k, 'droite', v)} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <p style={sectionTitleStyle}>Morphostatique</p>
+                  <label style={lblStyle}>Attitude du rachis</label>
+                  <input value={morpho.rachis} onChange={e => setMorphoField('rachis', e.target.value)} placeholder="—" style={inputStyle} />
+                  <label style={lblStyle}>Attitude des membres inférieurs</label>
+                  <input value={morpho.mi} onChange={e => setMorphoField('mi', e.target.value)} placeholder="Valgus / varus, recurvatum…" style={inputStyle} />
+                  <OuiNon label="Corrigeable ?" value={morpho.corrigeable} onChange={v => setMorphoField('corrigeable', v)} />
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Modification de la posture</label>
+                    {['Pire', 'Pareil', 'Mieux'].map(v => {
+                      const key = v.toLowerCase()
+                      return <button key={v} className={`choix-btn${morpho.modifPosture === key ? ' active' : ''}`} onClick={() => setMorphoField('modifPosture', morpho.modifPosture === key ? '' : key)}>{v}</button>
+                    })}
+                  </div>
+
+                  <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Observation</p>
+                  <OuiNon label="Amyotrophie" value={observation.amyotrophie} onChange={v => setObs('amyotrophie', v)} />
+                  {observation.amyotrophie === 'oui' && (
+                    <input value={observation.amyotrophieLoc} onChange={e => setObs('amyotrophieLoc', e.target.value)} placeholder="Localisation…" style={{ ...inputStyle, marginTop: 6 }} />
+                  )}
+                  <label style={lblStyle}>Autre observation</label>
+                  <input value={observation.autre} onChange={e => setObs('autre', e.target.value)} placeholder="—" style={inputStyle} />
+
+                  <label style={subTitleStyle}>Mobilité — Genou (°)</label>
+                  {renderMobApgdTable(MOB_GENOU_KEYS, mobGenou, updMobG)}
+
+                  <label style={subTitleStyle}>Mobilité — Hanche (°)</label>
+                  {renderMobApgdTable(MOB_HANCHE_KEYS, mobHanche, updMobH)}
+
+                  <label style={subTitleStyle}>Mobilité du rachis lombaire</label>
+                  <MobiliteRachisTable rows={MOB_LOMB_KEYS} state={mobLombaire} onChange={updMobL} />
+
+                  <label style={lblStyle}>Mobilité chevilles</label>
+                  <input value={mobAutres.chevilles} onChange={e => setMobA('chevilles', e.target.value)} placeholder="—" style={inputStyle} />
+                  <label style={lblStyle}>Autres zones</label>
+                  <textarea value={mobAutres.autresZones} onChange={e => setMobA('autresZones', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+
+                  <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Fonctionnel</p>
+                  <StatusSymptomes label="Accroupissement" status={fonctionnel.accroupissement} symptomes={fonctionnel.accroupissementSympt} onChangeStatus={v => setFonc('accroupissement', v)} onChangeSympt={v => setFonc('accroupissementSympt', v)} />
+                  <StatusSymptomes label="Course" status={fonctionnel.course} symptomes={fonctionnel.courseSympt} onChangeStatus={v => setFonc('course', v)} onChangeSympt={v => setFonc('courseSympt', v)} />
+                  <StatusSymptomes label="Sauts" status={fonctionnel.sauts} symptomes={fonctionnel.sautsSympt} onChangeStatus={v => setFonc('sauts', v)} onChangeSympt={v => setFonc('sautsSympt', v)} />
+                  <label style={lblStyle}>Autres</label>
+                  <textarea value={fonctionnel.autres} onChange={e => setFonc('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                 </>
               )}
 
-              {sec.id === 'tests' && (
+              {sec.id === 'force' && (
                 <>
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Tests ligamentaires</p>
-                  {[['lachman','Lachman'],['tiroir','Tiroir antérieur/postérieur'],['lcl','Test LCL'],['lcm','Test LCM']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
+                  <label style={{ ...subTitleStyle, display: 'flex', alignItems: 'center' }}>
+                    Force musculaire <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>(MRC)</span><MRCInfo />
+                  </label>
+                  <table className="mobility-table">
+                    <thead><tr><th>Muscle</th><th style={{ textAlign: 'center' }}>Gauche</th><th style={{ textAlign: 'center' }}>Droite</th></tr></thead>
+                    <tbody>
+                      {FORCE_KEYS.map(([k, lbl]) => (
+                        <tr key={k}>
+                          <td>{lbl}</td>
+                          <td><ForceInput value={force[k].gauche} onChange={v => updForce(k, 'gauche', v)} /></td>
+                          <td><ForceInput value={force[k].droite} onChange={v => updForce(k, 'droite', v)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <label style={{ ...subTitleStyle, marginTop: 14 }}>Muscles abdominaux</label>
+                  <table className="mobility-table">
+                    <thead><tr><th>Muscle</th><th style={{ textAlign: 'center' }}>Force</th></tr></thead>
+                    <tbody>
+                      {ABDO_KEYS.map(([k, lbl]) => (
+                        <tr key={k}><td>{lbl}</td><td><ForceInput value={abdo[k]} onChange={v => updAbdo(k, v)} /></td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <label style={{ ...lblStyle, marginTop: 10 }}>Autres tests de force</label>
+                  <textarea value={autresForce} onChange={e => setAutresForce(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+
+                  <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Examen des mouvements répétés</p>
+                  <label style={lblStyle}>Marqueurs avant procédure</label>
+                  <input value={mvtRepMarqueurs} onChange={e => setMvtRepMarqueurs(e.target.value)} placeholder="Douleur, ROM…" style={inputStyle} />
+                  <label style={lblStyle}>Résultats</label>
+                  <textarea value={mvtRepResultats} onChange={e => setMvtRepResultats(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                </>
+              )}
+
+              {sec.id === 'ligamentaires' && (
+                <>
+                  {([
+                    ['lachman', 'Lachman'],
+                    ['tiroirAnt', 'Tiroir antérieur'],
+                    ['tiroirPost', 'Tiroir postérieur'],
+                    ['lcl', 'Ligament collatéral latéral (LCL)'],
+                    ['lcm', 'Ligament collatéral médial (LCM)'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={lblStyle}>{lbl}<TestInfoButton testKey={k} /></label>
+                      <input value={ligTests[k]} onChange={e => setLT(k, e.target.value)} placeholder="+ / − / laxité…" style={inputStyle} />
+                    </div>
                   ))}
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 8px' }}>Tests méniscaux / tendinopathies</p>
-                  {[['thessaly','Thessaly'],['renne','Renne'],['noble','Noble'],['vague','Vague rotulien'],['hoffa','Hoffa']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
+                  <label style={lblStyle}>Autres tests ligamentaires</label>
+                  <textarea value={ligTests.autres} onChange={e => setLT('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                </>
+              )}
+
+              {sec.id === 'neuro' && (
+                <>
+                  <p style={sectionTitleStyle}>Examen neurologique</p>
+                  {([
+                    ['reflexes', 'Réflexes', 'Rotulien, achilléen…'],
+                    ['force', 'Force', '—'],
+                    ['sensibilite', 'Sensibilité', 'Dermatome…'],
+                    ['babinski', 'Babinski', '+ / -'],
+                  ] as [string, string, string][]).map(([k, lbl, ph]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={lblStyle}>{lbl}{k === 'babinski' && <TestInfoButton testKey="babinski" />}</label>
+                      <input value={neuro[k] ?? (k === 'force' ? (neuro.deficitMoteur ?? '') : '')} onChange={e => setN(k, e.target.value)} placeholder={ph} style={inputStyle} />
+                    </div>
                   ))}
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 8px' }}>Mécanosensibilité</p>
-                  {[['lasegue','Lasègue'],['pkb','PKB'],['slump','Slump']].map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={tests[k]} onChange={v => updateTest(k, v)} detail={tests[k + '_detail']} onDetailChange={v => setTests(p => ({ ...p, [k + '_detail']: v }))} />
+                  <label style={lblStyle}>Réversibilité</label>
+                  <input value={neuro.reversibilite ?? ''} onChange={e => setN('reversibilite', e.target.value)} placeholder="Oui / Non — précisions…" style={inputStyle} />
+                  <label style={lblStyle}>Comportement</label>
+                  <input value={neuro.comportement ?? ''} onChange={e => setN('comportement', e.target.value)} placeholder="Utile / Inutile — type…" style={inputStyle} />
+                  <label style={lblStyle}>Palpation Nerf(s)</label>
+                  <input value={neuro.palpationNerfs ?? ''} onChange={e => setN('palpationNerfs', e.target.value)} placeholder="Douleur, lequel…" style={inputStyle} />
+                  <p style={{ ...sectionTitleStyle, margin: '12px 0 6px' }}>Nerf / Racine</p>
+                  <OuiNon label="Sous pression" value={neuro.nerfSousPression ?? ''} onChange={v => setN('nerfSousPression', v)} />
+                  <OuiNon label="Malade" value={neuro.nerfMalade ?? ''} onChange={v => setN('nerfMalade', v)} />
+
+                  <label style={{ ...lblStyle, marginTop: 10 }}>Schéma des troubles sensitifs</label>
+                  <textarea value={neuro.troublesSensitifsNotes} onChange={e => setN('troublesSensitifsNotes', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+
+                  <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Mécanosensibilité</p>
+                  {([
+                    ['lasegue', 'Lasègue'],
+                    ['pkb', 'PKB'],
+                    ['slump', 'Slump test'],
+                    ['nerfCutaneLateralCuisse', 'Nerf cutané latéral de la cuisse'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={lblStyle}>{lbl}<TestInfoButton testKey={k} /></label>
+                      <input value={mecano[k] ?? ''} onChange={e => setMe(k, e.target.value)} placeholder="—" style={inputStyle} />
+                    </div>
                   ))}
+                </>
+              )}
+
+              {sec.id === 'testsSpec' && (
+                <>
+                  {([
+                    ['thessaly', 'Test de Thessaly'],
+                    ['renne', 'Test de Renne'],
+                    ['noble', 'Test de Noble'],
+                    ['vague', 'Test du vague rotulien'],
+                    ['hoffa', 'Test de Hoffa'],
+                  ] as [string, string][]).map(([k, lbl]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={lblStyle}>{lbl}<TestInfoButton testKey={k} /></label>
+                      <input value={tests[k] ?? ''} onChange={e => setT(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
+                    </div>
+                  ))}
+                  <label style={lblStyle}>Autres tests</label>
+                  <textarea value={tests.autres ?? ''} onChange={e => setT('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                 </>
               )}
 
               {sec.id === 'scores' && (
                 <>
-                  {[['koos','KOOS'],['fakps','F-AKPS'],['ikdc','IKDC'],['aclRsi','ACL-RSI'],['psfs','PSFS'],['had','HAD'],['dn4','DN4']].map(([k, lbl]) => (
-                    <ScoreRow key={k} label={lbl} value={scores[k]} onChange={v => updateScore(k, v)} />
+                  {([
+                    ['koos', 'KOOS', 'koos'],
+                    ['fakps', 'F-AKPS', 'fakps'],
+                    ['ikdc', 'IKDC', 'ikdc'],
+                    ['aclRsi', 'ACL-RSI', 'aclRsi'],
+                    ['sf36', 'SF-36', 'sf36'],
+                    ['had', 'Échelle HAD', 'had'],
+                    ['dn4', 'DN4', 'dn4'],
+                  ] as [string, string, string][]).map(([k, lbl, qId]) => (
+                    <ScoreRow key={k} label={lbl} value={scores[k]} onChange={v => updScore(k, v)}
+                      onOpenQuestionnaire={() => questionnaires.open(qId, k)}
+                      result={questionnaires.getResult(k, qId)} />
                   ))}
+                  <PSFSCards items={psfs} onChange={setPsfs} />
+                  <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
+                  <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                 </>
               )}
 
               {sec.id === 'contrat' && (
-                <>
-                  <SmartObjectifsInline objectifs={objectifs} onChange={setObjectifs} />
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Auto-rééducation</label>
-                  <textarea value={autoReedo} onChange={e => setAutoReedo(e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={2} placeholder="Exercices à domicile…" />
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Conseils</label>
-                  <textarea value={conseils} onChange={e => setConseils(e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={2} placeholder="Conseils au patient…" />
-                </>
+                <ContratKineSection state={contrat} onChange={p => setContrat(s => ({ ...s, ...p }))} />
+              )}
+              {sec.id === 'conseils' && (
+                <ConseilsSection value={conseils} onChange={setConseils} />
               )}
 
             </div>
           )}
         </div>
       ))}
+      {questionnaires.modal}
     </div>
   )
 })
