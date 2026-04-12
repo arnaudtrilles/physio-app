@@ -91,9 +91,9 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, { initialData?: NoteSeanc
                 {/* ── S — RESSENTI / SUIVI ─────────────────────── */}
                 {sec.id === 'subjective' && (
                   <>
-                    {/* EVA slider */}
+                    {/* EVN slider */}
                     <div style={{ marginBottom: 12 }}>
-                      <label style={lblStyle}>EVA actuelle (0-10)</label>
+                      <label style={lblStyle}>EVN actuelle (0-10)</label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <input type="range" min="0" max="10" step="1" value={eva || '0'}
                           onChange={e => setEva(e.target.value)}

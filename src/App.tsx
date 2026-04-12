@@ -3571,8 +3571,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             context={{
               patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
               bilans: evolutionBilans,
+              therapistProfession: profile.profession,
             }}
             patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
+            profession={profile.profession}
             onAudit={recordAIAudit}
             onBack={() => setStep('database')}
             onClose={() => setStep('database')}
@@ -3719,6 +3721,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           apiKey={apiKey}
           patient={{ nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance }}
           patientKey={currentIntermediaireForNote.patientKey}
+          profession={profile.profession}
           onAudit={recordAIAudit}
           zone={currentIntermediaireForNote.zone ?? ''}
           bilanType={currentIntermediaireForNote.bilanType ?? getBilanType(currentIntermediaireForNote.zone ?? '')}
@@ -3780,8 +3783,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
             notesLibres: bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
+            therapistProfession: profile.profession,
           }}
           patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
+          profession={profile.profession}
           onAudit={recordAIAudit}
           onUnmaskedDocsConfirm={askUnmaskedDocsConfirm}
           documents={bilanDocuments.length > 0 ? bilanDocuments : undefined}
@@ -3821,6 +3826,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         <Suspense fallback={<LazyFallback />}>
         <FicheExerciceIA
           apiKey={apiKey}
+          profession={profile.profession}
           context={{
             patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
             zone: ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? '',
@@ -3828,6 +3834,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             bilanData: ficheExerciceContextOverride?.bilanData ?? currentBilanDataOverride ?? getBilanData() ?? {},
             notesLibres: ficheExerciceContextOverride?.notesLibres ?? bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
+            therapistProfession: profile.profession,
             patientHistory: (() => {
               const patKey = selectedPatient ?? `${formData.nom}_${formData.prenom}_${formData.dateNaissance}`
               const history: import('./utils/clinicalPrompt').PatientHistoryEntry[] = []

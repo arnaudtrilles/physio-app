@@ -184,7 +184,7 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
       </div>
       {item.data.eva && (
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-          EVA : <strong>{item.data.eva}/10</strong>
+          EVN : <strong>{item.data.eva}/10</strong>
         </div>
       )}
     </div>
