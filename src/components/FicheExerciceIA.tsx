@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { jsPDF } from 'jspdf'
 import type { FicheExercice, AnalyseIA, AICallAuditEntry } from '../types'
-import { buildFicheExercicePrompt } from '../utils/clinicalPrompt'
+import { buildFicheExercicePrompt, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
 import { callGeminiSecure } from '../utils/geminiSecure'
 
@@ -9,6 +9,7 @@ interface FicheExerciceIAProps {
   apiKey: string
   context: BilanContext
   patientKey: string
+  profession?: string
   analyseIA?: AnalyseIA | null
   cached?: FicheExercice | null
   onAudit?: (entry: AICallAuditEntry) => void
@@ -88,7 +89,7 @@ function MarkdownFiche({ markdown }: { markdown: string }) {
   )
 }
 
-export function FicheExerciceIA({ apiKey, context, patientKey, analyseIA, cached, onAudit, onResult, onBack, onClose, onGoToProfile }: FicheExerciceIAProps) {
+export function FicheExerciceIA({ apiKey, context, patientKey, profession, analyseIA, cached, onAudit, onResult, onBack, onClose, onGoToProfile }: FicheExerciceIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fiche, setFiche] = useState<FicheExercice | null>(cached ?? null)
@@ -102,7 +103,7 @@ export function FicheExerciceIA({ apiKey, context, patientKey, analyseIA, cached
     setLoading(true)
     setError(null)
     try {
-      const systemPrompt = `Tu es un physiothérapeute expert en biomécanique et en rééducation fonctionnelle. Ton rôle est de traduire un plan de traitement technique en une fiche d'exercices à domicile claire, professionnelle et sécurisée.
+      const systemPrompt = `Tu es un ${roleTitle(profession)} expert en biomécanique et en rééducation fonctionnelle. Ton rôle est de traduire un plan de traitement technique en une fiche d'exercices à domicile claire, professionnelle et sécurisée.
 
 Tu vas recevoir en entrée l'état actuel du patient ainsi que la demande du thérapeute dans la balise <notes_seance_actuelle>.
 Si un historique patient est fourni dans la balise <historique_patient>, tu DOIS l'analyser attentivement pour adapter les exercices : évolution de la douleur, tolérance aux exercices précédents, observance, interventions réalisées, progression globale. Propose des exercices qui s'inscrivent dans la continuité du parcours de soin.
