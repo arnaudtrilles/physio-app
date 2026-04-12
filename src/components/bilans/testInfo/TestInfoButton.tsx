@@ -38,6 +38,7 @@ export function TestInfoButton({ testKey, ariaLabel }: { testKey: string; ariaLa
       {open && (
         <div
           onClick={() => setOpen(false)}
+          onTouchEnd={e => { if (e.target === e.currentTarget) { e.preventDefault(); setOpen(false) } }}
           style={{
             position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)',
             backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
@@ -57,9 +58,10 @@ export function TestInfoButton({ testKey, ariaLabel }: { testKey: string; ariaLa
             <div style={{ padding: '1rem 1.2rem 0.8rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{info.title}</h3>
               <button
-                onClick={() => setOpen(false)}
+                onClick={e => { e.stopPropagation(); setOpen(false) }}
+                onTouchEnd={e => { e.preventDefault(); e.stopPropagation(); setOpen(false) }}
                 aria-label="Fermer"
-                style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px', lineHeight: 1, minWidth: 32, minHeight: 32 }}
               >
                 ×
               </button>
