@@ -34,7 +34,6 @@ import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
 import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
-import { callGemini } from './utils/geminiClient'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
@@ -147,7 +146,7 @@ const DEMO_DB: BilanRecord[] = [
   { id:15, nom:'PETIT',    prenom:'Lucas',  dateNaissance:'22/11/1975', dateBilan:'17/12/2025', zoneCount:2, evn:6, zone:'Rachis Lombaire',pathologie:'Lombalgie chronique commune',          avatarBg:'#f97316', bilanType:'lombaire',status:'complet' },
 ]
 
-const DEFAULT_PROFILE: ProfileData = { nom: 'William', prenom: '', profession: 'Kinésithérapeute', photo: null }
+const DEFAULT_PROFILE: ProfileData = { nom: '', prenom: '', profession: 'Kinésithérapeute', photo: null }
 
 function App() {
   const [step, setStep] = useState<Step>('dashboard')
@@ -165,7 +164,7 @@ function App() {
   const [dbPrescriptions, setDbPrescriptions] = useIndexedDB<PatientPrescription[]>('physio_prescriptions', [])
   const isOnline = useOnlineStatus()
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
-  const [_apiKeyStored, setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
+  const [_apiKeyStored, _setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
   // Vertex AI: auth is server-side, no client key needed — always truthy
   const apiKey = 'vertex'
   const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded
@@ -238,8 +237,7 @@ function App() {
   const [labelDraft, setLabelDraft] = useState('')
   const [resumeBilan, setResumeBilan] = useState<{ record: BilanRecord; bilanNum: number } | null>(null)
   const [editingProfile, setEditingProfile] = useState(false)
-  const [testingApiKey, setTestingApiKey] = useState(false)
-  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'ok' | 'error'>('idle')
+  // testingApiKey / apiKeyStatus removed — Vertex AI, no client key needed
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [patientMode, setPatientMode] = useState<'new' | 'existing'>('new')
@@ -277,7 +275,7 @@ function App() {
   const [pdfPreviewZone, setPdfPreviewZone] = useState('')
   const [pdfPreviewTitle, setPdfPreviewTitle] = useState('')
   const [profileEditDraft, setProfileEditDraft] = useState<ProfileData>(profile)
-  const [apiKeyDraft, setApiKeyDraft] = useState(apiKey)
+  // apiKeyDraft removed — Vertex AI, no client key needed
 
   const [formData, setFormData] = useState({
     nom: '', prenom: '', dateNaissance: '',
@@ -1004,28 +1002,7 @@ STRUCTURE (n'inclure que si données présentes) :
     reader.readAsDataURL(file)
   }
 
-  const testApiKey = async () => {
-    if (!apiKeyDraft.trim()) return
-    setTestingApiKey(true)
-    setApiKeyStatus('idle')
-    try {
-      await callGemini(apiKeyDraft.trim(), 'You are a test assistant.', 'ping', 1)
-      setApiKeyStatus('ok')
-      showToast('Connexion Gemini réussie', 'success')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : ''
-      if (msg.includes('API_KEY_INVALID') || msg.includes('401') || msg.includes('403') || msg.includes('API key') || msg.includes('UNAUTHENTICATED') || msg.includes('"code":401') || msg.includes('"code":403')) {
-        setApiKeyStatus('error')
-        showToast('Clé API invalide', 'error')
-      } else {
-        // Quota ou modèle indispo — clé structurellement valide
-        setApiKeyStatus('ok')
-        showToast('Clé API acceptée', 'success')
-      }
-    } finally {
-      setTestingApiKey(false)
-    }
-  }
+  // testApiKey function removed — Vertex AI, no client key needed
 
   // ── Input with mic helper ─────────────────────────────────────────────────────
   const renderInputWithMic = (label: string, field: keyof typeof formData, placeholder: string, isTextArea = false) => (
@@ -2368,7 +2345,7 @@ STRUCTURE (n'inclure que si données présentes) :
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <h2 className="title-section">{editingProfile ? 'Modifier le profil' : 'Tableau de bord'}</h2>
-              <button onClick={() => { setEditingProfile(v => !v); setProfileEditDraft(profile); setApiKeyDraft(apiKey) }}
+              <button onClick={() => { setEditingProfile(v => !v); setProfileEditDraft(profile) }}
                 style={{ fontSize:'0.85rem', fontWeight:600, color:'var(--primary)', background:'none', border:'none', cursor:'pointer' }}>
                 {editingProfile ? 'Annuler' : 'Modifier'}
               </button>
@@ -2398,7 +2375,7 @@ STRUCTURE (n'inclure que si données présentes) :
                   <div className="form-group">
                     <label>Prénom / Nom affiché</label>
                     <input type="text" className="input-luxe" value={profileEditDraft.nom}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, nom: e.target.value }))} placeholder="Ex : William" />
+                      onChange={e => setProfileEditDraft(p => ({ ...p, nom: e.target.value }))} placeholder="Renseignez votre nom" />
                   </div>
                   <div className="form-group">
                     <label>Profession</label>
