@@ -165,7 +165,9 @@ function App() {
   const [dbPrescriptions, setDbPrescriptions] = useIndexedDB<PatientPrescription[]>('physio_prescriptions', [])
   const isOnline = useOnlineStatus()
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
-  const [apiKey, setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
+  const [_apiKeyStored, setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
+  // Vertex AI: auth is server-side, no client key needed — always truthy
+  const apiKey = 'vertex'
   const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded
 
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
