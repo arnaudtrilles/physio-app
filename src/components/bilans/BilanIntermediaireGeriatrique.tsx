@@ -169,6 +169,13 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
   const [evnReposAct, setEvnReposAct] = useState((_evo.evnReposAct as string) ?? '')
   const [evnMvtAct, setEvnMvtAct] = useState((_evo.evnMvtAct as string) ?? '')
   const [autonomie, setAutonomie] = useState((_evo.autonomie as string) ?? '')
+  // Yellow flags évolution
+  const [isolement, setIsolement] = useState((_evo.isolement as string) ?? '')
+  const [moral, setMoral] = useState((_evo.moral as string) ?? '')
+  const [peurTomber, setPeurTomber] = useState((_evo.peurTomber as string) ?? '')
+  // Contexte de vie
+  const [aidesTechEvol, setAidesTechEvol] = useState((_evo.aidesTechEvol as string) ?? '')
+  const [retentissementDouleur, setRetentissementDouleur] = useState((_evo.retentissementDouleur as string) ?? '')
 
   // ── Section 3 : Réévaluation tests fonctionnels ──────────────────────────
   const [tug, setTug] = useState((_t.tug as string) ?? '')
@@ -181,6 +188,10 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
   const [cinqLeverTime, setCinqLeverTime] = useState((_t.cinqLeverTime as string) ?? '')
   const [openSppb, setOpenSppb] = useState(false)
   const [openTinetti, setOpenTinetti] = useState(false)
+  // Examen clinique observations
+  const [forceGlobale, setForceGlobale] = useState((_t.forceGlobale as string) ?? '')
+  const [mobiliteEvol, setMobiliteEvol] = useState((_t.mobiliteEvol as string) ?? '')
+  const [equilibreObs, setEquilibreObs] = useState((_t.equilibreObs as string) ?? '')
 
   const sppbTotal = (() => {
     const e = Number(sppbEquilibre) || 0
@@ -216,8 +227,8 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
   useImperativeHandle(ref, () => ({
     getData: () => ({
       admin: { seanceNum },
-      evolution: { nouvellesChutes, chutesDetail, tolerance, observance, evnReposAct, evnMvtAct, autonomie },
-      tests: { tug, sppbEquilibre, sppbVitesse, sppbLever, sppbRawData, sppbTotal: sppbTotal ?? '', tinetti, tinettiAnswers, cinqLeverTime },
+      evolution: { nouvellesChutes, chutesDetail, tolerance, observance, evnReposAct, evnMvtAct, autonomie, isolement, moral, peurTomber, aidesTechEvol, retentissementDouleur },
+      tests: { tug, sppbEquilibre, sppbVitesse, sppbLever, sppbRawData, sppbTotal: sppbTotal ?? '', tinetti, tinettiAnswers, cinqLeverTime, forceGlobale, mobiliteEvol, equilibreObs },
       plan: { acquisitions, freins },
       comparatif: comparisons,
       // pour compatibilité historique
@@ -236,6 +247,11 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
       if (evo.evnReposAct !== undefined)     setEvnReposAct(evo.evnReposAct as string)
       if (evo.evnMvtAct !== undefined)       setEvnMvtAct(evo.evnMvtAct as string)
       if (evo.autonomie !== undefined)       setAutonomie(evo.autonomie as string)
+      if (evo.isolement !== undefined)     setIsolement(evo.isolement as string)
+      if (evo.moral !== undefined)         setMoral(evo.moral as string)
+      if (evo.peurTomber !== undefined)    setPeurTomber(evo.peurTomber as string)
+      if (evo.aidesTechEvol !== undefined) setAidesTechEvol(evo.aidesTechEvol as string)
+      if (evo.retentissementDouleur !== undefined) setRetentissementDouleur(evo.retentissementDouleur as string)
       if (t.tug !== undefined)            setTug(t.tug as string)
       if (t.sppbEquilibre !== undefined)  setSppbEquilibre(t.sppbEquilibre as string)
       if (t.sppbVitesse !== undefined)    setSppbVitesse(t.sppbVitesse as string)
@@ -244,6 +260,9 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
       if (t.tinetti !== undefined)        setTinetti(t.tinetti as string)
       if (t.tinettiAnswers !== undefined) setTinettiAnswers(t.tinettiAnswers as Record<string, number>)
       if (t.cinqLeverTime !== undefined)  setCinqLeverTime(t.cinqLeverTime as string)
+      if (t.forceGlobale !== undefined)    setForceGlobale(t.forceGlobale as string)
+      if (t.mobiliteEvol !== undefined)   setMobiliteEvol(t.mobiliteEvol as string)
+      if (t.equilibreObs !== undefined)   setEquilibreObs(t.equilibreObs as string)
       if (plan.acquisitions !== undefined) setAcquisitions(plan.acquisitions as string)
       if (plan.freins !== undefined)       setFreins(plan.freins as string)
     },
@@ -295,6 +314,32 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
           <label style={sublabel}>Autonomie au domicile (ressenti patient / aidant)</label>
           <ChoixGroup options={['Pire', 'Pareil', 'Mieux']} value={autonomie} onChange={setAutonomie} />
         </div>
+        {/* Contexte de vie */}
+        <div style={{ marginTop: 10 }}>
+          <label style={sublabel}>Aides techniques (évolution)</label>
+          <ChoixGroup options={['Idem', 'Allégées', 'Renforcées']} value={aidesTechEvol} onChange={setAidesTechEvol} />
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={sublabel}>Retentissement de la douleur sur l'autonomie</label>
+          <textarea value={retentissementDouleur} onChange={e => setRetentissementDouleur(e.target.value)} rows={2} placeholder="Marche, toilette, escaliers, sommeil…"
+            style={{ ...inputStyle, resize: 'vertical' }} />
+        </div>
+
+        {/* Yellow flags évolution */}
+        <div style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Évolution psycho-sociale</div>
+        <div style={{ marginTop: 6 }}>
+          <label style={sublabel}>Isolement social</label>
+          <ChoixGroup options={['Amélioré', 'Stable', 'Aggravé']} value={isolement} onChange={setIsolement} />
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <label style={sublabel}>Moral perçu</label>
+          <ChoixGroup options={['Bon', 'Variable', 'Bas', 'Préoccupant']} value={moral} onChange={setMoral} />
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <label style={sublabel}>Peur de tomber</label>
+          <ChoixGroup options={['Diminuée', 'Stable', 'Augmentée']} value={peurTomber} onChange={setPeurTomber} />
+        </div>
+
         <div style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Évolution de la douleur (0-10)</div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0 0.75rem' }}>
           <CompareRow label="EVN au repos" unit="/10" initial={base.evnRepos} actuel={evnReposAct} onChangeActuel={setEvnReposAct} />
@@ -334,6 +379,23 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
           <CompareRow label="5 levers de chaise" unit="sec" initial={base.cinqLeverTime} actuel={cinqLeverTime}>
             <Chrono value={cinqLeverTime} onChange={setCinqLeverTime} compact />
           </CompareRow>
+        </div>
+
+        {/* Observations cliniques */}
+        <div style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Observations cliniques</div>
+        <div style={{ marginTop: 6 }}>
+          <label style={sublabel}>Force globale (évolution)</label>
+          <ChoixGroup options={['Améliorée', 'Stable', 'Diminuée']} value={forceGlobale} onChange={setForceGlobale} />
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <label style={sublabel}>Mobilité fonctionnelle (évolution)</label>
+          <ChoixGroup options={['Améliorée', 'Stable', 'Diminuée']} value={mobiliteEvol} onChange={setMobiliteEvol} />
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <label style={sublabel}>Observations équilibre / posture</label>
+          <textarea value={equilibreObs} onChange={e => setEquilibreObs(e.target.value)} rows={2}
+            placeholder="Appui monopodal, tandem, stabilité en double tâche…"
+            style={{ ...inputStyle, resize: 'vertical' }} />
         </div>
       </div>
 

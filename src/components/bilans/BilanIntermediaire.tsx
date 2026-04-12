@@ -639,6 +639,13 @@ export const BilanIntermediaire = forwardRef<
                       <ScoreRow label="Pain Detect" actuel={scores.painDetectAct} initial={scores.painDetectInit} onActuel={v => updScore('painDetectAct', v)} onInitial={v => updScore('painDetectInit', v)} />
                       <ScoreRow label="Sensibilisation centrale" actuel={scores.sensiCAct} initial={scores.sensiCInit} onActuel={v => updScore('sensiCAct', v)} onInitial={v => updScore('sensiCInit', v)} />
                     </>}
+                    {bilanType === 'generique' && <>
+                      <ScoreRow label="Échelle HAD" actuel={scores.hadAct} initial={scores.hadInit} onActuel={v => updScore('hadAct', v)} onInitial={v => updScore('hadInit', v)} />
+                      <ScoreRow label="DN4" actuel={scores.dn4Act} initial={scores.dn4Init} onActuel={v => updScore('dn4Act', v)} onInitial={v => updScore('dn4Init', v)} />
+                      <ScoreRow label="Pain Detect" actuel={scores.painDetectAct} initial={scores.painDetectInit} onActuel={v => updScore('painDetectAct', v)} onInitial={v => updScore('painDetectInit', v)} />
+                      <ScoreRow label="Sensibilisation centrale (CSI)" actuel={scores.sensiCAct} initial={scores.sensiCInit} onActuel={v => updScore('sensiCAct', v)} onInitial={v => updScore('sensiCInit', v)} />
+                      <ScoreRow label="SF-36" actuel={scores.sf36Act} initial={scores.sf36Init} onActuel={v => updScore('sf36Act', v)} onInitial={v => updScore('sf36Init', v)} />
+                    </>}
                   </div>
 
                   {/* Examen clinique comparatif */}

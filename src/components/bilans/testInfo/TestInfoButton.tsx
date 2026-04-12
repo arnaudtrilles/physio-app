@@ -90,7 +90,7 @@ function Section({ title, body, accent }: { title: string; body: string; accent:
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, display: 'inline-block' }} />
         {title}
       </div>
-      <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-main)', lineHeight: 1.5 }}>{body}</p>
+      <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-main)', lineHeight: 1.5, whiteSpace: 'pre-line' }}>{body}</p>
     </div>
   )
 }

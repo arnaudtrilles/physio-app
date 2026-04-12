@@ -30,6 +30,14 @@ const ZONE_VIEWBOX: Record<string, [number, number, number, number]> = {
 };
 
 // Canvas de dessin superposé au SVG zoomé
+type DrawTool = 'pen' | 'highlight' | 'eraser';
+
+const TOOL_CONFIG: Record<DrawTool, { size: number; alpha: number }> = {
+  pen:       { size: 4,  alpha: 1 },
+  highlight: { size: 18, alpha: 0.35 },
+  eraser:    { size: 22, alpha: 1 },
+};
+
 const DrawingCanvas = ({
   zoneId,
   savedDrawing,
@@ -43,7 +51,7 @@ const DrawingCanvas = ({
   const isDrawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const [penColor, setPenColor] = useState('#ef4444');
-  const [penSize, setPenSize] = useState(3);
+  const [tool, setTool] = useState<DrawTool>('highlight');
 
   // Restaurer un dessin sauvegardé
   useEffect(() => {
@@ -69,10 +77,37 @@ const DrawingCanvas = ({
     return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
   };
 
+  const applyStrokeStyle = (ctx: CanvasRenderingContext2D) => {
+    const cfg = TOOL_CONFIG[tool];
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = cfg.size;
+    if (tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = cfg.alpha;
+      ctx.strokeStyle = penColor;
+    }
+  };
+
   const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     isDrawing.current = true;
     lastPos.current = getPos(e);
+    // Permet de "pointer" un seul endroit (tap sans drag) pour faire apparaître un petit rond
+    const ctx = canvasRef.current?.getContext('2d');
+    if (ctx && lastPos.current) {
+      applyStrokeStyle(ctx);
+      ctx.beginPath();
+      ctx.arc(lastPos.current.x, lastPos.current.y, TOOL_CONFIG[tool].size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = tool === 'eraser' ? 'rgba(0,0,0,1)' : penColor;
+      if (tool === 'eraser') ctx.fill();
+      else if (tool === 'highlight') { ctx.globalAlpha = TOOL_CONFIG.highlight.alpha; ctx.fill(); }
+      else ctx.fill();
+    }
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -80,11 +115,8 @@ const DrawingCanvas = ({
     e.preventDefault();
     const ctx = canvasRef.current.getContext('2d')!;
     const pos = getPos(e);
+    applyStrokeStyle(ctx);
     ctx.beginPath();
-    ctx.strokeStyle = penColor;
-    ctx.lineWidth = penSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     ctx.moveTo(lastPos.current.x, lastPos.current.y);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
@@ -95,6 +127,9 @@ const DrawingCanvas = ({
     if (!isDrawing.current) return;
     isDrawing.current = false;
     lastPos.current = null;
+    // Réinitialiser les props globales après chaque trait pour ne pas polluer les prochains dessins
+    const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
     if (canvasRef.current) onUpdate(canvasRef.current.toDataURL());
   };
 
@@ -106,36 +141,70 @@ const DrawingCanvas = ({
 
   const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#000000'];
 
+  const toolButton = (id: DrawTool, label: string, icon: React.ReactNode) => {
+    const active = tool === id;
+    return (
+      <button
+        key={id}
+        onClick={() => setTool(id)}
+        title={label}
+        aria-label={label}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 34, height: 34, borderRadius: 8,
+          background: active ? '#1e3a8a' : 'var(--surface)',
+          color: active ? 'white' : 'var(--text-main)',
+          border: active ? '1.5px solid #1e3a8a' : '1.5px solid var(--border-color)',
+          cursor: 'pointer', flexShrink: 0,
+        }}
+      >
+        {icon}
+      </button>
+    );
+  };
+
   return (
     <div style={{ userSelect: 'none' }}>
       {/* Barre d'outils */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Couleur :</span>
-        {COLORS.map(c => (
-          <button
-            key={c}
-            onClick={() => setPenColor(c)}
-            style={{
-              width: 22, height: 22, borderRadius: '50%', background: c, border: penColor === c ? '2.5px solid #1e3a8a' : '2px solid transparent',
-              boxShadow: penColor === c ? '0 0 0 2px white, 0 0 0 4px #1e3a8a' : 'none',
-              flexShrink: 0,
-            }}
-          />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+        {toolButton('highlight', 'Surligneur', (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 11l-6 6v3h3l6-6"/><path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>
+          </svg>
         ))}
-        <select
-          value={penSize}
-          onChange={e => setPenSize(Number(e.target.value))}
-          style={{ fontSize: '0.75rem', padding: '2px 4px', borderRadius: 4, border: '1px solid var(--border-color)', marginLeft: '0.25rem' }}
-        >
-          <option value={2}>Fin</option>
-          <option value={4}>Moyen</option>
-          <option value={7}>Épais</option>
-        </select>
+        {toolButton('pen', 'Pinceau', (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+          </svg>
+        ))}
+        {toolButton('eraser', 'Gomme', (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 20H7l-4-4a2 2 0 0 1 0-2.8L13.6 2.6a2 2 0 0 1 2.8 0L22 8.2a2 2 0 0 1 0 2.8L11 22"/><line x1="18" y1="12" x2="11" y2="5"/>
+          </svg>
+        ))}
+        <div style={{ width: 1, height: 24, background: 'var(--border-color)', margin: '0 4px' }} />
+        {COLORS.map(c => {
+          const disabled = tool === 'eraser';
+          return (
+            <button
+              key={c}
+              onClick={() => { if (!disabled) setPenColor(c); }}
+              disabled={disabled}
+              style={{
+                width: 24, height: 24, borderRadius: '50%', background: c,
+                border: penColor === c && !disabled ? '2.5px solid #1e3a8a' : '2px solid transparent',
+                boxShadow: penColor === c && !disabled ? '0 0 0 2px white, 0 0 0 4px #1e3a8a' : 'none',
+                flexShrink: 0, cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.35 : 1,
+              }}
+            />
+          );
+        })}
         <button
           onClick={clearCanvas}
-          style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--danger)' }}
+          style={{ marginLeft: 'auto', fontSize: '0.72rem', color: '#dc2626', fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1.5px solid #fca5a5', background: 'transparent', cursor: 'pointer' }}
         >
-          Effacer
+          Tout effacer
         </button>
       </div>
 
@@ -151,7 +220,7 @@ const DrawingCanvas = ({
           ref={canvasRef}
           width={400}
           height={400}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', touchAction: 'none', cursor: 'crosshair' }}
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', touchAction: 'none', cursor: tool === 'eraser' ? 'cell' : 'crosshair' }}
           onMouseDown={startDraw}
           onMouseMove={draw}
           onMouseUp={endDraw}
@@ -162,7 +231,7 @@ const DrawingCanvas = ({
         />
       </div>
       <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem', textAlign: 'center' }}>
-        Dessinez sur la zone pour localiser précisément
+        Surligneur = couvre la zone · Pinceau = trait précis · Gomme = retire
       </p>
     </div>
   );

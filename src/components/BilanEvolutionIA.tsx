@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import type { EvolutionIA } from '../types'
+import type { EvolutionIA, AICallAuditEntry } from '../types'
 import { buildEvolutionPrompt, parseEvolutionIA } from '../utils/clinicalPrompt'
 import type { EvolutionContext } from '../utils/clinicalPrompt'
-import { callGemini, GeminiAuthError } from '../utils/geminiClient'
+import { GeminiAuthError } from '../utils/geminiClient'
+import { callGeminiSecure } from '../utils/geminiSecure'
 
 interface BilanEvolutionIAProps {
   apiKey: string
   context: EvolutionContext
+  patientKey: string
+  onAudit?: (entry: AICallAuditEntry) => void
   onBack: () => void
   onClose?: () => void
   onGoToProfile: () => void
@@ -23,7 +26,7 @@ const TENDANCE_CONFIG = {
   mixte:         { label: 'Évolution mixte', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: '~' },
 }
 
-export function BilanEvolutionIA({ apiKey, context, onBack, onClose, onGoToProfile }: BilanEvolutionIAProps) {
+export function BilanEvolutionIA({ apiKey, context, patientKey, onAudit, onBack, onClose, onGoToProfile }: BilanEvolutionIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
@@ -35,12 +38,16 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onClose, onGoToProfi
     setLoading(true)
     setError(null)
     try {
-      const raw = await callGemini(
+      const raw = await callGeminiSecure({
         apiKey,
-        "Agis comme un physiothérapeute expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.",
-        buildEvolutionPrompt(context),
-        8192
-      )
+        systemPrompt: "Agis comme un physiothérapeute expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.",
+        userPrompt: buildEvolutionPrompt(context),
+        maxOutputTokens: 8192,
+        preferredModel: 'gemini-3.1-pro-preview',
+        patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
+        category: 'bilan_evolution',
+        onAudit,
+      })
       const parsed = parseEvolutionIA(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
       setEvolution(parsed)
@@ -82,7 +89,7 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onClose, onGoToProfi
           <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{patientLabel}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>IA</div>
+          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>Analysé</div>
           {onClose && (
             <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -103,7 +110,7 @@ export function BilanEvolutionIA({ apiKey, context, onBack, onClose, onGoToProfi
             </svg>
           </div>
           <div className="ai-hero-text">
-            <h4>Rapport d'évolution IA</h4>
+            <h4>Rapport d'évolution</h4>
             <p>Analyse de la progression sur l'ensemble des bilans du patient. À titre indicatif uniquement.</p>
           </div>
         </div>

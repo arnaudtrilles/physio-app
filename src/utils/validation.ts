@@ -85,6 +85,7 @@ export const backupSchema = z.object({
   dbObjectifs: z.array(z.record(z.string(), z.unknown())).optional(),
   dbExerciceBank: z.array(z.record(z.string(), z.unknown())).optional(),
   dbPatientDocs: z.array(z.record(z.string(), z.unknown())).optional(),
+  dbPrescriptions: z.array(z.record(z.string(), z.unknown())).optional(),
   profile: z.record(z.string(), z.unknown()).optional(),
   exportedAt: z.string().optional(),
 })

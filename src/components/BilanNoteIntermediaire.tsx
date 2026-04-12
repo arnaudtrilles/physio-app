@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import type { AnalyseIAIntermediaire } from '../types'
+import type { AnalyseIAIntermediaire, AICallAuditEntry } from '../types'
 import { buildIntermediairePrompt, parseAnalyseIAIntermediaire } from '../utils/clinicalPrompt'
 import type { BilanIntermediaireEntry, SeanceHistoryEntry } from '../utils/clinicalPrompt'
-import { callGemini, GeminiAuthError } from '../utils/geminiClient'
+import { GeminiAuthError } from '../utils/geminiClient'
+import { callGeminiSecure } from '../utils/geminiSecure'
 
 interface Props {
   apiKey: string
   patient: { nom: string; prenom: string; dateNaissance: string }
+  patientKey: string
   zone: string
   bilanType: string
   intermData: Record<string, unknown>
   historique: BilanIntermediaireEntry[]
   seances?: SeanceHistoryEntry[]
   cached?: AnalyseIAIntermediaire | null
+  onAudit?: (entry: AICallAuditEntry) => void
   onResult: (a: AnalyseIAIntermediaire) => void
   onBack: () => void
   onGoToProfile: () => void
@@ -24,8 +27,8 @@ function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
 }
 
 export function BilanNoteIntermediaire({
-  apiKey, patient, zone, bilanType, intermData, historique, seances,
-  cached, onResult, onBack, onGoToProfile, onFicheExercice,
+  apiKey, patient, patientKey, zone, bilanType, intermData, historique, seances,
+  cached, onAudit, onResult, onBack, onGoToProfile, onFicheExercice,
 }: Props) {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
@@ -40,14 +43,17 @@ export function BilanNoteIntermediaire({
     setError(null)
     try {
       const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances)
-      const raw = await callGemini(
+      const raw = await callGeminiSecure({
         apiKey,
-        'Agis comme un physiothérapeute expert. Rédige impérativement en français médical professionnel.',
-        prompt,
-        8192,
-        true,
-        'gemini-2.5-pro',
-      )
+        systemPrompt: 'Agis comme un physiothérapeute expert. Rédige impérativement en français médical professionnel.',
+        userPrompt: prompt,
+        maxOutputTokens: 8192,
+        jsonMode: true,
+        preferredModel: 'gemini-3.1-pro-preview',
+        patient: { nom: patient.nom, prenom: patient.prenom, patientKey },
+        category: 'bilan_intermediaire',
+        onAudit,
+      })
       const parsed = parseAnalyseIAIntermediaire(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
       setNote(parsed)
@@ -81,10 +87,10 @@ export function BilanNoteIntermediaire({
 - Prise en charge : ${note.priseEnChargeAjustee.map(p => p.point).join(' | ')}`
 
       const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances)
-      const raw = await callGemini(
+      const raw = await callGeminiSecure({
         apiKey,
-        `Agis comme un physiothérapeute expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,
-        `${prompt}
+        systemPrompt: `Agis comme un physiothérapeute expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,
+        userPrompt: `${prompt}
 
 ${prevNote}
 
@@ -92,10 +98,13 @@ CORRECTIONS DU THÉRAPEUTE (prioritaires) :
 ${correction.trim()}
 
 Produis une nouvelle note corrigée en tenant compte des observations du thérapeute.`,
-        8192,
-        true,
-        'gemini-2.5-pro',
-      )
+        maxOutputTokens: 8192,
+        jsonMode: true,
+        preferredModel: 'gemini-3.1-pro-preview',
+        patient: { nom: patient.nom, prenom: patient.prenom, patientKey },
+        category: 'bilan_intermediaire',
+        onAudit,
+      })
       const parsed = parseAnalyseIAIntermediaire(raw)
       if (!parsed) throw new Error('Réponse invalide')
       setNote(parsed)
@@ -311,7 +320,7 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
               <div className="fade-in" style={{ marginTop: 8, background: '#fefce8', border: '1.5px solid #fde68a', borderRadius: 12, padding: '0.85rem' }}>
                 <div style={{ fontSize: '0.78rem', color: '#92400e', fontWeight: 600, marginBottom: 6 }}>Vos observations cliniques</div>
                 <p style={{ fontSize: '0.75rem', color: '#78350f', margin: '0 0 8px', lineHeight: 1.5 }}>
-                  Indiquez ce que vous souhaitez corriger. L'IA ajustera la note diagnostique en conséquence.
+                  Indiquez ce que vous souhaitez corriger. La note diagnostique sera ajustée en conséquence.
                 </p>
                 <textarea
                   value={correction}

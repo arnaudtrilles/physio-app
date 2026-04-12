@@ -1,14 +1,19 @@
 import { useState } from 'react'
-import type { AnalyseIA, BilanDocument } from '../types'
+import type { AnalyseIA, BilanDocument, AICallAuditEntry } from '../types'
 import { buildClinicalPrompt, parseAnalyseIA } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
-import { callGemini, GeminiAuthError } from '../utils/geminiClient'
+import { GeminiAuthError } from '../utils/geminiClient'
+import { callGeminiSecure, UnmaskedDocumentsError } from '../utils/geminiSecure'
 
 interface BilanAnalyseIAProps {
   apiKey: string
   context: BilanContext
+  patientKey: string
   documents?: BilanDocument[]
   cached?: AnalyseIA | null
+  onAudit?: (entry: AICallAuditEntry) => void
+  /** Callback qui renvoie une Promise<boolean> — true si le praticien accepte d'envoyer des documents non masqués. */
+  onUnmaskedDocsConfirm?: (docs: BilanDocument[]) => Promise<boolean>
   onResult: (analyse: AnalyseIA) => void
   onBack: () => void
   onClose?: () => void
@@ -36,7 +41,21 @@ function NeuralIcon() {
   )
 }
 
-export function BilanAnalyseIA({ apiKey, context, documents, cached, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
+export function BilanAnalyseIA({ apiKey, context, patientKey, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
+  // Helper : appelle callGeminiSecure en gérant la confirmation documents non-masqués
+  const callWithDocGuard = async (opts: Parameters<typeof callGeminiSecure>[0]): Promise<string> => {
+    try {
+      return await callGeminiSecure(opts)
+    } catch (err) {
+      if (err instanceof UnmaskedDocumentsError && onUnmaskedDocsConfirm) {
+        const ok = await onUnmaskedDocsConfirm(err.unmaskedDocs)
+        if (!ok) throw new Error('UNMASKED_DOCS_CANCELLED')
+        return await callGeminiSecure({ ...opts, userAcknowledgedUnmasked: true })
+      }
+      throw err
+    }
+  }
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [analyse, setAnalyse] = useState<AnalyseIA | null>(cached ?? null)
@@ -59,20 +78,28 @@ export function BilanAnalyseIA({ apiKey, context, documents, cached, onResult, o
         : context.notesLibres
       const mergedContext = { ...context, notesLibres: mergedNotes }
 
-      const raw = await callGemini(
+      const raw = await callWithDocGuard({
         apiKey,
-        'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.',
-        buildClinicalPrompt(mergedContext),
-        8192,
-        true,
-        'gemini-2.5-pro',
-        documents
-      )
+        systemPrompt: 'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.',
+        userPrompt: buildClinicalPrompt(mergedContext),
+        maxOutputTokens: 8192,
+        jsonMode: true,
+        preferredModel: 'gemini-3.1-pro-preview',
+        documents,
+        patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
+        category: 'bilan_analyse',
+        onAudit,
+      })
       const parsed = parseAnalyseIA(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
       setAnalyse(parsed)
       onResult(parsed)
     } catch (err: unknown) {
+      // Annulation volontaire par l'utilisateur (docs non masqués) → silencieux
+      if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
+        setLoading(false)
+        return
+      }
       if (attempt < 2) {
         setRetryCount(attempt + 1)
         setTimeout(() => runAnalysis(attempt + 1), 1200)
@@ -103,10 +130,10 @@ export function BilanAnalyseIA({ apiKey, context, documents, cached, onResult, o
 - Hypothèses : ${analyse.hypotheses.map(h => `H${h.rang} (${h.probabilite}%) ${h.titre}`).join(' | ')}
 - Prise en charge : ${analyse.priseEnCharge.map(p => `${p.phase}: ${p.titre}`).join(' | ')}`
 
-      const raw = await callGemini(
+      const raw = await callWithDocGuard({
         apiKey,
-        `Agis comme un physiothérapeute expert. Tu as déjà produit une analyse clinique, mais le thérapeute qui a vu le patient te donne des corrections basées sur son examen clinique réel. Tu DOIS intégrer ces corrections et ajuster ton analyse en conséquence. Rédige en français médical professionnel.`,
-        `${buildClinicalPrompt(context)}
+        systemPrompt: `Agis comme un physiothérapeute expert. Tu as déjà produit une analyse clinique, mais le thérapeute qui a vu le patient te donne des corrections basées sur son examen clinique réel. Tu DOIS intégrer ces corrections et ajuster ton analyse en conséquence. Rédige en français médical professionnel.`,
+        userPrompt: `${buildClinicalPrompt(context)}
 
 ${prevAnalyse}
 
@@ -114,11 +141,14 @@ CORRECTIONS DU THÉRAPEUTE (prioritaires — elles priment sur l'analyse précé
 ${correction.trim()}
 
 Produis une nouvelle analyse corrigée en tenant compte des observations du thérapeute. Ajuste les probabilités des hypothèses, le diagnostic principal et le plan de traitement en conséquence.`,
-        8192,
-        true,
-        'gemini-2.5-pro',
-        documents
-      )
+        maxOutputTokens: 8192,
+        jsonMode: true,
+        preferredModel: 'gemini-3.1-pro-preview',
+        documents,
+        patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
+        category: 'bilan_analyse_refine',
+        onAudit,
+      })
       const parsed = parseAnalyseIA(raw)
       if (!parsed) throw new Error('Réponse invalide')
       setAnalyse(parsed)
@@ -126,6 +156,11 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
       setCorrection('')
       setShowCorrection(false)
     } catch (err: unknown) {
+      // Annulation volontaire (docs non masqués) → silencieux
+      if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
+        setRefining(false)
+        return
+      }
       const msg = err instanceof Error ? err.message : 'Erreur inconnue'
       setError(msg)
     } finally {
@@ -144,11 +179,11 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
           </svg>
         </button>
         <div style={{ flex: 1 }}>
-          <h2 className="title-section" style={{ marginBottom: 0 }}>Analyse IA</h2>
+          <h2 className="title-section" style={{ marginBottom: 0 }}>Analyse</h2>
           <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{context.zone} · {context.patient.prenom} {context.patient.nom}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>IA</div>
+          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>Analysé</div>
           {onClose && (
             <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -165,7 +200,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
         <div className="ai-hero">
           <div className="ai-hero-icon"><NeuralIcon /></div>
           <div className="ai-hero-text">
-            <h4>Analyse générée par IA</h4>
+            <h4>Analyse générée</h4>
             <p>Basée sur l'ensemble des données du bilan. À titre indicatif — le diagnostic clinique reste du ressort du thérapeute.</p>
           </div>
         </div>
@@ -396,7 +431,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                   Vos observations cliniques
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#78350f', margin: '0 0 8px', lineHeight: 1.5 }}>
-                  Indiquez ce que vous souhaitez corriger. L'IA recalculera les probabilités et ajustera l'analyse en conséquence.
+                  Indiquez ce que vous souhaitez corriger. Les probabilités seront recalculées et l'analyse ajustée en conséquence.
                 </p>
                 <textarea
                   value={correction}
@@ -434,7 +469,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
             </div>
             <div className="ai-section-body">
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-                Notez votre diagnostic supposé, vos hypothèses, ou toute observation clinique à communiquer à l'IA avant l'analyse. Optionnel — laissez vide pour une analyse uniquement basée sur les données du bilan.
+                Notez votre diagnostic supposé, vos hypothèses, ou toute observation clinique avant l'analyse. Optionnel — laissez vide pour une analyse uniquement basée sur les données du bilan.
               </p>
               <textarea
                 value={preAnalyseNotes}
@@ -451,7 +486,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {!analyse && !loading && apiKey && !error && (
             <button className="btn-primary-luxe" style={{ marginBottom: 0 }} onClick={() => runAnalysis(0)}>
-              Lancer l'analyse IA
+              Lancer l'analyse
             </button>
           )}
           {loading && (
@@ -471,7 +506,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                 <polyline points="14 2 14 8 20 8"/>
                 <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
               </svg>
-              Exporter le bilan + analyse IA
+              Exporter le bilan + analyse
             </button>
           )}
           {analyse && onFicheExercice && (

@@ -1,5 +1,5 @@
 import type { Question, Questionnaire, QuestionOption } from './types'
-import { opts5, optsOxford, optsFreq, optsSeverity, optsQoL, optsFreqMonth, optsYesNo, optsDashDiff, sumAnswers, countAnswered, interpret, q, slider, yesNo } from './helpers'
+import { opts5, optsOxford, optsFreq, optsSeverity, optsQoL, optsFreqMonth, optsDashDiff, sumAnswers, countAnswered, interpret, q, yesNo } from './helpers'
 
 // ─── 1. OSS — Oxford Shoulder Score ────────────────────────────────────────
 const OSS_OPTS_DOULEUR = optsOxford(['Aucune', 'Légère', 'Modérée', 'Forte', 'Insupportable'])
@@ -767,6 +767,207 @@ export const SF36: Questionnaire = {
 }
 
 // ─── Export master map ─────────────────────────────────────────────────────
+// ─── 24. ADL — Katz ────────────────────────────────────────────────────────
+// Évaluation de l'autonomie de base : 6 activités quotidiennes (toilette, habillage, WC, transferts, continence, alimentation)
+// Score : 1 = autonome / 0 = aide. Total /6.
+const KATZ_ITEMS: [string, string][] = [
+  ['toilette', "Toilette (se laver le corps : douche, bain, toilette au lavabo)"],
+  ['habillage', "Habillage (choisir et enfiler les vêtements, y compris sous-vêtements)"],
+  ['wc', "Aller aux toilettes (se rendre aux WC, s'asseoir, s'essuyer, se rhabiller)"],
+  ['transferts', "Transferts (se lever du lit, s'asseoir / se lever d'un fauteuil)"],
+  ['continence', "Continence urinaire et fécale"],
+  ['alimentation', "Alimentation (manger seul une fois la nourriture servie)"],
+]
+export const KATZ_ADL: Questionnaire = {
+  id: 'katzAdl',
+  title: 'Échelle ADL — Katz (Activities of Daily Living)',
+  short: 'Katz ADL',
+  instructions: '6 activités de base de la vie quotidienne. 1 point = autonome, 0 point = aide nécessaire.',
+  questions: KATZ_ITEMS.map(([id, lbl]) => q(
+    id,
+    lbl,
+    [
+      { label: 'Autonome', value: 1 },
+      { label: 'Aide partielle', value: 0.5 },
+      { label: 'Dépendant', value: 0 },
+    ],
+  )),
+  compute: (a) => {
+    const total = sumAnswers(a, KATZ_ITEMS.map(([id]) => id))
+    const totalRounded = Math.round(total * 2) / 2
+    const { text, color } = interpret(totalRounded, [
+      [2, 'Dépendance sévère', 'red'],
+      [4, 'Dépendance modérée', 'orange'],
+      [6, 'Autonomie préservée', 'green'],
+    ])
+    return {
+      value: totalRounded,
+      display: `${totalRounded} / 6`,
+      interpretation: text,
+      color,
+    }
+  },
+}
+
+// ─── 25. IADL — Lawton ─────────────────────────────────────────────────────
+// 8 activités instrumentales (téléphone, courses, cuisine, ménage, lessive, transports, médicaments, finances)
+// Score : 1 si la personne est autonome (cotation classique de Lawton), 0 sinon. Total /8 chez la femme, /5 chez l'homme.
+const LAWTON_ITEMS: [string, string, string[]][] = [
+  ['telephone', 'Capacité à utiliser le téléphone',
+    ["Se sert du téléphone de sa propre initiative (cherche, compose…)", "Compose un petit nombre de numéros bien connus", "Répond mais n'appelle pas", "Incapable de l'utiliser"]],
+  ['courses', 'Faire les courses',
+    ["Fait toutes ses courses seul(e)", "Fait seul(e) de petites courses", "A besoin d'être accompagné(e)", "Totalement incapable"]],
+  ['cuisine', 'Préparer les repas',
+    ["Prévoit, prépare et sert des repas équilibrés", "Prépare des repas si on lui fournit les ingrédients", "Réchauffe et sert mais alimentation inadéquate", "A besoin qu'on lui prépare et serve les repas"]],
+  ['menage', 'Entretien ménager',
+    ["Entretient seul(e) sa maison", "Effectue les tâches quotidiennes légères", "Fait quelques tâches mais qualité insuffisante", "A besoin d'aide pour toutes les tâches", "Incapable"]],
+  ['lessive', 'Lessive',
+    ["Fait toute sa lessive personnellement", "Lave les petits articles seul(e)", "Toute la lessive doit être faite par d'autres"]],
+  ['transports', 'Moyens de transport',
+    ["Utilise les transports publics ou conduit sa voiture", "Organise ses déplacements en taxi mais pas les transports publics", "Prend les transports publics si accompagné(e)", "Déplacements limités au taxi/voiture avec aide", "Ne se déplace plus du tout"]],
+  ['medicaments', 'Responsabilité de ses médicaments',
+    ["Prend ses médicaments correctement (dose et heure)", "Prend ses médicaments si préparés à l'avance par doses", "Incapable de prendre seul(e) ses médicaments"]],
+  ['finances', "Aptitude à manipuler l'argent",
+    ["Gère ses finances de manière autonome (chèques, factures, banque)", "Gère les achats quotidiens mais aide pour les opérations importantes", "Incapable de manipuler l'argent"]],
+]
+export const LAWTON_IADL: Questionnaire = {
+  id: 'lawtonIadl',
+  title: 'Échelle IADL — Lawton (Instrumental Activities of Daily Living)',
+  short: 'Lawton IADL',
+  instructions: '8 activités instrumentales. La cotation classique attribue 1 point uniquement au premier niveau de chaque item (le plus autonome). Score total /8.',
+  questions: LAWTON_ITEMS.map(([id, lbl, opts]) =>
+    q(id, lbl, opts.map((label, i) => ({ label, value: i === 0 ? 1 : 0 })))
+  ),
+  compute: (a) => {
+    const total = sumAnswers(a, LAWTON_ITEMS.map(([id]) => id))
+    const { text, color } = interpret(total, [
+      [2, 'Dépendance sévère', 'red'],
+      [5, 'Dépendance modérée', 'orange'],
+      [8, 'Autonomie préservée', 'green'],
+    ])
+    return {
+      value: total,
+      display: `${total} / 8`,
+      interpretation: text,
+      color,
+    }
+  },
+}
+
+// ─── 26. MNA-SF — Mini Nutritional Assessment Short Form ──────────────────
+// Outil de dépistage de la dénutrition chez la personne âgée. 6 items, score /14.
+// ≥ 12 = état nutritionnel normal, 8-11 = risque de dénutrition, ≤ 7 = dénutrition.
+const MNA_SF_ITEMS = [
+  {
+    id: 'a',
+    label: "A. Le patient présente-t-il une perte d'appétit ? A-t-il mangé moins ces 3 derniers mois (perte d'appétit, problèmes digestifs, difficultés de mastication ou de déglutition) ?",
+    options: [
+      { label: 'Anorexie sévère', value: 0 },
+      { label: 'Anorexie modérée', value: 1 },
+      { label: "Pas d'anorexie", value: 2 },
+    ],
+  },
+  {
+    id: 'b',
+    label: 'B. Perte récente de poids (< 3 mois) ?',
+    options: [
+      { label: 'Perte de poids > 3 kg', value: 0 },
+      { label: 'Ne sait pas', value: 1 },
+      { label: 'Perte de poids entre 1 et 3 kg', value: 2 },
+      { label: 'Pas de perte de poids', value: 3 },
+    ],
+  },
+  {
+    id: 'c',
+    label: 'C. Motricité',
+    options: [
+      { label: 'Du lit au fauteuil', value: 0 },
+      { label: "Autonome à l'intérieur", value: 1 },
+      { label: 'Sort du domicile', value: 2 },
+    ],
+  },
+  {
+    id: 'd',
+    label: 'D. Maladie aiguë ou stress psychologique lors des 3 derniers mois ?',
+    options: [
+      { label: 'Oui', value: 0 },
+      { label: 'Non', value: 2 },
+    ],
+  },
+  {
+    id: 'e',
+    label: 'E. Problèmes neuropsychologiques',
+    options: [
+      { label: 'Démence ou dépression sévère', value: 0 },
+      { label: 'Démence ou dépression modérée', value: 1 },
+      { label: 'Pas de problème psychologique', value: 2 },
+    ],
+  },
+  {
+    id: 'f',
+    label: 'F. IMC (Indice de Masse Corporelle)',
+    options: [
+      { label: 'IMC < 19', value: 0 },
+      { label: 'IMC 19 à < 21', value: 1 },
+      { label: 'IMC 21 à < 23', value: 2 },
+      { label: 'IMC ≥ 23', value: 3 },
+    ],
+    help: "Si IMC indisponible, remplacer par la circonférence du mollet : < 31 cm = 0 ; ≥ 31 cm = 3.",
+  },
+]
+export const MNA_SF: Questionnaire = {
+  id: 'mnaSf',
+  title: "MNA-SF — Mini Nutritional Assessment (Short Form)",
+  short: 'MNA-SF',
+  instructions: '6 items de dépistage de la dénutrition gériatrique. Score /14. ≥ 12 = normal, 8-11 = risque, ≤ 7 = dénutrition.',
+  questions: MNA_SF_ITEMS.map(it => q(it.id, it.label, it.options, it.help ? { help: it.help } : {})),
+  compute: (a) => {
+    const total = sumAnswers(a, MNA_SF_ITEMS.map(i => i.id))
+    let text: string
+    let color: 'green' | 'orange' | 'red'
+    if (total >= 12)      { text = 'État nutritionnel normal';     color = 'green' }
+    else if (total >= 8)  { text = 'Risque de dénutrition';        color = 'orange' }
+    else                  { text = 'Dénutrition avérée';           color = 'red' }
+    return {
+      value: total,
+      display: `${total} / 14`,
+      interpretation: text,
+      color,
+    }
+  },
+}
+
+// ─── 27. Critères de Fried — Fragilité ─────────────────────────────────────
+// 5 critères de fragilité physique (Fried 2001). 0 = robuste, 1-2 = pré-fragile, ≥ 3 = fragile.
+const FRIED_ITEMS: [string, string, string][] = [
+  ['pertePoids',     'Perte de poids involontaire',          "≥ 4,5 kg ou ≥ 5 % du poids corporel sur la dernière année, sans régime."],
+  ['epuisement',     'Épuisement ressenti (auto-déclaré)',   "Le patient se sent fatigué la plupart du temps (≥ 3 jours/semaine) — questions issues de l'échelle CES-D."],
+  ['faiblesse',      'Faiblesse musculaire',                  "Force de préhension diminuée (dynamomètre) selon seuils ajustés au sexe et à l'IMC. À défaut : difficulté à porter une charge de 5 kg."],
+  ['lenteur',        'Lenteur de la marche',                  "Vitesse de marche < 0,8 m/s sur 4 m (équivalent SPPB sous-test vitesse ≤ 3/4)."],
+  ['activitePhys',   'Activité physique réduite',             "Faible dépense énergétique hebdomadaire. À défaut : moins de 30 min d'activité modérée par semaine."],
+]
+export const FRIED: Questionnaire = {
+  id: 'fried',
+  title: 'Critères de Fried — Phénotype de fragilité',
+  short: 'Fried',
+  instructions: "5 critères de fragilité physique. Cocher chaque critère présent. 0 = robuste, 1-2 = pré-fragile, ≥ 3 = fragile.",
+  questions: FRIED_ITEMS.map(([id, lbl, help]) => yesNo(id, lbl, { help })),
+  compute: (a) => {
+    const total = sumAnswers(a, FRIED_ITEMS.map(([id]) => id))
+    let text: string
+    let color: 'green' | 'orange' | 'red'
+    if (total === 0)      { text = 'Robuste';                          color = 'green' }
+    else if (total <= 2)  { text = 'Pré-fragile';                      color = 'orange' }
+    else                  { text = 'Fragile (intervention urgente)';   color = 'red' }
+    return {
+      value: total,
+      display: `${total} / 5 critères`,
+      interpretation: text,
+      color,
+    }
+  },
+}
+
 export const QUESTIONNAIRES: Record<string, Questionnaire> = {
   oss: OSS, constant: CONSTANT, dash: DASH, rowe: ROWE,
   hoos: HOOS, oxfordHip: OXFORD_HIP,
@@ -775,4 +976,6 @@ export const QUESTIONNAIRES: Record<string, Questionnaire> = {
   ndi: NDI, csi: CSI,
   startBack: STARTBACK, odi: ODI, orebro: OREBRO, eifel: EIFEL,
   dn4: DN4, painDetect: PAIN_DETECT, fabq: FABQ, had: HAD, sf36: SF36,
+  // Gérontologie
+  katzAdl: KATZ_ADL, lawtonIadl: LAWTON_IADL, mnaSf: MNA_SF, fried: FRIED,
 }

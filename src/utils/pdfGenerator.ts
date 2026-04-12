@@ -1089,3 +1089,503 @@ export const generateAIPDF = (
   const safeFirst = (patientId.prenom || '').replace(/\s+/g, '_')
   doc.save(`Rapport_${safeName}_${safeFirst}_${dateFile}.pdf`)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  COURRIER PROFESSIONNEL — Génération PDF
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LetterPDFPraticien {
+  nom?: string
+  prenom?: string
+  profession?: string
+  specialisationsLibelle?: string
+  rcc?: string
+  adresse?: string
+  adresseComplement?: string
+  codePostal?: string
+  ville?: string
+  telephone?: string
+  email?: string
+  signatureImage?: string | null
+}
+
+export interface LetterPDFOptions {
+  praticien: LetterPDFPraticien
+  patientNom: string
+  patientPrenom: string
+  titreCourrier: string           // ex: "Fin de prise en charge"
+  corps: string                    // Texte généré (sans en-tête ni signature)
+  download?: boolean               // true = download direct, false = retourne Blob URL
+}
+
+/**
+ * Génère un PDF de courrier professionnel avec :
+ * - En-tête praticien (haut-gauche)
+ * - Ville + date (aligné à droite sous l'en-tête)
+ * - Corps du texte (narratif, justifié)
+ * - Signature (praticien + image signature si disponible)
+ */
+export const generateLetterPDF = (options: LetterPDFOptions): Blob | void => {
+  const { praticien: p, patientNom, patientPrenom, titreCourrier, corps, download = true } = options
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const W = 210
+  const H = 297
+  const ML = 22
+  const MR = 22
+  const MW = W - ML - MR
+  let y = 22
+
+  const today = new Date()
+  const dateFile = today.toISOString().split('T')[0]
+  const dateStr = today.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const check = (need = 10) => {
+    if (y + need > H - 30) { doc.addPage(); y = 22 }
+  }
+  const split = (text: string, maxW: number) => doc.splitTextToSize(sanitize(text), maxW)
+
+  // ── En-tête praticien (haut-gauche) ──────────────────────────────────────
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(...C.primary)
+  const fullName = `${p.prenom ?? ''} ${p.nom ?? ''}`.trim() || '—'
+  doc.text(fullName.toUpperCase(), ML, y)
+  y += 5
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...C.text)
+  if (p.profession) { doc.text(sanitize(p.profession), ML, y); y += 4 }
+  if (p.specialisationsLibelle) {
+    doc.setTextColor(...C.muted)
+    doc.setFontSize(8.5)
+    const sl = split(p.specialisationsLibelle, MW / 2)
+    for (const s of sl) { doc.text(s, ML, y); y += 3.8 }
+    doc.setFontSize(9)
+    doc.setTextColor(...C.text)
+  }
+  if (p.rcc) { doc.text(`RCC / ADELI : ${sanitize(p.rcc)}`, ML, y); y += 4 }
+  if (p.adresse) { doc.text(sanitize(p.adresse), ML, y); y += 4 }
+  if (p.adresseComplement) { doc.text(sanitize(p.adresseComplement), ML, y); y += 4 }
+  if (p.codePostal || p.ville) {
+    doc.text(sanitize(`${p.codePostal ?? ''} ${p.ville ?? ''}`.trim()), ML, y); y += 4
+  }
+  if (p.telephone) { doc.text(`Tél : ${sanitize(p.telephone)}`, ML, y); y += 4 }
+  if (p.email) { doc.text(sanitize(p.email), ML, y); y += 4 }
+
+  // Ligne de séparation douce
+  y += 3
+  doc.setDrawColor(...C.light)
+  doc.setLineWidth(0.3)
+  doc.line(ML, y, W - MR, y)
+  y += 8
+
+  // ── Ville + date (aligné à droite) ──────────────────────────────────────
+  const dateLine = `${(p.ville ?? '').toUpperCase() || '—'}, le ${dateStr}`
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(...C.text)
+  const dateLineWidth = doc.getTextWidth(sanitize(dateLine))
+  doc.text(sanitize(dateLine), W - MR - dateLineWidth, y)
+  y += 12
+
+  // ── Objet ───────────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10.5)
+  doc.setTextColor(...C.primary)
+  const objet = `Objet : ${titreCourrier} — ${patientPrenom} ${patientNom}`.trim()
+  const objetLines = split(objet, MW)
+  for (const ol of objetLines) { doc.text(ol, ML, y); y += 5 }
+  y += 6
+  doc.setTextColor(...C.text)
+
+  // ── Corps du courrier ──────────────────────────────────────────────────
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10.5)
+  const corpsLines = corps.split('\n')
+  for (const rawLine of corpsLines) {
+    const line = rawLine.trimEnd()
+    if (line === '') {
+      y += 4
+      continue
+    }
+    const wrapped = split(line, MW)
+    for (const w of wrapped) {
+      check(7)
+      doc.text(w, ML, y)
+      y += 5.2
+    }
+  }
+
+  // ── Signature ──────────────────────────────────────────────────────────
+  y += 10
+  check(35)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10.5)
+  doc.setTextColor(...C.primary)
+  doc.text(sanitize(fullName), W - MR, y, { align: 'right' })
+  y += 5
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(9)
+  doc.setTextColor(...C.muted)
+  if (p.profession) {
+    doc.text(sanitize(p.profession), W - MR, y, { align: 'right' })
+    y += 5
+  }
+
+  // Image signature si disponible
+  if (p.signatureImage) {
+    try {
+      const imgW = 45
+      const imgH = 22
+      const imgX = W - MR - imgW
+      const imgY = y
+      check(imgH + 5)
+      doc.addImage(p.signatureImage, 'PNG', imgX, imgY, imgW, imgH)
+      y += imgH + 4
+    } catch {
+      // ignore image errors
+    }
+  }
+
+  // ── Footer ─────────────────────────────────────────────────────────────
+  const totalPages = (doc as any).internal.getNumberOfPages()
+  for (let pg = 1; pg <= totalPages; pg++) {
+    doc.setPage(pg)
+    doc.setDrawColor(...C.light)
+    doc.setLineWidth(0.3)
+    doc.line(ML, H - 14, W - MR, H - 14)
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'italic')
+    doc.setTextColor(...C.muted)
+    doc.text('Document confidentiel - couvert par le secret professionnel', ML, H - 9)
+    doc.text(`Page ${pg}/${totalPages}`, W - MR - 18, H - 9)
+    doc.setTextColor(...C.text)
+  }
+
+  if (download) {
+    const safeName = (patientNom || 'Anonyme').replace(/\s+/g, '_')
+    const safeFirst = (patientPrenom || '').replace(/\s+/g, '_')
+    const safeType = titreCourrier.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 30)
+    doc.save(`Courrier_${safeType}_${safeName}_${safeFirst}_${dateFile}.pdf`)
+    return
+  }
+  return doc.output('blob')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  REGISTRE D'AUDIT RGPD — Export PDF
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AuditPDFOptions {
+  praticien: {
+    nom?: string
+    prenom?: string
+    profession?: string
+    rcc?: string
+    adresse?: string
+    codePostal?: string
+    ville?: string
+  }
+  entries: Array<{
+    id: number
+    timestamp: string
+    letterId: number
+    patientKey: string
+    type: string
+    pseudonymized: boolean
+    piiWarningsCount: number
+    modelUsed: string
+    resultLength: number
+  }>
+  aiCallEntries?: Array<{
+    id: number
+    timestamp: string
+    category: string
+    patientKey: string
+    pseudonymized: boolean
+    scrubReplacements: number
+    hasDocuments: boolean
+    modelUsed: string
+    promptLength: number
+    resultLength: number
+    success: boolean
+  }>
+}
+
+const AI_CALL_CATEGORY_LABELS: Record<string, string> = {
+  letter: 'Courrier',
+  bilan_analyse: 'Analyse bilan',
+  bilan_analyse_refine: 'Analyse (correction)',
+  bilan_evolution: 'Évolution patient',
+  bilan_intermediaire: 'Note intermédiaire',
+  fiche_exercice: "Fiche d'exercices",
+  pdf_bilan: 'PDF bilan',
+  pdf_analyse: 'PDF analyse',
+  note_seance_mini: 'Analyse mini séance',
+  api_key_test: 'Test clé API',
+}
+
+const LETTER_TYPE_LABELS: Record<string, string> = {
+  fin_pec: 'Fin de PEC',
+  fin_pec_anticipee: 'Fin de PEC anticipée',
+  demande_avis: "Demande d'avis",
+  demande_imagerie: "Demande d'imagerie",
+  demande_prescription: 'Demande prescription',
+  suivi: 'Courrier de suivi',
+  echec_pec: 'Échec de PEC',
+}
+
+export const generateAuditPDF = (options: AuditPDFOptions) => {
+  const { praticien: p, entries, aiCallEntries = [] } = options
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const W = 210
+  const H = 297
+  const ML = 16
+  const MR = 16
+  const MW = W - ML - MR
+  let y = 18
+
+  const today = new Date()
+  const dateFile = today.toISOString().split('T')[0]
+  const dateStr = today.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const check = (need = 10) => { if (y + need > H - 22) { doc.addPage(); y = 18; drawHeaderBand() } }
+
+  const drawHeaderBand = () => {
+    doc.setFillColor(...C.primary)
+    doc.rect(0, 0, W, 13, 'F')
+    doc.setFillColor(...C.accent)
+    doc.rect(0, 13, W, 1, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(...C.white)
+    doc.text('REGISTRE DES TRAITEMENTS IA - COURRIERS', ML, 9)
+    doc.setTextColor(...C.text)
+  }
+  drawHeaderBand()
+  y = 20
+
+  // ── Bloc informations praticien ──
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...C.primary)
+  doc.text('Responsable du traitement', ML, y)
+  y += 5
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...C.text)
+  doc.text(sanitize(`${p.prenom ?? ''} ${p.nom ?? ''}`.trim() || '—'), ML, y); y += 4
+  if (p.profession) { doc.text(sanitize(p.profession), ML, y); y += 4 }
+  if (p.rcc) { doc.text(`RCC / ADELI : ${sanitize(p.rcc)}`, ML, y); y += 4 }
+  if (p.adresse) { doc.text(sanitize(`${p.adresse}${p.codePostal ? ', ' + p.codePostal : ''}${p.ville ? ' ' + p.ville : ''}`), ML, y); y += 4 }
+  doc.text(`Date d'édition : ${dateStr}`, ML, y); y += 7
+
+  // ── Cartouche d'explication RGPD ──
+  doc.setFillColor(...C.primaryLight)
+  doc.roundedRect(ML, y, MW, 28, 2, 2, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...C.primary)
+  doc.text('Base legale & finalite', ML + 4, y + 5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C.text)
+  const info = [
+    "Base legale (RGPD art. 6-1-f & 9-2-h) : interet legitime et necessaire au diagnostic et a la prise en charge.",
+    "Finalite : assistance a la redaction de courriers professionnels destines aux medecins correspondants.",
+    "Mesures de protection : pseudonymisation systematique avant tout envoi a l'IA ; aucune donnee identifiante",
+    "ne quitte l'appareil du praticien. Texte final relu et valide par le praticien avant envoi.",
+  ]
+  for (let i = 0; i < info.length; i++) {
+    doc.text(info[i], ML + 4, y + 9 + i * 4)
+  }
+  y += 32
+
+  // ── Titre du tableau ──
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...C.primary)
+  doc.text(`Traitements enregistres : ${entries.length}`, ML, y)
+  y += 5
+  doc.setDrawColor(...C.light)
+  doc.setLineWidth(0.3)
+  doc.line(ML, y, W - MR, y)
+  y += 4
+
+  // ── Colonnes du tableau ──
+  const COLS = {
+    date: ML,
+    type: ML + 34,
+    patient: ML + 78,
+    pseudo: ML + 128,
+    warns: ML + 148,
+    size: ML + 166,
+  }
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C.muted)
+  doc.text('Date/Heure', COLS.date, y)
+  doc.text('Type de courrier', COLS.type, y)
+  doc.text('Patient (cle)', COLS.patient, y)
+  doc.text('Pseudo.', COLS.pseudo, y)
+  doc.text('Alertes', COLS.warns, y)
+  doc.text('Taille', COLS.size, y)
+  y += 4
+  doc.setDrawColor(...C.light)
+  doc.line(ML, y, W - MR, y)
+  y += 3.5
+
+  // ── Lignes ──
+  const sorted = [...entries].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C.text)
+
+  if (sorted.length === 0) {
+    doc.setTextColor(...C.muted)
+    doc.text('Aucun traitement enregistre a ce jour.', ML, y + 3)
+    y += 8
+  } else {
+    for (const e of sorted) {
+      check(6)
+      const d = new Date(e.timestamp)
+      const dateLine = `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+      const typeLine = sanitize(LETTER_TYPE_LABELS[e.type] ?? e.type).slice(0, 26)
+      const patientLine = sanitize(e.patientKey).slice(0, 30)
+      const pseudoLine = e.pseudonymized ? 'Oui' : 'NON'
+      const warnsLine = String(e.piiWarningsCount)
+      const sizeLine = `${e.resultLength} c.`
+
+      doc.text(dateLine, COLS.date, y)
+      doc.text(typeLine, COLS.type, y)
+      doc.text(patientLine, COLS.patient, y)
+      if (!e.pseudonymized) doc.setTextColor(...C.red)
+      doc.text(pseudoLine, COLS.pseudo, y)
+      doc.setTextColor(...C.text)
+      if (e.piiWarningsCount > 0) doc.setTextColor(...C.red)
+      doc.text(warnsLine, COLS.warns, y)
+      doc.setTextColor(...C.text)
+      doc.text(sizeLine, COLS.size, y)
+      y += 4.5
+    }
+  }
+
+  y += 6
+  check(18)
+
+  // ── Section TRAITEMENTS IA GLOBAUX (bilans, évolutions, fiches, etc.) ──
+  if (aiCallEntries.length > 0) {
+    check(18)
+    doc.setDrawColor(...C.light)
+    doc.setLineWidth(0.3)
+    doc.line(ML, y, W - MR, y)
+    y += 6
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.setTextColor(...C.primary)
+    doc.text(`Autres traitements IA enregistres : ${aiCallEntries.length}`, ML, y)
+    y += 5
+    doc.setDrawColor(...C.light)
+    doc.line(ML, y, W - MR, y)
+    y += 4
+
+    // Colonnes
+    const C2 = {
+      date: ML,
+      category: ML + 34,
+      patient: ML + 80,
+      pseudo: ML + 124,
+      scrub: ML + 142,
+      docs: ML + 158,
+      ok: ML + 172,
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C.muted)
+    doc.text('Date/Heure', C2.date, y)
+    doc.text('Categorie', C2.category, y)
+    doc.text('Patient', C2.patient, y)
+    doc.text('Pseudo.', C2.pseudo, y)
+    doc.text('Scrub', C2.scrub, y)
+    doc.text('Docs', C2.docs, y)
+    doc.text('OK', C2.ok, y)
+    y += 4
+    doc.setDrawColor(...C.light)
+    doc.line(ML, y, W - MR, y)
+    y += 3.5
+
+    const sortedAi = [...aiCallEntries].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C.text)
+
+    for (const e of sortedAi) {
+      check(5)
+      const d = new Date(e.timestamp)
+      const dateLine = `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+      const categoryLine = sanitize(AI_CALL_CATEGORY_LABELS[e.category] ?? e.category).slice(0, 22)
+      const patientLine = sanitize(e.patientKey).slice(0, 24)
+      doc.text(dateLine, C2.date, y)
+      doc.text(categoryLine, C2.category, y)
+      doc.text(patientLine, C2.patient, y)
+      if (!e.pseudonymized) doc.setTextColor(...C.red)
+      doc.text(e.pseudonymized ? 'Oui' : 'NON', C2.pseudo, y)
+      doc.setTextColor(...C.text)
+      if (e.scrubReplacements > 0) doc.setTextColor(...C.red)
+      doc.text(String(e.scrubReplacements), C2.scrub, y)
+      doc.setTextColor(...C.text)
+      if (e.hasDocuments) doc.setTextColor(...C.accent)
+      doc.text(e.hasDocuments ? 'Oui' : '-', C2.docs, y)
+      doc.setTextColor(...C.text)
+      if (!e.success) doc.setTextColor(...C.red)
+      doc.text(e.success ? 'Oui' : 'Err', C2.ok, y)
+      doc.setTextColor(...C.text)
+      y += 4.2
+    }
+    y += 4
+  }
+
+  check(18)
+  doc.setDrawColor(...C.light)
+  doc.line(ML, y, W - MR, y)
+  y += 4
+  doc.setFontSize(7)
+  doc.setFont('helvetica', 'italic')
+  doc.setTextColor(...C.muted)
+  const footerInfo = [
+    "Pseudo. = Pseudonymisation active au moment de l'appel (Oui = donnees identifiantes remplacees avant envoi a l'IA).",
+    "Scrub = Nombre de remplacements effectues par la couche de securite wrapper (defense en profondeur). Un nombre > 0 indique qu'un builder en amont a laisse passer un nom et qu'il a ete intercepte in-extremis.",
+    "Docs = Des pieces jointes (radios, PDF medicaux) ont ete envoyees. Attention : ces documents ne sont PAS automatiquement pseudonymises.",
+    "Alertes = Nombre de champs texte libre detectes comme potentiellement identifiants et vus par le praticien avant generation du courrier.",
+    "Le contenu integral du texte genere n'est PAS inclus dans ce registre.",
+  ]
+  for (const line of footerInfo) {
+    const wrapped = doc.splitTextToSize(line, MW)
+    for (const w of wrapped) {
+      check(4)
+      doc.text(w, ML, y)
+      y += 3.4
+    }
+    y += 1
+  }
+
+  // ── Footer standard toutes pages ──
+  const totalPages = (doc as any).internal.getNumberOfPages()
+  for (let pg = 1; pg <= totalPages; pg++) {
+    doc.setPage(pg)
+    doc.setDrawColor(...C.light)
+    doc.setLineWidth(0.3)
+    doc.line(ML, H - 14, W - MR, H - 14)
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'italic')
+    doc.setTextColor(...C.muted)
+    doc.text('Registre interne - Document de conformite RGPD - Usage praticien', ML, H - 9)
+    doc.text(`Page ${pg}/${totalPages}`, W - MR - 18, H - 9)
+    doc.setTextColor(...C.text)
+  }
+
+  doc.save(`Registre_IA_courriers_${dateFile}.pdf`)
+}

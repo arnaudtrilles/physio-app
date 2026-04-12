@@ -6,11 +6,11 @@ import {
   DouleurSection, RedFlagsSection, YellowFlagsSection, BlueBlackFlagsSection,
   ContratKineSection, ConseilsSection, PSFSCards,
   StatusSymptomes,
-  emptyDouleur, mergeDouleur,
-  emptyRedFlags, mergeRedFlags,
-  emptyYellow, mergeYellow,
-  emptyBlueBlack, mergeBlueBlack,
-  emptyContrat, mergeContrat,
+  mergeDouleur,
+  mergeRedFlags,
+  mergeYellow,
+  mergeBlueBlack,
+  mergeContrat,
   emptyPsfs, mergePsfs,
   initMobAPGD,
   inputStyle, lblStyle, sectionTitleStyle, subTitleStyle,
@@ -342,7 +342,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
               )}
 
               {sec.id === 'redFlags' && (
-                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }))} variant="ankle" />
+                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="ankle" />
               )}
               {sec.id === 'yellowFlags' && (
                 <YellowFlagsSection state={yellow} onChange={p => setYellow(s => ({ ...s, ...p }))} />

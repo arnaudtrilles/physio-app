@@ -7,11 +7,11 @@ import {
   ContratKineSection, ConseilsSection, PSFSCards,
   MobiliteRachisTable, initMobiliteRachis,
   StatusSymptomes,
-  emptyDouleur, mergeDouleur,
-  emptyRedFlags, mergeRedFlags,
-  emptyYellow, mergeYellow,
-  emptyBlueBlack, mergeBlueBlack,
-  emptyContrat, mergeContrat,
+  mergeDouleur,
+  mergeRedFlags,
+  mergeYellow,
+  mergeBlueBlack,
+  mergeContrat,
   emptyPsfs, mergePsfs,
   initMobAPGD,
   inputStyle, lblStyle, sectionTitleStyle, subTitleStyle,
@@ -253,7 +253,7 @@ export const BilanHanche = forwardRef<BilanHancheHandle, { initialData?: Record<
               )}
 
               {sec.id === 'redFlags' && (
-                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }))} variant="lower" />
+                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="lower" />
               )}
 
               {sec.id === 'yellowFlags' && (

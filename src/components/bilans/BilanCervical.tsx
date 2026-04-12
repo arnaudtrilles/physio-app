@@ -7,11 +7,11 @@ import {
   ContratKineSection, ConseilsSection, PSFSCards,
   MobiliteRachisTable, initMobiliteRachis,
   MvtsRepetesTable, emptyMvtRep,
-  emptyDouleur, mergeDouleur,
-  emptyRedFlags, mergeRedFlags,
-  emptyYellow, mergeYellow,
-  emptyBlueBlack, mergeBlueBlack,
-  emptyContrat, mergeContrat,
+  mergeDouleur,
+  mergeRedFlags,
+  mergeYellow,
+  mergeBlueBlack,
+  mergeContrat,
   emptyPsfs, mergePsfs,
   inputStyle, lblStyle, sectionTitleStyle, subTitleStyle,
   type DouleurState, type RedFlagsState, type YellowFlagsState, type BlueBlackState,
@@ -182,7 +182,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle, { initialData?: Rec
               )}
 
               {sec.id === 'redFlags' && (
-                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }))} variant="upper" />
+                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="upper" />
               )}
               {sec.id === 'yellowFlags' && (
                 <YellowFlagsSection state={yellow} onChange={p => setYellow(s => ({ ...s, ...p }))} />
@@ -341,7 +341,7 @@ export const BilanCervical = forwardRef<BilanCervicalHandle, { initialData?: Rec
                     ['ta', 'Test TA'],
                   ] as [string, string][]).map(([k, lbl]) => (
                     <div key={k} style={{ marginBottom: 8 }}>
-                      <label style={lblStyle}>{lbl}{k !== 'ta' && <TestInfoButton testKey={k} />}</label>
+                      <label style={lblStyle}>{lbl}<TestInfoButton testKey={k} /></label>
                       <input value={tests[k] ?? ''} onChange={e => setT(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
                     </div>
                   ))}

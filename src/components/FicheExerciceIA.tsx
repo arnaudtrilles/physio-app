@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { jsPDF } from 'jspdf'
-import type { FicheExercice, AnalyseIA } from '../types'
+import type { FicheExercice, AnalyseIA, AICallAuditEntry } from '../types'
 import { buildFicheExercicePrompt } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
-import { callGemini } from '../utils/geminiClient'
+import { callGeminiSecure } from '../utils/geminiSecure'
 
 interface FicheExerciceIAProps {
   apiKey: string
   context: BilanContext
+  patientKey: string
   analyseIA?: AnalyseIA | null
   cached?: FicheExercice | null
+  onAudit?: (entry: AICallAuditEntry) => void
   onResult: (fiche: FicheExercice) => void
   onBack: () => void
   onClose?: () => void
@@ -86,7 +88,7 @@ function MarkdownFiche({ markdown }: { markdown: string }) {
   )
 }
 
-export function FicheExerciceIA({ apiKey, context, analyseIA, cached, onResult, onBack, onClose, onGoToProfile }: FicheExerciceIAProps) {
+export function FicheExerciceIA({ apiKey, context, patientKey, analyseIA, cached, onAudit, onResult, onBack, onClose, onGoToProfile }: FicheExerciceIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fiche, setFiche] = useState<FicheExercice | null>(cached ?? null)
@@ -130,14 +132,17 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
 
 [Répéter pour l'exercice 2, 3 et 4 maximum]`
 
-      const markdown = await callGemini(
+      const markdown = await callGeminiSecure({
         apiKey,
         systemPrompt,
-        buildFicheExercicePrompt(context, notesSeance, analyseIA),
-        8192,
-        false,
-        'gemini-2.5-pro'
-      )
+        userPrompt: buildFicheExercicePrompt(context, notesSeance, analyseIA),
+        maxOutputTokens: 8192,
+        jsonMode: false,
+        preferredModel: 'gemini-3.1-pro-preview',
+        patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
+        category: 'fiche_exercice',
+        onAudit,
+      })
       if (!markdown.trim()) throw new Error('Réponse vide reçue')
 
       const result: FicheExercice = {

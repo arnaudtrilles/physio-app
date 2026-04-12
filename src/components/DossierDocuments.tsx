@@ -13,7 +13,9 @@ interface UnifiedDoc {
   key: string
   name: string
   mimeType: string
-  data: string
+  data: string          // version caviardée (ou brute si non masqué)
+  originalData?: string // version originale pour affichage/impression
+  masked?: boolean
   addedAt: string
   // source
   kind: 'bilan' | 'standalone'
@@ -30,7 +32,9 @@ interface DossierDocumentsProps {
   standaloneDocs: PatientDocument[]
   onRename: (target: RenameTarget, newName: string) => void
   onDelete: (docId: string) => void
-  onAdd: (doc: Omit<PatientDocument, 'id' | 'patientKey'>) => void
+  onAddRaw: (dataUrl: string, name: string, mimeType: string) => void
+  /** Relancer le caviardage sur un document standalone existant */
+  onRemask?: (docId: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -60,9 +64,14 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Renvoie l'original si disponible, sinon la version masquée */
+function getDisplayData(doc: UnifiedDoc): string {
+  return doc.originalData ?? doc.data
+}
+
 function triggerDownload(doc: UnifiedDoc) {
   const a = document.createElement('a')
-  a.href = ensureDataUrl(doc.data, doc.mimeType)
+  a.href = ensureDataUrl(getDisplayData(doc), doc.mimeType)
   a.download = doc.name
   document.body.appendChild(a)
   a.click()
@@ -70,7 +79,7 @@ function triggerDownload(doc: UnifiedDoc) {
 }
 
 function DocViewer({ doc, onClose }: { doc: UnifiedDoc; onClose: () => void }) {
-  const url = ensureDataUrl(doc.data, doc.mimeType)
+  const url = ensureDataUrl(getDisplayData(doc), doc.mimeType)
   const isImg = doc.mimeType.startsWith('image/')
   return (
     <div
@@ -188,12 +197,15 @@ function IconBtn({ onClick, title, children, danger }: { onClick: () => void; ti
 // Main component
 // ---------------------------------------------------------------------------
 
-export const DossierDocuments = memo(function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename, onDelete, onAdd }: DossierDocumentsProps) {
+export const DossierDocuments = memo(function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename, onDelete, onAddRaw, onRemask }: DossierDocumentsProps) {
   void patientKey
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [viewingDoc, setViewingDoc] = useState<UnifiedDoc | null>(null)
+  const [showSourceMenu, setShowSourceMenu] = useState(false)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Build unified list
@@ -206,6 +218,8 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
         name: d.name,
         mimeType: d.mimeType,
         data: d.data,
+        originalData: d.originalData,
+        masked: d.masked,
         addedAt: d.addedAt,
         kind: 'bilan',
         bilanId: b.id,
@@ -221,6 +235,8 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
       name: d.name,
       mimeType: d.mimeType,
       data: d.data,
+      originalData: d.originalData,
+      masked: d.masked,
       addedAt: d.addedAt,
       kind: 'standalone',
       docId: d.id,
@@ -244,28 +260,21 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
     setRenamingKey(null)
   }
 
-  const handleFiles = async (files: FileList | null) => {
+  const handleFiles = async (files: FileList | null, inputRef?: React.RefObject<HTMLInputElement | null>) => {
     if (!files) return
     for (const file of Array.from(files)) {
       const mimeType = file.type || 'application/octet-stream'
       if (!mimeType.startsWith('image/') && mimeType !== 'application/pdf') continue
-      const base64 = await new Promise<string>((resolve, reject) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
-        reader.onload = () => {
-          const result = reader.result as string
-          resolve(result.split(',')[1] ?? '')
-        }
+        reader.onload = () => resolve(reader.result as string)
         reader.onerror = () => reject(reader.error)
         reader.readAsDataURL(file)
       })
-      onAdd({
-        name: file.name,
-        mimeType,
-        data: base64,
-        addedAt: new Date().toISOString(),
-      })
+      onAddRaw(dataUrl, file.name, mimeType)
     }
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    const ref = inputRef ?? fileInputRef
+    if (ref.current) ref.current.value = ''
   }
 
   return (
@@ -278,27 +287,45 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
         <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
       </div>
 
-      {/* Add button */}
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: '0.35rem', padding: '0.6rem 0.5rem', marginBottom: '0.6rem',
-          borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border-color)',
-          background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
-        }}
-      >
-        <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Ajouter un document
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/pdf,image/*"
-        multiple
-        style={{ display: 'none' }}
-        onChange={e => handleFiles(e.target.files)}
-      />
+      {/* Hidden file inputs */}
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleFiles(e.target.files, cameraInputRef)} />
+      <input ref={galleryInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files, galleryInputRef)} />
+      <input ref={fileInputRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
+
+      {/* Add button with source menu */}
+      <div style={{ position: 'relative', marginBottom: '0.6rem' }}>
+        <button
+          type="button"
+          onClick={() => setShowSourceMenu(prev => !prev)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: '0.35rem', padding: '0.6rem 0.5rem',
+            borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border-color)',
+            background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Ajouter un document
+        </button>
+        {showSourceMenu && (
+          <>
+          <div onClick={() => setShowSourceMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 20, overflow: 'hidden' }}>
+            {[
+              { ref: cameraInputRef, label: 'Prendre une photo', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> },
+              { ref: galleryInputRef, label: 'Galerie photo', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
+              { ref: fileInputRef, label: 'Fichiers', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
+            ].map((opt, i) => (
+              <button key={i} type="button"
+                onClick={() => { setShowSourceMenu(false); opt.ref.current?.click() }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '0.7rem 1rem', background: 'none', border: 'none', borderBottom: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.84rem', color: 'var(--text-main)', fontWeight: 500 }}>
+                <span style={{ color: 'var(--primary)', display: 'flex' }}>{opt.icon}</span>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          </>
+        )}
+      </div>
 
       {unified.length === 0 ? (
         <div style={{ padding: '12px 4px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
@@ -365,8 +392,30 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
                         Dossier
                       </span>
                     )}
+                    {doc.originalData && doc.masked && (
+                      <span style={{
+                        display: 'inline-block', padding: '0 6px', borderRadius: 4,
+                        fontSize: 10, fontWeight: 600, background: '#f5f3ff', color: '#7c3aed', lineHeight: '16px',
+                      }}>
+                        Anonymisé
+                      </span>
+                    )}
+                    {doc.originalData && !doc.masked && (
+                      <span
+                        onClick={e => { e.stopPropagation(); if (doc.kind === 'standalone' && doc.docId && onRemask) onRemask(doc.docId) }}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0 6px', borderRadius: 4,
+                          fontSize: 10, fontWeight: 600, background: '#fef2f2', color: '#dc2626', lineHeight: '16px',
+                          cursor: onRemask && doc.kind === 'standalone' ? 'pointer' : 'default',
+                        }}
+                        title={onRemask && doc.kind === 'standalone' ? 'Cliquez pour anonymiser' : undefined}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        Non anonymisé
+                      </span>
+                    )}
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {formatSize(doc.data, doc.mimeType)} · {formatDate(doc.addedAt)}
+                      {formatSize(getDisplayData(doc), doc.mimeType)} · {formatDate(doc.addedAt)}
                     </span>
                   </div>
                 </div>

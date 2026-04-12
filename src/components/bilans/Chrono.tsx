@@ -77,11 +77,11 @@ export function Chrono({ value, onChange, compact }: ChronoProps) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{
-          flex: '0 0 auto', minWidth: 80,
-          fontSize: '1.1rem', fontWeight: 700, color: running ? '#dc2626' : 'var(--primary-dark)',
+          flex: '0 0 auto', minWidth: 60,
+          fontSize: '0.85rem', fontWeight: 700, color: running ? '#dc2626' : 'var(--primary-dark)',
           letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums',
-          padding: '0.4rem 0.6rem', background: running ? '#fef2f2' : 'var(--secondary)',
-          borderRadius: 8, textAlign: 'center', border: `1.5px solid ${running ? '#fca5a5' : 'transparent'}`,
+          padding: '0.3rem 0.5rem', background: running ? '#fef2f2' : 'var(--secondary)',
+          borderRadius: 6, textAlign: 'center', border: `1.5px solid ${running ? '#fca5a5' : 'transparent'}`,
         }}>
           {display}
         </div>

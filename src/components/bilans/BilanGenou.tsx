@@ -7,11 +7,11 @@ import {
   ContratKineSection, ConseilsSection, PSFSCards,
   MobiliteRachisTable, initMobiliteRachis,
   StatusSymptomes,
-  emptyDouleur, mergeDouleur,
-  emptyRedFlags, mergeRedFlags,
-  emptyYellow, mergeYellow,
-  emptyBlueBlack, mergeBlueBlack,
-  emptyContrat, mergeContrat,
+  mergeDouleur,
+  mergeRedFlags,
+  mergeYellow,
+  mergeBlueBlack,
+  mergeContrat,
   emptyPsfs, mergePsfs,
   initMobAPGD,
   inputStyle, lblStyle, sectionTitleStyle, subTitleStyle,
@@ -271,7 +271,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                 <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} />
               )}
               {sec.id === 'redFlags' && (
-                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }))} variant="lower" />
+                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="lower" />
               )}
               {sec.id === 'yellowFlags' && (
                 <YellowFlagsSection state={yellow} onChange={p => setYellow(s => ({ ...s, ...p }))} />

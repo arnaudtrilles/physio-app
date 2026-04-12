@@ -9,8 +9,15 @@ export interface FicheExercice {
 export interface BilanDocument {
   name: string
   mimeType: string   // 'image/jpeg' | 'image/png' | 'application/pdf' | etc.
-  data: string       // base64 encoded
+  data: string       // base64 encoded (version caviardée si masked=true)
+  originalData?: string // base64 de l'original non caviardé (pour affichage/impression)
   addedAt: string    // ISO date
+  /**
+   * true si le document a été passé par DocumentMasker (identifiants patient
+   * masqués manuellement). false / absent = document brut, dangereux à envoyer
+   * à l'IA tel quel. Le wrapper callGeminiSecure vérifie ce flag.
+   */
+  masked?: boolean
 }
 
 export interface PatientDocument {
@@ -18,8 +25,10 @@ export interface PatientDocument {
   patientKey: string
   name: string
   mimeType: string
-  data: string       // base64 encoded
+  data: string       // base64 encoded (version caviardée si masked=true)
+  originalData?: string // base64 de l'original non caviardé
   addedAt: string
+  masked?: boolean
 }
 
 export interface BilanRecord {
@@ -127,6 +136,26 @@ export interface ExerciceBankEntry {
   occurrences: number
 }
 
+export interface PrescriptionEntry {
+  id: number
+  nbSeances: number
+  datePrescription: string   // dd/mm/yyyy
+  prescripteur: string
+  /** Photo ou scan de l'ordonnance (base64) */
+  document?: { data: string; mimeType: string; name: string }
+}
+
+export interface PatientPrescription {
+  patientKey: string
+  prescriptions: PrescriptionEntry[]
+  /** Séances effectuées avant l'application */
+  seancesAnterieures?: number
+  /** @deprecated — compat ancien format mono-prescription */
+  nbSeancesPrescrites?: number
+  datePrescription?: string
+  prescripteur?: string
+}
+
 export interface SmartObjectif {
   id: number
   patientKey: string
@@ -147,6 +176,131 @@ export interface ProfileData {
   techniques?: string[]
   equipements?: string[]
   autresCompetences?: string
+  // ── Infos praticien pour en-tête des courriers ─────────────────────────────
+  rcc?: string               // Numéro RCC / ADELI
+  adresse?: string           // Rue + n°
+  adresseComplement?: string // Bâtiment / étage (optionnel)
+  codePostal?: string
+  ville?: string
+  telephone?: string
+  email?: string
+  signatureImage?: string | null // base64 PNG de la signature manuscrite
+  specialisationsLibelle?: string // ex: "Thérapie manuelle, Rééducation du sportif"
+}
+
+export type LetterType =
+  | 'fin_pec'
+  | 'fin_pec_anticipee'
+  | 'demande_avis'
+  | 'demande_imagerie'
+  | 'demande_prescription'
+  | 'suivi'
+  | 'echec_pec'
+
+export interface LetterFormData {
+  // Champs communs
+  titreDestinataire: string     // Docteur / Cher confrère / Chère consœur
+  nomDestinataire: string        // ex: Dr DUPONT
+  civilitePatient: string        // M. / Mme
+  nomPatient: string
+  prenomPatient: string
+  dateNaissancePatient?: string
+  indication: string
+  dateDebutPec?: string
+  dateFinPec?: string
+  frequence?: string
+  nbSeances?: string
+  // Champs variables selon le type (stockés librement)
+  resumeBilanInitial?: string
+  traitement?: string
+  resultats?: string
+  recommandations?: string
+  suite?: string
+  raisonArret?: string
+  etatActuel?: string
+  typePro?: string
+  resumePec?: string
+  raisonOrientation?: string
+  accordPatient?: string
+  nomProRecommande?: string
+  typeImagerie?: string
+  zoneAnatomique?: string
+  justification?: string
+  antecedents?: string
+  natureDemande?: string
+  indication1?: string
+  indication2?: string
+  typeDest?: string              // médecin / confrère
+  dateBilanInterm?: string
+  evolution?: string
+  pointsPositifs?: string
+  difficultes?: string
+  traitementsEssayes?: string
+  constat?: string
+  scoresFonctionnels?: string
+  orientation?: string
+  avisPersonnel?: string
+}
+
+export interface LetterRecord {
+  id: number
+  patientKey: string
+  type: LetterType
+  createdAt: string            // ISO
+  updatedAt: string            // ISO
+  formData: LetterFormData
+  contenu: string              // Texte généré (éditable). Vide si brouillon non généré.
+  titreAffichage: string       // ex: "Fin de PEC — Dr DUPONT — 11/04/2026"
+  status: 'brouillon' | 'final'
+}
+
+/**
+ * Journal d'audit des traitements IA pour traçabilité RGPD.
+ * Une entrée est créée à chaque appel effectif à Gemini pour générer un courrier.
+ * Contient uniquement des métadonnées non-identifiantes ; jamais le contenu du courrier.
+ */
+export interface LetterAuditEntry {
+  id: number
+  timestamp: string                    // ISO
+  letterId: number                     // id du LetterRecord associé
+  patientKey: string                   // pour rattacher l'entrée au patient (usage interne)
+  type: LetterType
+  pseudonymized: boolean               // toujours true en l'état, documenté pour le futur
+  piiWarningsCount: number             // combien d'alertes PII le praticien a vues avant validation
+  modelUsed: string                    // ex: "gemini-2.5-flash"
+  resultLength: number                 // taille du texte généré (caractères)
+}
+
+/**
+ * Journal d'audit générique pour tous les appels IA (bilan, évolution, intermédiaire,
+ * fiche exercice, PDF, mini analyse, courrier). Complémentaire à LetterAuditEntry.
+ */
+export type AICallCategory =
+  | 'letter'                  // LetterGenerator
+  | 'bilan_analyse'           // BilanAnalyseIA
+  | 'bilan_analyse_refine'    // BilanAnalyseIA — correction thérapeute
+  | 'bilan_evolution'         // BilanEvolutionIA
+  | 'bilan_intermediaire'     // BilanNoteIntermediaire
+  | 'fiche_exercice'          // FicheExerciceIA
+  | 'pdf_bilan'               // Export PDF avec mise au propre IA
+  | 'pdf_analyse'             // Export PDF depuis la page Analyse
+  | 'note_seance_mini'        // Mini-analyse de note de séance
+  | 'api_key_test'            // Ping de test de clé API
+
+export interface AICallAuditEntry {
+  id: number
+  timestamp: string              // ISO
+  category: AICallCategory
+  patientKey: string              // clé interne (non envoyée à l'IA)
+  pseudonymized: boolean          // true si le prompt a été scrubbed avant envoi
+  scrubReplacements: number       // nombre de tokens remplacés par le scrub final (alerte si > 0)
+  hasDocuments: boolean           // true si des pièces jointes ont été envoyées
+  documentsCount: number          // nombre total de documents envoyés
+  documentsUnmasked: number       // nombre de documents non masqués (risque d'identification)
+  modelUsed: string
+  promptLength: number            // taille du prompt envoyé (caractères)
+  resultLength: number            // taille de la réponse (caractères)
+  success: boolean
 }
 
 export interface EvolutionIA {

@@ -129,7 +129,7 @@ function BilanCard({ item }: { item: BilanItem }) {
     <div style={cardStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, fontSize: 14, color: '#1e3a8a' }}>Bilan initial</span>
-        {hasIA && <Badge label="IA" bg="#dbeafe" fg="#1e3a8a" />}
+        {hasIA && <Badge label="Analysé" bg="#dbeafe" fg="#1e3a8a" />}
         {incomplet && <Badge label="Incomplet" bg="#fef3c7" fg="#92400e" />}
       </div>
       <div style={metaRowStyle}>
@@ -181,7 +181,6 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
       </div>
       <div style={metaRowStyle}>
         <span>{item.dateSeance}</span>
-        {item.zone && <span style={chipStyle}>{item.zone}</span>}
       </div>
       {item.data.eva && (
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>

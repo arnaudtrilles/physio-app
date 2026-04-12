@@ -7,11 +7,11 @@ import {
   ContratKineSection, ConseilsSection, PSFSCards,
   MobiliteRachisTable, initMobiliteRachis,
   MvtsRepetesTable, emptyMvtRep,
-  emptyDouleur, mergeDouleur,
-  emptyRedFlags, mergeRedFlags,
-  emptyYellow, mergeYellow,
-  emptyBlueBlack, mergeBlueBlack,
-  emptyContrat, mergeContrat,
+  mergeDouleur,
+  mergeRedFlags,
+  mergeYellow,
+  mergeBlueBlack,
+  mergeContrat,
   emptyPsfs, mergePsfs,
   inputStyle, lblStyle, sectionTitleStyle, subTitleStyle,
   type DouleurState, type RedFlagsState, type YellowFlagsState, type BlueBlackState,
@@ -85,7 +85,7 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
   // Tests spécifiques
   const _ts = (init.testsSpecifiques as Record<string, unknown>) ?? {}
   const [tests, setTests] = useState<Record<string, string>>({
-    clusterLaslett: '', extensionRotation: '', proneInstability: '', ta: '', autres: '',
+    clusterLaslett: '', extensionRotation: '', proneInstability: '', adam: '', autres: '',
     ...((_ts as Record<string, string>) ?? {}),
   })
   const setT = (k: string, v: string) => setTests(p => ({ ...p, [k]: v }))
@@ -190,7 +190,7 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
                       <p style={{ fontSize: '0.8rem', color: '#7f1d1d', margin: 0 }}>Orientation en urgence aux urgences chirurgicales. IRM immédiate.</p>
                     </div>
                   )}
-                  <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }))} variant="lower" />
+                  <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="lower" />
                 </>
               )}
 
@@ -347,10 +347,10 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
                     ['clusterLaslett', 'Cluster Laslett (SIJ)'],
                     ['extensionRotation', 'Extension-Rotation Test'],
                     ['proneInstability', 'Prone Instability Test'],
-                    ['ta', 'Test TA'],
+                    ['adam', "Test d'Adam (flexion antérieure)"],
                   ] as [string, string][]).map(([k, lbl]) => (
                     <div key={k} style={{ marginBottom: 8 }}>
-                      <label style={lblStyle}>{lbl}{k !== 'ta' && <TestInfoButton testKey={k} />}</label>
+                      <label style={lblStyle}>{lbl}<TestInfoButton testKey={k} /></label>
                       <input value={tests[k] ?? ''} onChange={e => setT(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
                     </div>
                   ))}

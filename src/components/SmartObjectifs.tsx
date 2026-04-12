@@ -13,6 +13,10 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
   const [cible, setCible] = useState('')
   const [dateCible, setDateCible] = useState('')
   const [zone, setZone] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editTitre, setEditTitre] = useState('')
+  const [editCible, setEditCible] = useState('')
+  const [editDate, setEditDate] = useState('')
 
   const patientObjectifs = objectifs.filter(o => o.patientKey === patientKey)
   const enCours = patientObjectifs.filter(o => o.status === 'en_cours')
@@ -72,27 +76,58 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
           {enCours.map(obj => (
             <div key={obj.id} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '0.7rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+              {editingId === obj.id ? (
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#92400e' }}>{obj.titre}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#b45309' }}>{obj.cible}</div>
+                  <input value={editTitre} onChange={e => setEditTitre(e.target.value)} placeholder="Titre"
+                    style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.82rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: 4, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
+                  <input value={editCible} onChange={e => setEditCible(e.target.value)} placeholder="Cible mesurable"
+                    style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.82rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: 4, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+                    style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.82rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => {
+                      if (editTitre.trim()) onUpdate(objectifs.map(o => o.id === obj.id ? { ...o, titre: editTitre.trim(), cible: editCible.trim(), dateCible: editDate } : o))
+                      setEditingId(null)
+                    }} style={{ flex: 1, padding: '0.35rem', borderRadius: 6, border: 'none', background: '#d97706', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                      OK
+                    </button>
+                    <button onClick={() => setEditingId(null)}
+                      style={{ padding: '0.35rem 0.6rem', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--secondary)', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}>
+                      Annuler
+                    </button>
+                  </div>
                 </div>
-                {obj.dateCible && <span style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 600, flexShrink: 0 }}>{obj.dateCible}</span>}
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                <button onClick={() => updateStatus(obj.id, 'atteint')}
-                  style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
-                  Atteint
-                </button>
-                <button onClick={() => updateStatus(obj.id, 'non_atteint')}
-                  style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: '1px solid #fca5a5', background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
-                  Non atteint
-                </button>
-                <button onClick={() => removeObj(obj.id)}
-                  style={{ padding: '0.4rem 0.6rem', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--secondary)', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                </button>
-              </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#92400e' }}>{obj.titre}</div>
+                      <div style={{ fontSize: '0.78rem', color: '#b45309' }}>{obj.cible}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      {obj.dateCible && <div style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 600 }}>{obj.dateCible}</div>}
+                      <button onClick={() => { setEditingId(obj.id); setEditTitre(obj.titre); setEditCible(obj.cible); setEditDate(obj.dateCible) }}
+                        style={{ fontSize: '0.62rem', color: '#b45309', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 1 }}>
+                        Modifier
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <button onClick={() => updateStatus(obj.id, 'atteint')}
+                      style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                      Atteint
+                    </button>
+                    <button onClick={() => updateStatus(obj.id, 'non_atteint')}
+                      style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: '1px solid #fca5a5', background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                      Non atteint
+                    </button>
+                    <button onClick={() => removeObj(obj.id)}
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--secondary)', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>

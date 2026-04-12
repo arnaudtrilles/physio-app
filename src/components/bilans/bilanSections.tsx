@@ -171,11 +171,11 @@ export const emptyRedFlags = (): RedFlagsState => ({
   dizziness: '', dropAttacks: '', diplopie: '', dysarthrie: '', dysphagie: '', nystagmus: '', nausees: '', numbness: '',
 })
 export const mergeRedFlags = (raw: Record<string, unknown>): RedFlagsState => {
-  const base = emptyRedFlags() as Record<string, string>
+  const base = emptyRedFlags() as unknown as Record<string, string>
   for (const [k, v] of Object.entries(raw ?? {})) {
     base[k] = typeof v === 'boolean' ? boolToStr(v) : String(v ?? '')
   }
-  return base as RedFlagsState
+  return base as unknown as RedFlagsState
 }
 
 export type RedFlagsVariant = 'upper' | 'lower' | 'ankle'
@@ -296,11 +296,11 @@ export const emptyYellow = (): YellowFlagsState => ({
   flexibilitePsy: '', anxiete: '', depression: '',
 })
 export const mergeYellow = (raw: Record<string, unknown>): YellowFlagsState => {
-  const base = emptyYellow() as Record<string, string>
+  const base = emptyYellow() as unknown as Record<string, string>
   for (const [k, v] of Object.entries(raw ?? {})) {
     base[k] = typeof v === 'boolean' ? boolToStr(v) : String(v ?? '')
   }
-  return base as YellowFlagsState
+  return base as unknown as YellowFlagsState
 }
 
 export function YellowFlagsSection({ state, onChange }: {
@@ -372,12 +372,12 @@ export const emptyBlueBlack = (): BlueBlackState => ({
   difficultesAcces: '', conditionsSocioEco: '', litige: '',
 })
 export const mergeBlueBlack = (raw: Record<string, unknown>): BlueBlackState => {
-  const base = emptyBlueBlack() as Record<string, string | number>
+  const base = emptyBlueBlack() as unknown as Record<string, string | number>
   for (const [k, v] of Object.entries(raw ?? {})) {
     if (k === 'stressNiveau') base[k] = Number(v ?? 0)
     else base[k] = typeof v === 'boolean' ? boolToStr(v) : String(v ?? '')
   }
-  return base as BlueBlackState
+  return base as unknown as BlueBlackState
 }
 
 export function BlueBlackFlagsSection({ state, onChange }: {

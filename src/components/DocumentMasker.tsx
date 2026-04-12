@@ -3,7 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 interface DocumentMaskerProps {
   imageDataUrl: string
   fileName: string
-  onConfirm: (maskedDataUrl: string) => void
+  /** maskedDataUrl: le résultat, rectCount: nombre de rectangles appliqués (0 = aucun caviardage) */
+  onConfirm: (maskedDataUrl: string, rectCount: number) => void
   onCancel: () => void
 }
 
@@ -23,6 +24,7 @@ export function DocumentMasker({ imageDataUrl, fileName, onConfirm, onCancel }: 
   const [currentRect, setCurrentRect] = useState<Rect | null>(null)
   const [imgSize, setImgSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
   const [scale, setScale] = useState(1)
+  const [showNoMaskWarning, setShowNoMaskWarning] = useState(false)
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
 
   // Load image
@@ -149,7 +151,7 @@ export function DocumentMasker({ imageDataUrl, fileName, onConfirm, onCancel }: 
       ctx.fillRect(r.x, r.y, r.w, r.h)
     }
     const maskedDataUrl = finalCanvas.toDataURL('image/jpeg', 0.9)
-    onConfirm(maskedDataUrl)
+    onConfirm(maskedDataUrl, rects.length)
   }
 
   return (
@@ -204,16 +206,46 @@ export function DocumentMasker({ imageDataUrl, fileName, onConfirm, onCancel }: 
             Effacer
           </button>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={onCancel}
-            style={{ flex: 1, minWidth: 0, padding: '0.55rem 0.4rem', borderRadius: 8, background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            Annuler
-          </button>
-          <button onClick={handleConfirm}
-            style={{ flex: 2, minWidth: 0, padding: '0.55rem 0.4rem', borderRadius: 8, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Valider{rects.length > 0 ? ` (${rects.length})` : ''}
-          </button>
-        </div>
+        {showNoMaskWarning ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ padding: '8px 10px', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 8, fontSize: '0.7rem', color: '#92400e', lineHeight: 1.45 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Vérification avant validation
+              </div>
+              Avez-vous bien masqué toutes les zones sensibles ?
+              <div style={{ marginTop: 4, paddingLeft: 4 }}>
+                • Nom et prénom du patient{'\n'}
+                • Date de naissance{'\n'}
+                • N° de sécurité sociale / assurance maladie{'\n'}
+                • Adresse du patient{'\n'}
+                • En-tête et signature du médecin{'\n'}
+                • Tout autre identifiant personnel
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setShowNoMaskWarning(false)}
+                style={{ flex: 1, minWidth: 0, padding: '0.55rem 0.4rem', borderRadius: 8, background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Retour
+              </button>
+              <button onClick={handleConfirm}
+                style={{ flex: 2, minWidth: 0, padding: '0.55rem 0.4rem', borderRadius: 8, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                J'ai vérifié, valider{rects.length > 0 ? ` (${rects.length})` : ''}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={onCancel}
+              style={{ flex: 1, minWidth: 0, padding: '0.55rem 0.4rem', borderRadius: 8, background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              Annuler
+            </button>
+            <button onClick={() => setShowNoMaskWarning(true)}
+              style={{ flex: 2, minWidth: 0, padding: '0.55rem 0.4rem', borderRadius: 8, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Valider{rects.length > 0 ? ` (${rects.length})` : ''}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

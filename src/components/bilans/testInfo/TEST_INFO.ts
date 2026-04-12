@@ -31,6 +31,12 @@ export const TEST_INFO: Record<string, TestInfo> = {
     realisation: "Patient assis, épaules à 90° d'abduction, coudes à 90° de flexion, paumes vers l'avant. Le patient ouvre et ferme les mains pendant 3 minutes.",
     interpretation: "Positif si reproduction des symptômes (lourdeur, paresthésies, pâleur, fatigue du membre supérieur) ou incapacité à maintenir la position 3 minutes. Négatif si test complété sans symptôme.",
   },
+  ta: {
+    title: "Test de l'artère vertébrale",
+    description: "Test de dépistage d'une insuffisance vertébro-basilaire avant toute technique cervicale en rotation/extension (manipulation, mobilisation). Vise à détecter des signes d'hypoperfusion du tronc cérébral.",
+    realisation: "Patient en décubitus dorsal, tête hors de la table soutenue par le thérapeute. Amener passivement le rachis cervical en extension, puis en rotation homolatérale maximale, et maintenir la position 10 à 30 secondes. Répéter du côté opposé. Surveiller en continu le regard du patient et l'interroger sur les symptômes.",
+    interpretation: "Positif si apparition de signes des 5D And 3N : Dizziness (vertiges), Drop attacks, Diplopia, Dysarthria, Dysphagia, Nausée, Numbness (paresthésies faciales), Nystagmus — ou céphalée occipitale brutale. Un test positif contre-indique les techniques cervicales en rotation/extension. Négatif si aucun symptôme après maintien de la position.",
+  },
   hoffman: {
     title: 'Hoffman',
     description: "Test des signes de la voie pyramidale (atteinte du motoneurone supérieur) au membre supérieur.",
@@ -95,9 +101,15 @@ export const TEST_INFO: Record<string, TestInfo> = {
   },
   clusterLaslett: {
     title: 'Cluster de Laslett',
-    description: "Batterie de tests de provocation sacro-iliaque. 3 tests positifs sur 5 orientent fortement vers une origine sacro-iliaque de la douleur.",
-    realisation: "5 tests de provocation : compression, distraction, thrust de la cuisse (postero-anterior), test de Gaenslen, compression sacrée. Chaque test applique une contrainte spécifique sur l'articulation sacro-iliaque.",
-    interpretation: "Positif si 3 tests ou plus sur 5 reproduisent la douleur habituelle du patient dans la région sacro-iliaque. Négatif si moins de 3 tests positifs.",
+    description: "Batterie de 5 tests de provocation de l'articulation sacro-iliaque (SIJ). Valeur diagnostique élevée lorsqu'elle est combinée à une anamnèse évocatrice (douleur sous L5, absence de douleur référée lombaire, test de centralisation négatif). 3 tests positifs sur 5 (ou 2 positifs parmi les plus sensibles : thigh thrust + compression) orientent fortement vers une origine sacro-iliaque.",
+    realisation: "Réaliser les 5 tests de provocation dans l'ordre, chacun maintenu ~10 secondes.\n\n1) DISTRACTION (gapping test) — Patient en décubitus dorsal. Le thérapeute croise les bras et applique une pression postéro-latérale sur les EIAS (épines iliaques antéro-supérieures), écartant les ailes iliaques. Objectif : mise en tension des ligaments sacro-iliaques antérieurs.\n\n2) COMPRESSION — Patient en décubitus latéral, côté testé vers le haut, hanches/genoux fléchis. Le thérapeute applique une pression verticale (vers le sol) sur la crête iliaque supérieure. Objectif : compression de la SIJ testée.\n\n3) THIGH THRUST (P4 test, postero-anterior) — Patient en décubitus dorsal, hanche du côté testé fléchie à 90°, genou fléchi. Le thérapeute stabilise le sacrum controlatéral d'une main (sous la fesse) et applique une poussée axiale sur le fémur via le genou, dirigée vers le sol (postéro-antérieure). Test le plus sensible du cluster.\n\n4) GAENSLEN — Patient en décubitus dorsal au bord de la table, la jambe testée hors de la table en hyperextension de hanche, la jambe controlatérale ramenée contre le thorax. Le thérapeute applique une pression simultanée (extension du côté testé + flexion de l'autre). Crée un stress en cisaillement sur la SIJ.\n\n5) SACRAL THRUST — Patient en décubitus ventral. Le thérapeute applique une poussée postéro-antérieure sur le centre du sacrum (S2-S3) avec le talon de la main. Crée un mouvement de nutation forcée.",
+    interpretation: "Chaque test est positif s'il reproduit la douleur habituelle du patient dans la région sacro-iliaque/fessière. Cluster POSITIF si ≥ 3 tests positifs sur 5 (sensibilité ~91%, spécificité ~78%). Variante abrégée : thigh thrust + compression positifs ont une valeur diagnostique élevée à eux seuls. NÉGATIF si < 3 tests positifs — la douleur n'est probablement pas d'origine sacro-iliaque.",
+  },
+  adam: {
+    title: "Test d'Adam (flexion antérieure)",
+    description: "Test de dépistage d'une scoliose structurale. Permet de différencier une gibbosité (scoliose structurale, rotation vertébrale) d'une simple asymétrie posturale (attitude scoliotique réductible en flexion).",
+    realisation: "Patient debout, pieds joints, membres inférieurs tendus, bras relâchés pendants. Le thérapeute se place derrière le patient, les yeux au niveau du dos. Demander au patient de se pencher lentement vers l'avant (flexion antérieure du tronc), mains jointes, en gardant les genoux tendus, jusqu'à ce que le tronc soit horizontal. Observer le dos en vue postérieure pendant la descente et en position fléchie.",
+    interpretation: "Positif (scoliose structurale) si apparition ou majoration d'une gibbosité (bosse costale d'un côté en thoracique ou bourrelet para-lombaire en lombaire), traduisant la rotation vertébrale fixée. Si disponible, mesurer l'angle de la gibbosité avec un scoliomètre (≥ 5-7° = seuil d'alerte, orientation radio/spécialiste). Négatif (attitude scoliotique) si le dos reste symétrique en flexion — la déformation observée debout se corrige en charge.",
   },
   extensionRotation: {
     title: "Test d'Extension-Rotation",
@@ -200,10 +212,10 @@ export const TEST_INFO: Record<string, TestInfo> = {
     interpretation: "Positif si la cuisse reste en abduction et ne retombe pas en adduction sous la ligne horizontale, indiquant une rétraction de la bandelette ilio-tibiale. Négatif si la cuisse retombe naturellement en adduction.",
   },
   clusterSultive: {
-    title: 'Cluster de Sultive',
-    description: "Cluster diagnostique pour l'arthrose de hanche. Combine 5 critères cliniques.",
-    realisation: "Évaluer : (1) douleur inguinale rapportée par le patient, (2) flexion de hanche ≤ 115°, (3) rotation interne ≤ 15°, (4) douleur à l'accroupissement, (5) test de FABER positif (distance genou-table). Si 4 critères sur 5 sont positifs, la probabilité d'arthrose est très élevée.",
-    interpretation: "Positif si 4 critères ou plus sur 5 sont présents (LR+ élevé pour arthrose de hanche). Négatif si moins de 4 critères positifs.",
+    title: 'Cluster de Sutlive',
+    description: "Règle de prédiction clinique pour le diagnostic d'arthrose symptomatique de hanche (Sutlive et al. 2008). Combine 5 critères cliniques simples. Avec 4/5 critères positifs, le LR+ est d'environ 24 (probabilité post-test très élevée).",
+    realisation: "Évaluer les 5 critères suivants dans l'ordre :\n\n1) AUTO-RAPPORT DE CLAQUEMENTS / ACCROCHAGES — Interroger le patient : ressent-il des claquements, craquements, grincements ou accrochages dans la hanche à la marche ou lors des mouvements quotidiens ? Positif si oui.\n\n2) DOULEUR À LA FLEXION PASSIVE DE HANCHE — Patient en décubitus dorsal. Amener passivement la hanche en flexion maximale (genou fléchi vers le thorax). Positif si reproduction de la douleur inguinale ou antéro-latérale de hanche en fin d'amplitude.\n\n3) DOULEUR À LA ROTATION INTERNE PASSIVE — Patient en décubitus dorsal, hanche et genou fléchis à 90°. Amener passivement la hanche en rotation interne. Positif si douleur reproduite.\n\n4) LIMITATION DE LA ROTATION INTERNE — Mesurer l'amplitude passive de rotation interne (même position que critère 3), avec un goniomètre si possible. Positif si ≤ 25°.\n\n5) DOULEUR À LA SCOUR TEST (flexion + compression axiale) — Patient en décubitus dorsal. Le thérapeute amène la hanche à 90° de flexion, puis applique une compression axiale le long du fémur tout en balayant la hanche en adduction et abduction. Positif si douleur reproduite.",
+    interpretation: "Compter le nombre de critères positifs.\n• ≥ 4/5 positifs : très forte probabilité d'arthrose de hanche (LR+ ≈ 24).\n• 3/5 positifs : probabilité modérée (LR+ ≈ 5).\n• ≤ 2/5 positifs : arthrose de hanche peu probable.",
   },
   heer: {
     title: 'Test de HEER',
@@ -262,10 +274,10 @@ export const TEST_INFO: Record<string, TestInfo> = {
     interpretation: "Positif si douleur localisée à l'articulation acromio-claviculaire. Négatif si aucune douleur à l'AC.",
   },
   apprehensionRelocation: {
-    title: 'Apprehension + Relocation test',
-    description: "Tests combinés pour l'instabilité gléno-humérale antérieure.",
-    realisation: "Patient en décubitus dorsal. Apprehension : épaule à 90° d'abduction, coude fléchi à 90°, le thérapeute amène en rotation externe maximale. Relocation : même position, le thérapeute applique une pression postérieure sur la tête humérale antérieure.",
-    interpretation: "Apprehension positif si sensation d'appréhension (peur de la luxation), pas seulement la douleur. Relocation positif si la pression postérieure soulage l'appréhension et/ou permet plus de rotation externe. Négatif si aucune appréhension.",
+    title: 'Apprehension + Relocation + Release (Jobe)',
+    description: "Séquence de 3 tests enchaînés pour l'instabilité gléno-humérale antérieure. Utilisé ensemble, le trio augmente fortement la spécificité du diagnostic. L'appréhension (et non la seule douleur) est le signe discriminant.",
+    realisation: "Patient en décubitus dorsal, épaule au bord de la table.\n\n1) APPREHENSION TEST — Amener passivement l'épaule à 90° d'abduction, coude fléchi à 90°. Le thérapeute stabilise l'humérus et amène progressivement l'épaule en rotation externe maximale. Observer l'expression du patient et lui demander ce qu'il ressent.\n\n2) RELOCATION TEST — Dans la même position (90° ABD, RE max), le thérapeute applique avec l'autre main une pression postérieure sur la face antérieure de la tête humérale (pousser la tête vers l'arrière dans la glène). Évaluer si l'appréhension/douleur disparaît et si on peut gagner de la rotation externe.\n\n3) RELEASE / SURPRISE TEST — Toujours dans la même position, le thérapeute retire brusquement la pression postérieure. Observer la réaction du patient.",
+    interpretation: "• APPREHENSION positif si apparition d'une sensation d'instabilité/peur de la luxation (pas seulement la douleur — une simple douleur oriente plutôt vers un conflit postéro-supérieur).\n• RELOCATION positif si la pression postérieure supprime l'appréhension et/ou permet de gagner en rotation externe.\n• RELEASE positif si le retrait brusque de la pression déclenche une réapparition brutale de l'appréhension ou une sensation de subluxation.\nLes 3 tests positifs ensemble = forte suspicion d'instabilité antérieure gléno-humérale.",
   },
   signeSulcus: {
     title: 'Test du signe du Sulcus',
@@ -427,9 +439,9 @@ export const TEST_INFO: Record<string, TestInfo> = {
   },
   bess: {
     title: 'Balance Error Scoring System (BESS)',
-    description: "Test d'équilibre postural statique standardisé, évaluant la stabilité dans différentes conditions de surface et de position.",
-    realisation: "6 conditions : appui bipodal, unipodal et tandem, chacune sur surface ferme et sur mousse, yeux fermés, 20 secondes par condition. Compter les erreurs (ouverture des yeux, mouvement de mains, pas, chutes, etc.).",
-    interpretation: "Score total sur 60 (10 erreurs max par condition). Plus le score est élevé, plus l'équilibre est déficitaire. Comparer bilatéralement et avec les normatives.",
+    description: "Test d'équilibre postural statique standardisé, très utilisé pour le suivi post-commotion et les instabilités de cheville. Évalue la stabilité dans 6 conditions combinant 3 positions d'appui × 2 surfaces. Plus fiable que l'observation clinique subjective.",
+    realisation: "Patient pieds nus, mains sur les hanches, yeux fermés pendant toute la durée du test. 6 conditions × 20 secondes chacune.\n\nSURFACE FERME (sol) :\n1) Bipodal — pieds joints côte à côte.\n2) Unipodal — appui sur la jambe non-dominante, l'autre genou fléchi ~90° (cuisse non jointe).\n3) Tandem — pied non-dominant derrière le dominant, talon contre la pointe, en ligne.\n\nSURFACE MOUSSE (coussin instable de 10 cm) :\n4) Bipodal sur mousse.\n5) Unipodal sur mousse (jambe non-dominante).\n6) Tandem sur mousse.\n\nCompter les ERREURS pendant les 20 secondes de chaque condition :\n• Ouvrir les yeux\n• Retirer les mains des hanches\n• Faire un pas, trébucher ou tomber\n• Soulever l'avant-pied ou le talon\n• Abduction/flexion de hanche > 30°\n• Rester plus de 5 secondes hors position — compte comme 10 erreurs (score plafond pour cette condition)",
+    interpretation: "Score total = somme des erreurs sur les 6 conditions, maximum 60 (10 erreurs max par condition). Plus le score est élevé, plus l'équilibre est déficitaire. Valeurs indicatives chez l'adulte sain : < 10-12 erreurs. Un score ≥ 14 oriente vers un déficit d'équilibre significatif. Pour un suivi post-commotion, comparer au score de base (baseline) du patient plutôt qu'à des normatives.",
   },
   yBalance: {
     title: 'Y Balance test',
