@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AnalyseIA, BilanDocument, AICallAuditEntry } from '../types'
-import { buildClinicalPrompt, parseAnalyseIA, roleTitle } from '../utils/clinicalPrompt'
+import { buildClinicalPrompt, parseAnalyseIA } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
 import { GeminiAuthError } from '../utils/geminiClient'
 import { callGeminiSecure, UnmaskedDocumentsError } from '../utils/geminiSecure'
@@ -8,7 +8,6 @@ import { callGeminiSecure, UnmaskedDocumentsError } from '../utils/geminiSecure'
 interface BilanAnalyseIAProps {
   apiKey: string
   context: BilanContext
-  profession?: string
   patientKey: string
   documents?: BilanDocument[]
   cached?: AnalyseIA | null
@@ -42,7 +41,7 @@ function NeuralIcon() {
   )
 }
 
-export function BilanAnalyseIA({ apiKey, context, patientKey, profession, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
+export function BilanAnalyseIA({ apiKey, context, patientKey, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
   // Helper : appelle callGeminiSecure en gérant la confirmation documents non-masqués
   const callWithDocGuard = async (opts: Parameters<typeof callGeminiSecure>[0]): Promise<string> => {
     try {
@@ -81,7 +80,7 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
 
       const raw = await callWithDocGuard({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.`,
+        systemPrompt: 'Agis comme un physiothérapeute expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.',
         userPrompt: buildClinicalPrompt(mergedContext),
         maxOutputTokens: 8192,
         jsonMode: true,
@@ -133,7 +132,7 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
 
       const raw = await callWithDocGuard({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une analyse clinique, mais le thérapeute qui a vu le patient te donne des corrections basées sur son examen clinique réel. Tu DOIS intégrer ces corrections et ajuster ton analyse en conséquence. Rédige en français médical professionnel.`,
+        systemPrompt: `Agis comme un physiothérapeute expert. Tu as déjà produit une analyse clinique, mais le thérapeute qui a vu le patient te donne des corrections basées sur son examen clinique réel. Tu DOIS intégrer ces corrections et ajuster ton analyse en conséquence. Rédige en français médical professionnel.`,
         userPrompt: `${buildClinicalPrompt(context)}
 
 ${prevAnalyse}

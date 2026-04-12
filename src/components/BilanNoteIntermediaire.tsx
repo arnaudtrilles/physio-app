@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AnalyseIAIntermediaire, AICallAuditEntry } from '../types'
-import { buildIntermediairePrompt, parseAnalyseIAIntermediaire, roleTitle } from '../utils/clinicalPrompt'
+import { buildIntermediairePrompt, parseAnalyseIAIntermediaire } from '../utils/clinicalPrompt'
 import type { BilanIntermediaireEntry, SeanceHistoryEntry } from '../utils/clinicalPrompt'
 import { GeminiAuthError } from '../utils/geminiClient'
 import { callGeminiSecure } from '../utils/geminiSecure'
@@ -9,7 +9,6 @@ interface Props {
   apiKey: string
   patient: { nom: string; prenom: string; dateNaissance: string }
   patientKey: string
-  profession?: string
   zone: string
   bilanType: string
   intermData: Record<string, unknown>
@@ -28,7 +27,7 @@ function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
 }
 
 export function BilanNoteIntermediaire({
-  apiKey, patient, patientKey, profession, zone, bilanType, intermData, historique, seances,
+  apiKey, patient, patientKey, zone, bilanType, intermData, historique, seances,
   cached, onAudit, onResult, onBack, onGoToProfile, onFicheExercice,
 }: Props) {
   const [loading, setLoading]   = useState(false)
@@ -43,10 +42,10 @@ export function BilanNoteIntermediaire({
     setLoading(true)
     setError(null)
     try {
-      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession)
+      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances)
       const raw = await callGeminiSecure({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige impérativement en français médical professionnel.`,
+        systemPrompt: 'Agis comme un physiothérapeute expert. Rédige impérativement en français médical professionnel.',
         userPrompt: prompt,
         maxOutputTokens: 8192,
         jsonMode: true,
@@ -87,10 +86,10 @@ export function BilanNoteIntermediaire({
 - Description : ${note.noteDiagnostique.description}
 - Prise en charge : ${note.priseEnChargeAjustee.map(p => p.point).join(' | ')}`
 
-      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession)
+      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances)
       const raw = await callGeminiSecure({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,
+        systemPrompt: `Agis comme un physiothérapeute expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,
         userPrompt: `${prompt}
 
 ${prevNote}

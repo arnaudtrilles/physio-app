@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { EvolutionIA, AICallAuditEntry } from '../types'
-import { buildEvolutionPrompt, parseEvolutionIA, roleTitle } from '../utils/clinicalPrompt'
+import { buildEvolutionPrompt, parseEvolutionIA } from '../utils/clinicalPrompt'
 import type { EvolutionContext } from '../utils/clinicalPrompt'
 import { GeminiAuthError } from '../utils/geminiClient'
 import { callGeminiSecure } from '../utils/geminiSecure'
@@ -9,7 +9,6 @@ interface BilanEvolutionIAProps {
   apiKey: string
   context: EvolutionContext
   patientKey: string
-  profession?: string
   onAudit?: (entry: AICallAuditEntry) => void
   onBack: () => void
   onClose?: () => void
@@ -27,7 +26,7 @@ const TENDANCE_CONFIG = {
   mixte:         { label: 'Évolution mixte', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: '~' },
 }
 
-export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAudit, onBack, onClose, onGoToProfile }: BilanEvolutionIAProps) {
+export function BilanEvolutionIA({ apiKey, context, patientKey, onAudit, onBack, onClose, onGoToProfile }: BilanEvolutionIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
@@ -41,7 +40,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
     try {
       const raw = await callGeminiSecure({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.`,
+        systemPrompt: "Agis comme un physiothérapeute expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.",
         userPrompt: buildEvolutionPrompt(context),
         maxOutputTokens: 8192,
         preferredModel: 'gemini-3.1-pro-preview',

@@ -42,13 +42,6 @@ export interface BilanContext {
   notesLibres?: string
   therapist?: TherapistProfile
   patientHistory?: PatientHistoryEntry[]
-  /** Profession du thérapeute — 'Kinésithérapeute' ou 'Physiothérapeute' */
-  therapistProfession?: string
-}
-
-/** Retourne le titre professionnel adapté pour les prompts IA */
-export function roleTitle(profession?: string): string {
-  return /physio/i.test(profession ?? '') ? 'physiothérapeute' : 'kinésithérapeute'
 }
 
 // ── Anonymization ─────────────────────────────────────────────────────────────
@@ -135,9 +128,7 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
     ? `\nPROFIL DU THÉRAPEUTE (adapter la prise en charge aux compétences et équipements disponibles) :\n${therapistLines.map(l => `- ${l}`).join('\n')}`
     : ''
 
-  const role = roleTitle(ctx.therapistProfession)
-
-  return `Tu es un ${role} expert en musculo-squelettique. Analyse ce bilan clinique et fournis une évaluation précise et personnalisée.
+  return `Tu es un physiothérapeute expert en musculo-squelettique. Analyse ce bilan clinique et fournis une évaluation précise et personnalisée.
 
 DONNÉES DU BILAN (données anonymisées) :
 - Patient : ${ageLine}${sexeLine}
@@ -235,7 +226,7 @@ export function buildFicheExercicePrompt(
       parts.push(`\n--- NOTES DE SÉANCE (${notes.length}) ---`)
       for (const n of notes) {
         const nd = n.noteData
-        parts.push(`Séance du ${n.date} — Zone : ${n.zone} — EVN : ${nd?.eva ?? 'N/R'}/10`)
+        parts.push(`Séance du ${n.date} — Zone : ${n.zone} — EVA : ${nd?.eva ?? 'N/R'}/10`)
         if (nd?.observance) parts.push(`  Observance exercices : ${nd.observance}`)
         if (nd?.evolution) parts.push(`  Évolution : ${scrub(nd.evolution)}`)
         if (nd?.interventions?.length) parts.push(`  Interventions : ${nd.interventions.join(', ')}`)
@@ -296,7 +287,6 @@ export interface EvolutionBilanEntry {
 export interface EvolutionContext {
   patient: BilanContext['patient']
   bilans: EvolutionBilanEntry[]
-  therapistProfession?: string
 }
 
 export function buildEvolutionPrompt(ctx: EvolutionContext): string {
@@ -327,7 +317,7 @@ Scores : ${sc ? scrub(JSON.stringify(sc)) : 'N/R'}
 Données brutes : ${notes}`
   }).join('\n\n')
 
-  return `Tu es un ${roleTitle(ctx.therapistProfession)} expert chargé de rédiger un rapport d'évolution clinique complet pour un suivi de patient sur plusieurs bilans.
+  return `Tu es un physiothérapeute expert chargé de rédiger un rapport d'évolution clinique complet pour un suivi de patient sur plusieurs bilans.
 
 PATIENT (données anonymisées — aucun nom ni identifiant) :
 - ${ageLine}${sexeLine}
@@ -456,8 +446,7 @@ export function buildIntermediairePrompt(
   bilanType: string,
   intermData: Record<string, unknown>,
   historique: BilanIntermediaireEntry[],
-  seances?: SeanceHistoryEntry[],
-  therapistProfession?: string,
+  seances?: SeanceHistoryEntry[]
 ): string {
   const { age, sexe, scrub } = anonymizePatientData(patient)
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
@@ -493,7 +482,7 @@ export function buildIntermediairePrompt(
   if (seances && seances.length > 0) {
     const seanceParts = seances.map(s => {
       const lines = [`--- Séance n°${s.numSeance} (${s.date}) ---`,
-        `EVN : ${s.eva}/10 | Observance : ${s.observance} | Tolérance : ${s.tolerance}${s.toleranceDetail ? ` (${s.toleranceDetail})` : ''}`]
+        `EVA : ${s.eva}/10 | Observance : ${s.observance} | Tolérance : ${s.tolerance}${s.toleranceDetail ? ` (${s.toleranceDetail})` : ''}`]
       if (s.evolution) lines.push(`Évolution : ${scrub(s.evolution)}`)
       if (s.interventions?.length) lines.push(`Interventions : ${s.interventions.join(', ')}`)
       if (s.prochaineEtape?.length) lines.push(`Prochaines étapes : ${s.prochaineEtape.join(', ')}`)
@@ -521,7 +510,7 @@ export function buildIntermediairePrompt(
 
   const scoresStr = Object.keys(sc).length > 0 ? JSON.stringify(sc) : 'Non renseignés'
 
-  return `Tu es un ${roleTitle(therapistProfession)} expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique COMPLET du patient pour cette zone : bilans, séances, analyses IA précédentes et exercices prescrits.
+  return `Tu es un physiothérapeute expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique COMPLET du patient pour cette zone : bilans, séances, analyses IA précédentes et exercices prescrits.
 
 PATIENT (anonymisé) : ${ageLine}${sexeLine}
 ZONE : ${zone} (type : ${bilanType})
