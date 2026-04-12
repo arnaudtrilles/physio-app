@@ -4,14 +4,20 @@ import { GoogleAuth } from 'google-auth-library'
 const PROJECT_ID = process.env.GCP_PROJECT_ID!
 const REGION = process.env.GCP_REGION || 'europe-west9'
 
-// Models available on Vertex AI
+// Models available on Vertex AI (keep short to avoid slow 404 fallbacks)
 const FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-pro',
-  'gemini-2.0-flash',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
 ]
+
+// Models that don't exist on Vertex AI — remap to equivalent
+const MODEL_REMAP: Record<string, string> = {
+  'gemini-3.1-pro-preview': 'gemini-2.5-pro',
+  'gemini-2.5-flash-preview-04-17': 'gemini-2.5-flash',
+  'gemini-2.0-flash': 'gemini-2.5-flash',
+  'gemini-1.5-pro': 'gemini-2.5-pro',
+  'gemini-1.5-flash': 'gemini-2.5-flash',
+}
 
 // Parse service account key from env
 function getAuth(): GoogleAuth {
@@ -39,9 +45,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!userPrompt) return res.status(400).json({ error: 'userPrompt is required' })
 
-    // Build model list
-    const models = preferredModel
-      ? [preferredModel, ...FALLBACK_MODELS.filter(m => m !== preferredModel)]
+    // Build model list (remap old/preview model names to Vertex-available ones)
+    const remapped = preferredModel ? (MODEL_REMAP[preferredModel] ?? preferredModel) : null
+    const models = remapped
+      ? [remapped, ...FALLBACK_MODELS.filter(m => m !== remapped)]
       : FALLBACK_MODELS
 
     // Build content parts
