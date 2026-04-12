@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 .vercel
 *.code-workspace
+
+# Google Cloud service account keys — NEVER commit
+*-service-account*.json
+*-credentials*.json
+gcp-*.json
