@@ -87,7 +87,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
 
   const meta = type ? getLetterTypeMeta(type) : null
 
-  const missingApiKey = !apiKey || apiKey.length < 10
+  const missingApiKey = !apiKey
   const missingPraticien = !profile.nom || !profile.ville
 
   const update = (field: keyof LetterFormData, value: string) =>
