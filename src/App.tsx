@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, lazy, Suspense } from 'react'
+import { useState, useRef, useCallback, lazy, Suspense, Component } from 'react'
+import type { ReactNode, ErrorInfo } from 'react'
 import { useSpeechRecognition } from './hooks/useSpeechRecognition'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useToast } from './hooks/useToast'
@@ -62,6 +63,27 @@ const LazyFallback = () => (
     <div className="spinner" style={{ width: 28, height: 28 }} />
   </div>
 )
+
+class ErrorBoundary extends Component<{ children: ReactNode; onReset?: () => void }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('[ErrorBoundary]', error, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <p style={{ fontSize: '1rem', fontWeight: 700, color: '#dc2626', marginBottom: 8 }}>Une erreur est survenue</p>
+          <p style={{ fontSize: '0.82rem', color: '#78716c', marginBottom: 16 }}>{this.state.error.message}</p>
+          <button onClick={() => { this.setState({ error: null }); this.props.onReset?.() }}
+            style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
+            Revenir
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // ── Zone picker : grille compacte 2 colonnes ───────────────────────────────
 const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
@@ -3943,6 +3965,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
       {/* ── Courrier (letter) step ───────────────────────────────────────────── */}
       {step === 'letter' && selectedPatient && (
+        <ErrorBoundary onReset={() => setStep('database')}>
         <Suspense fallback={<LazyFallback />}>
           <LetterGenerator
             profile={profile}
@@ -3970,6 +3993,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             showToast={showToast}
           />
         </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* ── Bilan de sortie step ──────────────────────────────────────────── */}
