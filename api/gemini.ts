@@ -132,35 +132,43 @@ export default async function handler(req: Request): Promise<Response> {
       },
     })
 
+    // Try regional (europe-west9) first, then global endpoint as fallback
+    const endpoints = [
+      { host: `${REGION}-aiplatform.googleapis.com`, location: REGION },
+      { host: 'aiplatform.googleapis.com', location: 'global' },
+    ]
+
     let lastError = ''
     for (const model of models) {
-      const url = `https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/publishers/google/models/${model}:generateContent`
+      for (const ep of endpoints) {
+        const url = `https://${ep.host}/v1/projects/${PROJECT_ID}/locations/${ep.location}/publishers/google/models/${model}:generateContent`
 
-      const apiRes = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: requestBody,
-      })
+        const apiRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: requestBody,
+        })
 
-      if (apiRes.status === 404) continue
+        if (apiRes.status === 404) continue // try next endpoint or model
 
-      const body = await apiRes.text()
-      if (!apiRes.ok) {
-        lastError = body
-        if (apiRes.status === 503 || apiRes.status === 429) continue
-        return Response.json({ error: body }, { status: apiRes.status })
+        const body = await apiRes.text()
+        if (!apiRes.ok) {
+          lastError = body
+          if (apiRes.status === 503 || apiRes.status === 429) continue
+          return Response.json({ error: body }, { status: apiRes.status })
+        }
+
+        const data = JSON.parse(body)
+        const responseParts: Array<{ thought?: boolean; text?: string }> =
+          data?.candidates?.[0]?.content?.parts ?? []
+        const textPart = responseParts.find((p: { thought?: boolean; text?: string }) => !p.thought && typeof p.text === 'string')
+        const result = textPart?.text ?? responseParts[0]?.text ?? ''
+
+        return Response.json({ result, model, endpoint: ep.location })
       }
-
-      const data = JSON.parse(body)
-      const responseParts: Array<{ thought?: boolean; text?: string }> =
-        data?.candidates?.[0]?.content?.parts ?? []
-      const textPart = responseParts.find((p: { thought?: boolean; text?: string }) => !p.thought && typeof p.text === 'string')
-      const result = textPart?.text ?? responseParts[0]?.text ?? ''
-
-      return Response.json({ result, model })
     }
 
     return Response.json({ error: lastError || 'No model available' }, { status: 503 })

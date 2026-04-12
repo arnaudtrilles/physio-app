@@ -43,6 +43,6 @@ export async function callGemini(
   if (!res.ok) throw new Error(body)
 
   const data = JSON.parse(body)
-  console.log(`[Vertex AI] Modèle utilisé : ${data.model ?? 'inconnu'}`)
+  console.log(`[Vertex AI] Modèle : ${data.model ?? 'inconnu'} | Endpoint : ${data.endpoint ?? '?'}`)
   return data.result ?? ''
 }
