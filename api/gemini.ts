@@ -1,5 +1,8 @@
-// Edge Runtime — 30s timeout on Hobby plan (vs 10s for Node.js)
-export const config = { runtime: 'edge', maxDuration: 60 }
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import crypto from 'node:crypto'
+
+// Node.js Serverless — 60s timeout on Hobby plan (Edge was limited to 30s)
+export const config = { maxDuration: 60 }
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID!
 const REGION = process.env.GCP_REGION || 'europe-west9'
@@ -10,7 +13,6 @@ const FALLBACK_MODELS = [
   'gemini-2.5-flash',
 ]
 
-// Remap old model names to Vertex-available equivalents
 const MODEL_REMAP: Record<string, string> = {
   'gemini-3-flash': 'gemini-2.5-flash',
   'gemini-2.5-flash-preview-04-17': 'gemini-2.5-flash',
@@ -19,30 +21,15 @@ const MODEL_REMAP: Record<string, string> = {
   'gemini-1.5-flash': 'gemini-2.5-flash',
 }
 
-// ── JWT auth for Edge Runtime (no google-auth-library needed) ──
+// ── JWT auth using Node.js crypto ──
 
 function base64url(data: string): string {
-  return btoa(data).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-function base64urlFromBytes(bytes: Uint8Array): string {
-  let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '')
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes.buffer
+  return Buffer.from(data).toString('base64url')
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null
 
 async function getAccessToken(): Promise<string> {
-  // Reuse token if still valid (with 60s margin)
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
     return cachedToken.token
   }
@@ -61,15 +48,10 @@ async function getAccessToken(): Promise<string> {
     exp: now + 3600,
   }))
 
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pemToArrayBuffer(sa.private_key),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign']
-  )
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${header}.${payload}`))
-  const jwt = `${header}.${payload}.${base64urlFromBytes(new Uint8Array(sig))}`
+  const sign = crypto.createSign('RSA-SHA256')
+  sign.update(`${header}.${payload}`)
+  const sig = sign.sign(sa.private_key, 'base64url')
+  const jwt = `${header}.${payload}.${sig}`
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -85,26 +67,19 @@ async function getAccessToken(): Promise<string> {
 
 // ── Handler ──
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    })
-  }
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
-  if (req.method !== 'POST') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 })
-  }
+  if (req.method === 'OPTIONS') return res.status(204).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents } = await req.json()
+    const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents } = req.body
 
-    if (!userPrompt) return Response.json({ error: 'userPrompt is required' }, { status: 400 })
+    if (!userPrompt) return res.status(400).json({ error: 'userPrompt is required' })
 
     const remapped = preferredModel ? (MODEL_REMAP[preferredModel] ?? preferredModel) : null
     const models = remapped
@@ -132,7 +107,6 @@ export default async function handler(req: Request): Promise<Response> {
       },
     })
 
-    // Try regional (europe-west9) first, then global endpoint as fallback
     const endpoints = [
       { host: `${REGION}-aiplatform.googleapis.com`, location: REGION },
       { host: 'aiplatform.googleapis.com', location: 'global' },
@@ -152,13 +126,13 @@ export default async function handler(req: Request): Promise<Response> {
           body: requestBody,
         })
 
-        if (apiRes.status === 404) continue // try next endpoint or model
+        if (apiRes.status === 404) continue
 
         const body = await apiRes.text()
         if (!apiRes.ok) {
           lastError = body
           if (apiRes.status === 503 || apiRes.status === 429) continue
-          return Response.json({ error: body }, { status: apiRes.status })
+          return res.status(apiRes.status).json({ error: body })
         }
 
         const data = JSON.parse(body)
@@ -167,14 +141,14 @@ export default async function handler(req: Request): Promise<Response> {
         const textPart = responseParts.find((p: { thought?: boolean; text?: string }) => !p.thought && typeof p.text === 'string')
         const result = textPart?.text ?? responseParts[0]?.text ?? ''
 
-        return Response.json({ result, model, endpoint: ep.location })
+        return res.status(200).json({ result, model, endpoint: ep.location })
       }
     }
 
-    return Response.json({ error: lastError || 'No model available' }, { status: 503 })
+    return res.status(503).json({ error: lastError || 'No model available' })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('Vertex AI proxy error:', message)
-    return Response.json({ error: message }, { status: 500 })
+    return res.status(500).json({ error: message })
   }
 }
