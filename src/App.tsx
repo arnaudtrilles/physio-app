@@ -2684,34 +2684,9 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                     </div>
                   </div>
 
-                  {/* IA Section */}
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 12 }}>Intelligence Artificielle</div>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid var(--border-color)' }}>
-                      <div className="form-group" style={{ marginBottom: 8 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Clé API Gemini</label>
-                        <input type="password" className={`input-luxe api-key-field`}
-                          value={apiKeyDraft} onChange={e => { setApiKeyDraft(e.target.value); setApiKeyStatus('idle') }}
-                          placeholder="AIza…" />
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button onClick={testApiKey} disabled={testingApiKey || !apiKeyDraft.trim()}
-                          style={{ padding: '0.55rem 1rem', borderRadius: 8, border: '1.5px solid var(--border-color)', background: 'white', fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: testingApiKey || !apiKeyDraft.trim() ? 0.5 : 1 }}>
-                          {testingApiKey
-                            ? <><div className="spinner" style={{ width: 14, height: 14, borderColor: 'rgba(30,58,138,0.2)', borderTopColor: 'var(--primary)' }} />Test…</>
-                            : 'Tester la connexion'}
-                        </button>
-                        {apiKeyStatus === 'ok'  && <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>Connecté</span>}
-                        {apiKeyStatus === 'error'&& <span style={{ fontSize: '0.8rem', color: '#dc2626', fontWeight: 600 }}>Invalide</span>}
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>La clé est stockée localement et n'est jamais transmise à nos serveurs.</p>
-                    </div>
-                  </div>
-
-                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'0.5rem' }}
+                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
                     onClick={() => {
                       setProfile(profileEditDraft)
-                      setApiKey(apiKeyDraft.trim())
                       setEditingProfile(false)
                       showToast('Profil enregistré', 'success')
                     }}>
