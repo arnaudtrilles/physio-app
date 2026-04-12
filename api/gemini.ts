@@ -1,5 +1,5 @@
 // Edge Runtime — 30s timeout on Hobby plan (vs 10s for Node.js)
-export const config = { runtime: 'edge' }
+export const config = { runtime: 'edge', maxDuration: 60 }
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID!
 const REGION = process.env.GCP_REGION || 'europe-west9'
