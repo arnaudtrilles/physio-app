@@ -6,13 +6,14 @@ const REGION = process.env.GCP_REGION || 'europe-west9'
 
 // Models available on Vertex AI (keep short to avoid slow 404 fallbacks)
 const FALLBACK_MODELS = [
+  'gemini-3-flash',
   'gemini-2.5-flash',
   'gemini-2.5-pro',
 ]
 
 // Models that don't exist on Vertex AI — remap to equivalent
 const MODEL_REMAP: Record<string, string> = {
-  'gemini-3.1-pro-preview': 'gemini-2.5-pro',
+  'gemini-3.1-pro-preview': 'gemini-3-flash',
   'gemini-2.5-flash-preview-04-17': 'gemini-2.5-flash',
   'gemini-2.0-flash': 'gemini-2.5-flash',
   'gemini-1.5-pro': 'gemini-2.5-pro',
