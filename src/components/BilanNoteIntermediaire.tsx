@@ -15,6 +15,7 @@ interface Props {
   intermData: Record<string, unknown>
   historique: BilanIntermediaireEntry[]
   seances?: SeanceHistoryEntry[]
+  closedAntecedents?: string[]
   cached?: AnalyseIAIntermediaire | null
   onAudit?: (entry: AICallAuditEntry) => void
   onResult: (a: AnalyseIAIntermediaire) => void
@@ -28,7 +29,7 @@ function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
 }
 
 export function BilanNoteIntermediaire({
-  apiKey, patient, patientKey, profession, zone, bilanType, intermData, historique, seances,
+  apiKey, patient, patientKey, profession, zone, bilanType, intermData, historique, seances, closedAntecedents,
   cached, onAudit, onResult, onBack, onGoToProfile, onFicheExercice,
 }: Props) {
   const [loading, setLoading]   = useState(false)
@@ -43,7 +44,7 @@ export function BilanNoteIntermediaire({
     setLoading(true)
     setError(null)
     try {
-      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession)
+      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession, closedAntecedents)
       const raw = await callGeminiSecure({
         apiKey,
         systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige impérativement en français médical professionnel.`,
@@ -87,7 +88,7 @@ export function BilanNoteIntermediaire({
 - Description : ${note.noteDiagnostique.description}
 - Prise en charge : ${note.priseEnChargeAjustee.map(p => p.point).join(' | ')}`
 
-      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession)
+      const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession, closedAntecedents)
       const raw = await callGeminiSecure({
         apiKey,
         systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,

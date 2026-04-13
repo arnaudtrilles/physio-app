@@ -212,77 +212,90 @@ export function LetterGenerator(props: LetterGeneratorProps) {
     if (!createdAt) setCreatedAt(record.createdAt)
   }
 
+  const buildPraticienData = () => ({
+    nom: profile.nom,
+    prenom: profile.prenom,
+    profession: profile.profession,
+    specialisationsLibelle: profile.specialisationsLibelle,
+    rcc: profile.rcc,
+    adresse: profile.adresse,
+    adresseComplement: profile.adresseComplement,
+    codePostal: profile.codePostal,
+    ville: profile.ville,
+    telephone: profile.telephone,
+    email: profile.email,
+    signatureImage: profile.signatureImage ?? null,
+  })
+
   const handleDownloadPDF = () => {
     if (!meta) return
     handleSaveFinal()
-    generateLetterPDF({
-      praticien: {
-        nom: profile.nom,
-        prenom: profile.prenom,
-        profession: profile.profession,
-        specialisationsLibelle: profile.specialisationsLibelle,
-        rcc: profile.rcc,
-        adresse: profile.adresse,
-        adresseComplement: profile.adresseComplement,
-        codePostal: profile.codePostal,
-        ville: profile.ville,
-        telephone: profile.telephone,
-        email: profile.email,
-        signatureImage: profile.signatureImage ?? null,
-      },
-      patientNom: form.nomPatient,
-      patientPrenom: form.prenomPatient,
-      titreCourrier: meta.label,
-      corps: generatedText,
-    })
+    try {
+      generateLetterPDF({
+        praticien: buildPraticienData(),
+        patientNom: form.nomPatient,
+        patientPrenom: form.prenomPatient,
+        titreCourrier: meta.label,
+        corps: generatedText,
+      })
+    } catch (e) {
+      showToast(`Erreur PDF : ${(e as Error).message}`, 'error')
+    }
   }
 
   const handlePrint = () => {
     if (!meta) return
     handleSaveFinal()
-    const blob = generateLetterPDF({
-      praticien: {
-        nom: profile.nom, prenom: profile.prenom, profession: profile.profession,
-        specialisationsLibelle: profile.specialisationsLibelle, rcc: profile.rcc,
-        adresse: profile.adresse, adresseComplement: profile.adresseComplement,
-        codePostal: profile.codePostal, ville: profile.ville,
-        telephone: profile.telephone, email: profile.email,
-        signatureImage: profile.signatureImage ?? null,
-      },
-      patientNom: form.nomPatient,
-      patientPrenom: form.prenomPatient,
-      titreCourrier: meta.label,
-      corps: generatedText,
-      download: false,
-    }) as Blob | undefined
-    if (!blob) return
+    let blob: Blob | undefined
+    try {
+      blob = generateLetterPDF({
+        praticien: buildPraticienData(),
+        patientNom: form.nomPatient,
+        patientPrenom: form.prenomPatient,
+        titreCourrier: meta.label,
+        corps: generatedText,
+        download: false,
+      }) as Blob | undefined
+    } catch (e) {
+      showToast(`Erreur PDF : ${(e as Error).message}`, 'error')
+      return
+    }
+    if (!blob) {
+      showToast("Erreur : PDF non généré.", 'error')
+      return
+    }
     const url = URL.createObjectURL(blob)
     const w = window.open(url)
-    if (w) {
-      w.addEventListener('load', () => setTimeout(() => w.print(), 400))
-    } else {
+    if (!w) {
+      URL.revokeObjectURL(url)
       showToast("Pop-up bloqué. Autorisez-le pour imprimer.", 'error')
+      return
     }
+    // Cleanup : libère l'object URL après ouverture (le navigateur garde le contenu)
+    const onLoad = () => {
+      try { w.print() } catch { /* ignore */ }
+      // Révoque l'URL après quelques secondes (laisse le temps au print dialog)
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+    w.addEventListener('load', onLoad, { once: true })
   }
 
-  const handleEmail = async () => {
+  const handleEmail = () => {
     if (!meta) return
     handleSaveFinal()
-    generateLetterPDF({
-      praticien: {
-        nom: profile.nom, prenom: profile.prenom, profession: profile.profession,
-        specialisationsLibelle: profile.specialisationsLibelle, rcc: profile.rcc,
-        adresse: profile.adresse, adresseComplement: profile.adresseComplement,
-        codePostal: profile.codePostal, ville: profile.ville,
-        telephone: profile.telephone, email: profile.email,
-        signatureImage: profile.signatureImage ?? null,
-      },
-      patientNom: form.nomPatient,
-      patientPrenom: form.prenomPatient,
-      titreCourrier: meta.label,
-      corps: generatedText,
-      download: true,
-    })
+    try {
+      generateLetterPDF({
+        praticien: buildPraticienData(),
+        patientNom: form.nomPatient,
+        patientPrenom: form.prenomPatient,
+        titreCourrier: meta.label,
+        corps: generatedText,
+        download: true,
+      })
+    } catch (e) {
+      showToast(`Erreur PDF : ${(e as Error).message}`, 'error')
+      return
+    }
     // Mailto avec objet pré-rempli
     const subject = encodeURIComponent(`${meta.label} — ${form.prenomPatient} ${form.nomPatient}`)
     const body = encodeURIComponent(
@@ -295,22 +308,24 @@ export function LetterGenerator(props: LetterGeneratorProps) {
   const handleWhatsApp = async () => {
     if (!meta) return
     handleSaveFinal()
-    const blob = generateLetterPDF({
-      praticien: {
-        nom: profile.nom, prenom: profile.prenom, profession: profile.profession,
-        specialisationsLibelle: profile.specialisationsLibelle, rcc: profile.rcc,
-        adresse: profile.adresse, adresseComplement: profile.adresseComplement,
-        codePostal: profile.codePostal, ville: profile.ville,
-        telephone: profile.telephone, email: profile.email,
-        signatureImage: profile.signatureImage ?? null,
-      },
-      patientNom: form.nomPatient,
-      patientPrenom: form.prenomPatient,
-      titreCourrier: meta.label,
-      corps: generatedText,
-      download: false,
-    }) as Blob | undefined
-    if (!blob) return
+    let blob: Blob | undefined
+    try {
+      blob = generateLetterPDF({
+        praticien: buildPraticienData(),
+        patientNom: form.nomPatient,
+        patientPrenom: form.prenomPatient,
+        titreCourrier: meta.label,
+        corps: generatedText,
+        download: false,
+      }) as Blob | undefined
+    } catch (e) {
+      showToast(`Erreur PDF : ${(e as Error).message}`, 'error')
+      return
+    }
+    if (!blob) {
+      showToast("Erreur : PDF non généré.", 'error')
+      return
+    }
     // Si l'API Web Share est disponible et supporte les fichiers
     const file = new File([blob], `Courrier_${meta.label}.pdf`, { type: 'application/pdf' })
     const nav = navigator as Navigator & {
@@ -325,21 +340,19 @@ export function LetterGenerator(props: LetterGeneratorProps) {
         // Utilisateur a annulé ou erreur — fallback ci-dessous
       }
     }
-    // Fallback : ouvrir WhatsApp Web sans fichier (pas possible d'envoyer un PDF via lien)
-    generateLetterPDF({
-      praticien: {
-        nom: profile.nom, prenom: profile.prenom, profession: profile.profession,
-        specialisationsLibelle: profile.specialisationsLibelle, rcc: profile.rcc,
-        adresse: profile.adresse, adresseComplement: profile.adresseComplement,
-        codePostal: profile.codePostal, ville: profile.ville,
-        telephone: profile.telephone, email: profile.email,
-        signatureImage: profile.signatureImage ?? null,
-      },
-      patientNom: form.nomPatient,
-      patientPrenom: form.prenomPatient,
-      titreCourrier: meta.label,
-      corps: generatedText,
-    })
+    // Fallback : télécharge le PDF + ouvre WhatsApp Web sans fichier
+    try {
+      generateLetterPDF({
+        praticien: buildPraticienData(),
+        patientNom: form.nomPatient,
+        patientPrenom: form.prenomPatient,
+        titreCourrier: meta.label,
+        corps: generatedText,
+      })
+    } catch (e) {
+      showToast(`Erreur PDF : ${(e as Error).message}`, 'error')
+      return
+    }
     const text = encodeURIComponent(`${meta.label} — ${form.prenomPatient} ${form.nomPatient}`)
     window.open(`https://wa.me/?text=${text}`, '_blank')
     showToast('PDF téléchargé. Attachez-le dans WhatsApp.', 'info')

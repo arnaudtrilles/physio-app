@@ -42,6 +42,8 @@ export interface BilanContext {
   notesLibres?: string
   therapist?: TherapistProfile
   patientHistory?: PatientHistoryEntry[]
+  /** Résumé 1 ligne par PEC clôturée sur une autre zone — contexte d'arrière-plan uniquement. */
+  closedAntecedents?: string[]
   therapistProfession?: string
 }
 
@@ -134,6 +136,10 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
     ? `\nPROFIL DU THÉRAPEUTE (adapter la prise en charge aux compétences et équipements disponibles) :\n${therapistLines.map(l => `- ${l}`).join('\n')}`
     : ''
 
+  const antecedentsPEC = (ctx.closedAntecedents && ctx.closedAntecedents.length > 0)
+    ? `\nANTÉCÉDENTS DE PRISE EN CHARGE (autres zones, déjà clôturées — contexte général uniquement, NE PAS mélanger avec l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
+    : ''
+
   const role = roleTitle(ctx.therapistProfession)
 
   return `Tu es un ${role} expert en musculo-squelettique. Analyse ce bilan clinique et fournis une évaluation précise et personnalisée.
@@ -143,7 +149,7 @@ DONNÉES DU BILAN (données anonymisées) :
 - Profession : ${profession}
 - Activité sportive : ${sport}
 - Antécédents : ${antecedents}
-- Zone : ${zone} (type bilan : ${bilanType})
+- Zone : ${zone} (type bilan : ${bilanType})${antecedentsPEC}
 
 DOULEUR :
 - EVN pire : ${douleur?.evnPire ?? 'N/R'} / EVN mieux : ${douleur?.evnMieux ?? 'N/R'} / EVN moyen : ${douleur?.evnMoy ?? 'N/R'}
@@ -269,13 +275,17 @@ IMPORTANT : Utilise cet historique pour adapter les exercices au niveau actuel d
 `
   }
 
+  const antecedentsPEC = (ctx.closedAntecedents && ctx.closedAntecedents.length > 0)
+    ? `\nAntécédents d'autres PEC clôturées (contexte général, ne pas y puiser d'exercices) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
+    : ''
+
   return `<notes_seance_actuelle>
 Zone traitée : ${zone}
 Patient : ${age !== null ? `${age} ans` : 'Âge N/R'}${sexe ? ` — Sexe : ${sexe}` : ''}
 EVN actuel : ${evn} / 10
 Profession : ${profession}
 Activité sportive : ${sport}
-Antécédents : ${antecedents}
+Antécédents : ${antecedents}${antecedentsPEC}
 ${analyseIA ? `\nDiagnostic retenu : ${analyseIA.diagnostic.titre}\nObjectifs thérapeutiques : ${analyseIA.priseEnCharge.map(p => p.titre).join(' | ')}` : ''}
 Notes du thérapeute pour cette séance :
 ${scrubbedNotes || '(Non renseignées — générer un programme adapté au diagnostic et à la zone traitée)'}
@@ -292,14 +302,56 @@ export interface EvolutionBilanEntry {
   bilanData: Record<string, unknown>
 }
 
+export interface EvolutionIntermediaireEntry {
+  num: number
+  date: string
+  zone: string
+  data: Record<string, unknown>
+}
+
+export interface EvolutionSeanceEntry {
+  num: string
+  date: string
+  zone: string
+  data: {
+    eva?: string
+    observance?: string
+    evolution?: string
+    noteSubjective?: string
+    interventions?: string[]
+    detailDosage?: string
+    tolerance?: string
+    toleranceDetail?: string
+    prochaineEtape?: string[]
+    notePlan?: string
+  }
+}
+
 export interface EvolutionContext {
   patient: BilanContext['patient']
   bilans: EvolutionBilanEntry[]
+  intermediaires?: EvolutionIntermediaireEntry[]
+  seances?: EvolutionSeanceEntry[]
+  /** Zone/bilanType courant du rapport (pour filtrer strictement l'évolution à cette PEC). */
+  currentZoneLabel?: string
+  /** Résumés 1-ligne des PEC clôturées dans d'autres zones — contexte d'arrière-plan uniquement. */
+  closedAntecedents?: string[]
   therapistProfession?: string
 }
 
+// Parse dd/mm/yyyy → timestamp (stable sort key)
+const parseFrDateStr = (raw: string | undefined): number => {
+  if (!raw) return 0
+  if (raw.includes('/')) {
+    const [d, m, y] = raw.split('/').map(Number)
+    return new Date(y, (m ?? 1) - 1, d ?? 1).getTime()
+  }
+  const t = Date.parse(raw)
+  return Number.isNaN(t) ? 0 : t
+}
+
 export function buildEvolutionPrompt(ctx: EvolutionContext): string {
-  const { patient, bilans } = ctx
+  const { patient, bilans, intermediaires = [], seances = [] } = ctx
   const { age, sexe, scrub } = anonymizePatientData(patient)
 
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
@@ -311,41 +363,86 @@ export function buildEvolutionPrompt(ctx: EvolutionContext): string {
   const flagsPositifs = (obj: Record<string, unknown> | undefined) =>
     obj ? Object.entries(obj).filter(([, v]) => v === 'oui' || v === true).map(([k]) => k).join(', ') || 'Aucun' : 'Aucun'
 
-  const bilansStr = bilans.map(b => {
-    const d = b.bilanData.douleur as Record<string, unknown> | undefined
-    const rf = b.bilanData.redFlags as Record<string, unknown> | undefined
-    const yf = b.bilanData.yellowFlags as Record<string, unknown> | undefined
-    const sc = b.bilanData.scores as Record<string, unknown> | undefined
-    const notes = scrub(JSON.stringify({ douleur: d, scores: sc }, null, 0))
-    return `--- Bilan N°${b.num} (${b.date}) — Zone : ${b.zone} ---
+  type TimelineItem =
+    | { kind: 'bilan'; date: string; ts: number; entry: EvolutionBilanEntry }
+    | { kind: 'intermediaire'; date: string; ts: number; entry: EvolutionIntermediaireEntry }
+    | { kind: 'seance'; date: string; ts: number; entry: EvolutionSeanceEntry }
+
+  const timeline: TimelineItem[] = [
+    ...bilans.map<TimelineItem>(b => ({ kind: 'bilan', date: b.date, ts: parseFrDateStr(b.date), entry: b })),
+    ...intermediaires.map<TimelineItem>(i => ({ kind: 'intermediaire', date: i.date, ts: parseFrDateStr(i.date), entry: i })),
+    ...seances.map<TimelineItem>(s => ({ kind: 'seance', date: s.date, ts: parseFrDateStr(s.date), entry: s })),
+  ].sort((a, b) => a.ts - b.ts)
+
+  const timelineStr = timeline.map((item, idx) => {
+    const stepNum = idx + 1
+    if (item.kind === 'bilan') {
+      const b = item.entry
+      const d = b.bilanData.douleur as Record<string, unknown> | undefined
+      const rf = b.bilanData.redFlags as Record<string, unknown> | undefined
+      const yf = b.bilanData.yellowFlags as Record<string, unknown> | undefined
+      const sc = b.bilanData.scores as Record<string, unknown> | undefined
+      const notes = scrub(JSON.stringify({ douleur: d, scores: sc }, null, 0))
+      return `--- Étape ${stepNum} · BILAN INITIAL N°${b.num} (${b.date}) — Zone : ${b.zone} ---
 EVN : ${b.evn ?? 'N/R'}
 Type douleur : ${d?.douleurType ?? 'N/R'} | Évolution : ${d?.situation ?? 'N/R'} | Nocturne : ${d?.douleurNocturne ?? 'N/R'}
 Red flags positifs : ${flagsPositifs(rf)}
 Yellow flags positifs : ${flagsPositifs(yf)}
 Scores : ${sc ? scrub(JSON.stringify(sc)) : 'N/R'}
 Données brutes : ${notes}`
+    }
+    if (item.kind === 'intermediaire') {
+      const i = item.entry
+      const d = i.data.douleur as Record<string, unknown> | undefined
+      const sc = i.data.scores as Record<string, unknown> | undefined
+      const evn = (i.data.evn as number | undefined) ?? (d?.evn as number | undefined) ?? null
+      const notes = scrub(JSON.stringify(i.data, null, 0))
+      return `--- Étape ${stepNum} · BILAN INTERMÉDIAIRE N°${i.num} (${i.date}) — Zone : ${i.zone} ---
+EVN : ${evn ?? 'N/R'}
+Scores : ${sc ? scrub(JSON.stringify(sc)) : 'N/R'}
+Données : ${notes}`
+    }
+    // séance
+    const s = item.entry
+    const d = s.data
+    const interventions = Array.isArray(d.interventions) ? d.interventions.join(', ') : 'N/R'
+    const prochaines = Array.isArray(d.prochaineEtape) ? d.prochaineEtape.join(', ') : 'N/R'
+    return `--- Étape ${stepNum} · SÉANCE N°${s.num} (${s.date}) — Zone : ${s.zone} ---
+EVA : ${d.eva ?? 'N/R'} | Observance : ${d.observance ?? 'N/R'} | Tolérance : ${d.tolerance ?? 'N/R'}
+Évolution perçue : ${scrub(d.evolution ?? 'N/R')}
+Note subjective : ${scrub(d.noteSubjective ?? 'N/R')}
+Interventions : ${scrub(interventions)}
+Dosage : ${scrub(d.detailDosage ?? 'N/R')}
+Prochaine étape : ${scrub(prochaines)}
+Plan : ${scrub(d.notePlan ?? 'N/R')}`
   }).join('\n\n')
 
-  return `Tu es un ${roleTitle(ctx.therapistProfession)} expert chargé de rédiger un rapport d'évolution clinique complet pour un suivi de patient sur plusieurs bilans.
+  const zoneScope = ctx.currentZoneLabel ? `\nPRISE EN CHARGE ANALYSÉE : ${ctx.currentZoneLabel} (RAPPORT CENTRÉ UNIQUEMENT SUR CETTE ZONE)` : ''
+  const antecedentsPEC = (ctx.closedAntecedents && ctx.closedAntecedents.length > 0)
+    ? `\nANTÉCÉDENTS D'AUTRES PEC CLÔTURÉES (contexte patient uniquement, NE PAS mélanger à l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
+    : ''
+
+  return `Tu es un ${roleTitle(ctx.therapistProfession)} expert chargé de rédiger un rapport d'évolution clinique complet pour un suivi de patient.
 
 PATIENT (données anonymisées — aucun nom ni identifiant) :
 - ${ageLine}${sexeLine}
 - Profession : ${profession}
 - Activité sportive : ${sport}
 - Antécédents : ${antecedents}
-- Nombre de bilans : ${bilans.length}
+- Bilans initiaux : ${bilans.length} | Bilans intermédiaires : ${intermediaires.length} | Séances : ${seances.length}
+- Total d'étapes : ${timeline.length}${zoneScope}${antecedentsPEC}
 
-HISTORIQUE DES BILANS :
-${bilansStr}
+HISTORIQUE COMPLET DE LA PEC (ordre chronologique — inclut bilans initiaux, bilans intermédiaires et notes de séance pour la zone ciblée) :
+${timelineStr}
 
 INSTRUCTIONS :
-Rédige un rapport d'évolution complet en français médical professionnel.
+Rédige un rapport d'évolution complet en français médical professionnel, basé sur TOUTE la chronologie (bilans initiaux, bilans intermédiaires ET séances). Pour chaque étape, indique clairement son type dans le champ "etape" (ex : "Bilan initial", "Bilan intermédiaire", "Séance N°2"). Le champ "evn" doit contenir la douleur perçue (EVN du bilan ou EVA de la séance) quand disponible, sinon null. Le champ "bilanNum" sert de numéro d'étape séquentiel (1, 2, 3…).
 Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour, selon ce schéma exact :
 {
   "resume": "Résumé clinique global de l'évolution en 3-4 phrases",
   "tendance": "amelioration | stationnaire | regression | mixte",
   "progression": [
-    { "bilanNum": 1, "date": "dd/mm/yyyy", "evn": 8, "commentaire": "Observation clinique courte" }
+    { "bilanNum": 1, "etape": "Bilan initial", "date": "dd/mm/yyyy", "evn": 8, "commentaire": "Observation clinique courte" }
   ],
   "pointsForts": ["Point positif 1", "Point positif 2"],
   "pointsVigilance": ["Point de vigilance 1"],
@@ -457,6 +554,7 @@ export function buildIntermediairePrompt(
   historique: BilanIntermediaireEntry[],
   seances?: SeanceHistoryEntry[],
   therapistProfession?: string,
+  closedAntecedents?: string[],
 ): string {
   const { age, sexe, scrub } = anonymizePatientData(patient)
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
@@ -520,10 +618,14 @@ export function buildIntermediairePrompt(
 
   const scoresStr = Object.keys(sc).length > 0 ? JSON.stringify(sc) : 'Non renseignés'
 
+  const antecedentsPEC = (closedAntecedents && closedAntecedents.length > 0)
+    ? `\nANTÉCÉDENTS DE PEC (autres zones, clôturées — contexte uniquement, NE PAS y puiser d'éléments cliniques pour cette zone) :\n${closedAntecedents.map(a => `- ${a}`).join('\n')}\n`
+    : ''
+
   return `Tu es un ${roleTitle(therapistProfession)} expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique COMPLET du patient pour cette zone : bilans, séances, analyses IA précédentes et exercices prescrits.
 
 PATIENT (anonymisé) : ${ageLine}${sexeLine}
-ZONE : ${zone} (type : ${bilanType})
+ZONE : ${zone} (type : ${bilanType})${antecedentsPEC}
 
 HISTORIQUE DES BILANS POUR CETTE ZONE :
 ${histStr}${seancesStr}${fichesStr}

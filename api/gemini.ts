@@ -28,15 +28,31 @@ function base64url(data: string): string {
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null
+// Promise verrou : déduplique les fetchs concurrents (sinon N requêtes simultanées
+// déclenchent N appels OAuth → quota Google grillé pour rien)
+let tokenFetchPromise: Promise<string> | null = null
 
-async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
-    return cachedToken.token
+async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: number }): Promise<Response> {
+  const { timeoutMs = 15_000, ...rest } = opts
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...rest, signal: controller.signal })
+  } finally {
+    clearTimeout(id)
   }
+}
 
+async function fetchNewToken(): Promise<string> {
   const raw = process.env.GCP_SERVICE_ACCOUNT_KEY
   if (!raw) throw new Error('GCP_SERVICE_ACCOUNT_KEY not configured')
-  const sa = JSON.parse(raw)
+
+  let sa: { client_email: string; private_key: string }
+  try {
+    sa = JSON.parse(raw)
+  } catch (e) {
+    throw new Error('GCP_SERVICE_ACCOUNT_KEY is not valid JSON: ' + (e as Error).message)
+  }
 
   const now = Math.floor(Date.now() / 1000)
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
@@ -53,16 +69,47 @@ async function getAccessToken(): Promise<string> {
   const sig = sign.sign(sa.private_key, 'base64url')
   const jwt = `${header}.${payload}.${sig}`
 
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenRes = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+    timeoutMs: 10_000,
   })
-  const tokenData = await tokenRes.json()
-  if (!tokenData.access_token) throw new Error('Failed to get access token: ' + JSON.stringify(tokenData))
 
-  cachedToken = { token: tokenData.access_token, expiresAt: Date.now() + tokenData.expires_in * 1000 }
+  const text = await tokenRes.text()
+  if (!tokenRes.ok) {
+    throw new Error(`OAuth token fetch failed (${tokenRes.status}): ${text.slice(0, 500)}`)
+  }
+
+  let tokenData: { access_token?: string; expires_in?: number }
+  try {
+    tokenData = JSON.parse(text)
+  } catch {
+    throw new Error('OAuth response is not valid JSON: ' + text.slice(0, 200))
+  }
+
+  if (!tokenData.access_token || typeof tokenData.expires_in !== 'number') {
+    throw new Error('Failed to get access token: ' + JSON.stringify(tokenData).slice(0, 300))
+  }
+
+  cachedToken = {
+    token: tokenData.access_token,
+    expiresAt: Date.now() + tokenData.expires_in * 1000,
+  }
   return cachedToken.token
+}
+
+async function getAccessToken(): Promise<string> {
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
+    return cachedToken.token
+  }
+  // Si un fetch est déjà en vol, attend son résultat (déduplication)
+  if (tokenFetchPromise) return tokenFetchPromise
+
+  tokenFetchPromise = fetchNewToken().finally(() => {
+    tokenFetchPromise = null
+  })
+  return tokenFetchPromise
 }
 
 // ── Handler ──
@@ -117,29 +164,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const ep of endpoints) {
         const url = `https://${ep.host}/v1/projects/${PROJECT_ID}/locations/${ep.location}/publishers/google/models/${model}:generateContent`
 
-        const apiRes = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: requestBody,
-        })
+        let apiRes: Response
+        try {
+          apiRes = await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: requestBody,
+            timeoutMs: 55_000, // marge sous le maxDuration de 60s
+          })
+        } catch (e) {
+          // Timeout ou erreur réseau → essaie le modèle/endpoint suivant
+          lastError = `Network error on ${model}/${ep.location}: ${(e as Error).message}`
+          continue
+        }
 
         if (apiRes.status === 404) continue
 
         const body = await apiRes.text()
         if (!apiRes.ok) {
-          lastError = body
+          // Tronque pour éviter les énormes réponses d'erreur (avec attachements)
+          lastError = body.length > 1000 ? body.slice(0, 1000) + '…' : body
           if (apiRes.status === 503 || apiRes.status === 429) continue
-          return res.status(apiRes.status).json({ error: body })
+          // Tente de parser le message d'erreur Vertex AI proprement
+          let errorMessage = lastError
+          try {
+            const parsed = JSON.parse(body)
+            errorMessage = parsed?.error?.message || lastError
+          } catch { /* garde le body brut */ }
+          return res.status(apiRes.status).json({ error: errorMessage })
         }
 
-        const data = JSON.parse(body)
+        let data: { candidates?: Array<{ content?: { parts?: Array<{ thought?: boolean; text?: string }> } }> }
+        try {
+          data = JSON.parse(body)
+        } catch (e) {
+          lastError = `Invalid JSON from Vertex AI (${model}): ${(e as Error).message}`
+          continue
+        }
+
         const responseParts: Array<{ thought?: boolean; text?: string }> =
           data?.candidates?.[0]?.content?.parts ?? []
-        const textPart = responseParts.find((p: { thought?: boolean; text?: string }) => !p.thought && typeof p.text === 'string')
+
+        if (!Array.isArray(responseParts) || responseParts.length === 0) {
+          lastError = `Empty response from ${model}: no parts found`
+          continue
+        }
+
+        const textPart = responseParts.find((p) => !p.thought && typeof p.text === 'string')
         const result = textPart?.text ?? responseParts[0]?.text ?? ''
+
+        if (!result) {
+          lastError = `No text content in response from ${model}`
+          continue
+        }
 
         return res.status(200).json({ result, model, endpoint: ep.location })
       }

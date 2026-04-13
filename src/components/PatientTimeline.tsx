@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,13 +23,33 @@ interface IntermediaireItem {
   data?: Record<string, unknown>
 }
 
+interface NoteAnalyseIA {
+  resume: string
+  evolution: string
+  vigilance: string[]
+  focus: string
+  conseil: string
+}
+
 interface NoteSeanceItem {
   id: number
   dateSeance: string
   numSeance: string
   zone?: string
   bilanType?: string
-  data: { eva: string; evolution: string; tolerance: string }
+  data: {
+    eva: string
+    evolution: string
+    tolerance: string
+    observance?: string
+    noteSubjective?: string
+    interventions?: string[]
+    detailDosage?: string
+    toleranceDetail?: string
+    prochaineEtape?: string[]
+    notePlan?: string
+  }
+  analyseIA?: NoteAnalyseIA
 }
 
 export interface PatientTimelineProps {
@@ -168,6 +188,18 @@ function IntermediaireCard({ item }: { item: IntermediaireItem }) {
 
 function NoteCard({ item }: { item: NoteSeanceItem }) {
   const evoBg = EVOLUTION_COLORS[item.data.evolution] ?? '#71717a'
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [analyseOpen, setAnalyseOpen] = useState(false)
+
+  const interventions = item.data.interventions ?? []
+  const prochaineEtape = item.data.prochaineEtape ?? []
+  const hasDetail =
+    interventions.length > 0 ||
+    !!item.data.detailDosage ||
+    !!item.data.noteSubjective ||
+    !!item.data.toleranceDetail ||
+    prochaineEtape.length > 0 ||
+    !!item.data.notePlan
 
   return (
     <div style={cardStyle}>
@@ -178,6 +210,13 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
         {item.data.evolution && (
           <Badge label={item.data.evolution} bg={`${evoBg}1a`} fg={evoBg} />
         )}
+        {item.data.tolerance && (
+          <Badge
+            label={item.data.tolerance}
+            bg={item.data.tolerance === 'Bien toléré' ? '#dcfce7' : '#fffbeb'}
+            fg={item.data.tolerance === 'Bien toléré' ? '#16a34a' : '#d97706'}
+          />
+        )}
       </div>
       <div style={metaRowStyle}>
         <span>{item.dateSeance}</span>
@@ -185,6 +224,95 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
       {item.data.eva && (
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
           EVA : <strong>{item.data.eva}/10</strong>
+        </div>
+      )}
+
+      {hasDetail && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            onClick={() => setDetailOpen(v => !v)}
+            style={{
+              width: '100%',
+              padding: '0.3rem 0.7rem',
+              borderRadius: detailOpen ? '8px 8px 0 0' : 8,
+              background: '#f5f3ff',
+              border: '1px solid #ede9fe',
+              color: '#7c3aed',
+              fontWeight: 600,
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+            <span>Détails séance</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: detailOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          {detailOpen && (
+            <div style={{ background: '#f5f3ff', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#5b21b6', lineHeight: 1.5, borderTop: '1px solid #ede9fe' }}>
+              {interventions.length > 0 && (
+                <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Traitement :</span> {interventions.join(', ')}</div>
+              )}
+              {item.data.detailDosage && (
+                <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Dosage :</span> {item.data.detailDosage}</div>
+              )}
+              {item.data.noteSubjective && (
+                <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Ressenti :</span> {item.data.noteSubjective}</div>
+              )}
+              {item.data.toleranceDetail && (
+                <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Tolérance :</span> {item.data.toleranceDetail}</div>
+              )}
+              {prochaineEtape.length > 0 && (
+                <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Prochaine étape :</span> {prochaineEtape.join(', ')}</div>
+              )}
+              {item.data.notePlan && (
+                <div><span style={{ fontWeight: 700 }}>Note :</span> {item.data.notePlan}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {item.analyseIA && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            onClick={() => setAnalyseOpen(v => !v)}
+            style={{
+              width: '100%',
+              padding: '0.4rem 0.7rem',
+              borderRadius: analyseOpen ? '8px 8px 0 0' : 8,
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              color: '#1d4ed8',
+              fontWeight: 600,
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+            <span>Analyse</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: analyseOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          {analyseOpen && (
+            <div style={{ background: '#eff6ff', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#1e3a8a', lineHeight: 1.5, borderLeft: '3px solid #2563eb', borderTop: 'none' }}>
+              <div style={{ marginBottom: 3 }}>{item.analyseIA.resume}</div>
+              <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{item.analyseIA.evolution}</div>
+              {item.analyseIA.vigilance.length > 0 && (
+                <div style={{ color: '#dc2626', fontSize: '0.72rem', marginBottom: 3 }}>Vigilance : {item.analyseIA.vigilance.join(' / ')}</div>
+              )}
+              <div style={{ fontWeight: 600, fontSize: '0.72rem' }}>Focus : {item.analyseIA.focus}</div>
+              {item.analyseIA.conseil && (
+                <div style={{ marginTop: 4, padding: '0.4rem 0.55rem', background: '#f0fdf4', borderRadius: 6, border: '1px solid #bbf7d0', color: '#15803d', fontSize: '0.72rem' }}>
+                  <span style={{ fontWeight: 700 }}>Conseil :</span> {item.analyseIA.conseil}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

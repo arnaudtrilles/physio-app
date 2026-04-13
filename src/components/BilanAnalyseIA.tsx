@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { AnalyseIA, BilanDocument, AICallAuditEntry } from '../types'
 import { buildClinicalPrompt, parseAnalyseIA, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
@@ -66,7 +66,22 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
   const [refining, setRefining] = useState(false)
   const [preAnalyseNotes, setPreAnalyseNotes] = useState('')
 
+  // Cleanup : annule le retry timeout et bloque les setState après unmount
+  const isMountedRef = useRef(true)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+    }
+  }, [])
+
   const runAnalysis = async (attempt = 0) => {
+    if (!isMountedRef.current) return
     setLoading(true)
     setError(null)
     try {
@@ -93,9 +108,11 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
       })
       const parsed = parseAnalyseIA(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
+      if (!isMountedRef.current) return
       setAnalyse(parsed)
       onResult(parsed)
     } catch (err: unknown) {
+      if (!isMountedRef.current) return
       // Annulation volontaire par l'utilisateur (docs non masqués) → silencieux
       if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
         setLoading(false)
@@ -103,7 +120,10 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
       }
       if (attempt < 2) {
         setRetryCount(attempt + 1)
-        setTimeout(() => runAnalysis(attempt + 1), 1200)
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null
+          if (isMountedRef.current) runAnalysis(attempt + 1)
+        }, 1200)
         return
       }
       if (err instanceof GeminiAuthError) {
@@ -117,7 +137,7 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
         }
       }
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) setLoading(false)
     }
   }
 
@@ -152,11 +172,13 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
       })
       const parsed = parseAnalyseIA(raw)
       if (!parsed) throw new Error('Réponse invalide')
+      if (!isMountedRef.current) return
       setAnalyse(parsed)
       onResult(parsed)
       setCorrection('')
       setShowCorrection(false)
     } catch (err: unknown) {
+      if (!isMountedRef.current) return
       // Annulation volontaire (docs non masqués) → silencieux
       if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
         setRefining(false)
@@ -165,7 +187,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
       const msg = err instanceof Error ? err.message : 'Erreur inconnue'
       setError(msg)
     } finally {
-      setRefining(false)
+      if (isMountedRef.current) setRefining(false)
     }
   }
 

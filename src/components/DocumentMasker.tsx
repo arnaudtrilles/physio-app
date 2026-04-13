@@ -27,14 +27,21 @@ export function DocumentMasker({ imageDataUrl, fileName, onConfirm, onCancel }: 
   const [showNoMaskWarning, setShowNoMaskWarning] = useState(false)
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
 
-  // Load image
+  // Load image — annule le onload si l'URL change pendant le chargement
   useEffect(() => {
+    let cancelled = false
     const img = new Image()
     img.onload = () => {
+      if (cancelled) return
       imgRef.current = img
       setImgSize({ w: img.naturalWidth, h: img.naturalHeight })
     }
+    img.onerror = () => {
+      if (cancelled) return
+      console.warn('[DocumentMasker] Échec chargement image')
+    }
     img.src = imageDataUrl
+    return () => { cancelled = true }
   }, [imageDataUrl])
 
   // Observe container size (recalcule au resize, rotation, etc.)

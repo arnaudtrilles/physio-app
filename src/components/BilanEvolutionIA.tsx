@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { EvolutionIA, AICallAuditEntry } from '../types'
 import { buildEvolutionPrompt, parseEvolutionIA, roleTitle } from '../utils/clinicalPrompt'
 import type { EvolutionContext } from '../utils/clinicalPrompt'
@@ -33,11 +33,33 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
-  const patientLabel = `${context.bilans[0]?.zone ?? ''} · ${context.bilans.length} bilan(s)`
+  // Cleanup : annule le retry timeout et bloque les setState après unmount
+  const isMountedRef = useRef(true)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const totalEvents = context.bilans.length + (context.intermediaires?.length ?? 0) + (context.seances?.length ?? 0)
+  const zoneLabel = context.bilans[0]?.zone ?? context.intermediaires?.[0]?.zone ?? context.seances?.[0]?.zone ?? ''
+  const parts: string[] = []
+  if (context.bilans.length) parts.push(`${context.bilans.length} bilan(s)`)
+  if (context.intermediaires?.length) parts.push(`${context.intermediaires.length} interm.`)
+  if (context.seances?.length) parts.push(`${context.seances.length} séance(s)`)
+  const patientLabel = `${zoneLabel}${zoneLabel ? ' · ' : ''}${parts.join(' · ') || `${totalEvents} étape(s)`}`
 
   const runAnalysis = async (attempt = 0) => {
+    if (!isMountedRef.current) return
     setLoading(true)
     setError(null)
+    let willRetry = false
     try {
       const raw = await callGeminiSecure({
         apiKey,
@@ -51,11 +73,17 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
       })
       const parsed = parseEvolutionIA(raw)
       if (!parsed) throw new Error('Réponse invalide — format JSON inattendu')
+      if (!isMountedRef.current) return
       setEvolution(parsed)
     } catch (err: unknown) {
+      if (!isMountedRef.current) return
       if (attempt < 2) {
+        willRetry = true
         setRetryCount(attempt + 1)
-        setTimeout(() => runAnalysis(attempt + 1), 1200)
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null
+          if (isMountedRef.current) runAnalysis(attempt + 1)
+        }, 1200)
         return
       }
       if (err instanceof GeminiAuthError) {
@@ -69,8 +97,8 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         }
       }
     } finally {
-      if (attempt >= 2) setLoading(false)
-      else if (attempt === 0) setLoading(true)
+      // Ne désactive le loader que si on ne va pas retry
+      if (!willRetry && isMountedRef.current) setLoading(false)
     }
   }
 
@@ -112,7 +140,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
           </div>
           <div className="ai-hero-text">
             <h4>Rapport d'évolution</h4>
-            <p>Analyse de la progression sur l'ensemble des bilans du patient. À titre indicatif uniquement.</p>
+            <p>Analyse chronologique de la progression : bilans initiaux, bilans intermédiaires et notes de séance. À titre indicatif uniquement.</p>
           </div>
         </div>
 
@@ -180,7 +208,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
               </div>
               <div>
                 <div style={{ fontWeight: 700, color: tendanceCfg.color, fontSize: '1rem' }}>{tendanceCfg.label}</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>Tendance générale sur {evolution.progression.length} bilan(s)</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>Tendance générale sur {evolution.progression.length} étape(s)</div>
               </div>
             </div>
 
@@ -223,7 +251,10 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{p.date}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {p.etape && <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{p.etape}</span>}
+                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{p.date}</span>
+                          </div>
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             {curr != null && <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)' }}>EVN {curr}/10</span>}
                             {delta !== null && <span style={{ fontSize: '0.75rem', fontWeight: 700, color: dColor }}>({delta > 0 ? '+' : ''}{delta}%)</span>}

@@ -3,19 +3,39 @@ import html2canvas from 'html2canvas';
 import { computeAge } from './clinicalPrompt';
 
 // ── Nettoyage texte pour jsPDF (Helvetica ne supporte pas certains caractères) ─
-const sanitize = (text: string): string =>
-  text
-    .replace(/[\u2018\u2019\u2032]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/\u2013/g, '\u002D')  // en-dash → hyphen
-    .replace(/\u2014/g, '\u002D')  // em-dash → hyphen
+// Robuste face au texte généré par IA : guillemets typographiques, tirets,
+// bullets, exposants, flèches… tout ce qui n'est pas WinAnsi est filtré pour
+// éviter les crashs jsPDF.
+const sanitize = (text: string): string => {
+  if (text == null) return ''
+  return String(text)
+    .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+    .replace(/[\u2013\u2014\u2015\u2212]/g, '-')   // en/em-dash, minus
     .replace(/\u2026/g, '...')
-    .replace(/\u00A0/g, ' ')       // non-breaking space
-    .replace(/[\u200B\u200C\u200D\uFEFF]/g, '') // zero-width chars
-    .replace(/\u00B2/g, '2')       // superscript 2
-    .replace(/\u00B3/g, '3')       // superscript 3
-    .replace(/\u2265/g, '>=')      // ≥
-    .replace(/\u2264/g, '<=')      // ≤
+    .replace(/\u00A0/g, ' ')                        // non-breaking space
+    // eslint-disable-next-line no-misleading-character-class
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')     // zero-width chars
+    .replace(/[\u2022\u2023\u25E6\u2043\u204C\u204D]/g, '-') // bullets
+    .replace(/\u00B2/g, '2')                        // superscript 2
+    .replace(/\u00B3/g, '3')                        // superscript 3
+    .replace(/\u00B9/g, '1')                        // superscript 1
+    .replace(/\u2070/g, '0').replace(/\u2074/g, '4').replace(/\u2075/g, '5')
+    .replace(/\u2076/g, '6').replace(/\u2077/g, '7').replace(/\u2078/g, '8').replace(/\u2079/g, '9')
+    .replace(/\u2265/g, '>=')                       // ≥
+    .replace(/\u2264/g, '<=')                       // ≤
+    .replace(/\u2260/g, '!=')                       // ≠
+    .replace(/\u00B1/g, '+/-')                      // ±
+    .replace(/\u00D7/g, 'x')                        // ×
+    .replace(/\u00F7/g, '/')                        // ÷
+    .replace(/[\u2192\u27A1]/g, '->')               // → arrows
+    .replace(/[\u2190]/g, '<-')                     // ←
+    .replace(/[\u2194]/g, '<->')                    // ↔
+    // Strip emoji + autres symboles non-WinAnsi qui crashent jsPDF
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+}
 
 // ── Couleurs ──────────────────────────────────────────────────────────────────
 const C = {
@@ -1243,8 +1263,9 @@ export const generateLetterPDF = (options: LetterPDFOptions): Blob | void => {
       check(imgH + 5)
       doc.addImage(p.signatureImage, 'PNG', imgX, imgY, imgW, imgH)
       y += imgH + 4
-    } catch {
-      // ignore image errors
+    } catch (e) {
+      // Log mais ne crash pas le PDF — la signature est optionnelle
+      console.warn('[PDF] Échec ajout signature image :', e instanceof Error ? e.message : e)
     }
   }
 

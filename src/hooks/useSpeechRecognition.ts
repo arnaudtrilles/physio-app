@@ -1,16 +1,37 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export const useSpeechRecognition = () => {
   const [activeField, setActiveField] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef<string>('');
+  const isMountedRef = useRef(true);
+
+  // Cleanup global au démontage : arrête la reconnaissance et bloque les setState
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      const rec = recognitionRef.current;
+      if (rec) {
+        rec.onend = null;
+        rec.onerror = null;
+        rec.onresult = null;
+        try { rec.stop(); } catch { /* ignore */ }
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
+
+  const safeSetActiveField = (v: string | null) => {
+    if (isMountedRef.current) setActiveField(v);
+  };
 
   const toggleListening = (fieldName: string, onResult: (text: string) => void) => {
     // Clic sur le champ actif → arrêt
     if (activeField === fieldName) {
       recognitionRef.current?.stop();
       recognitionRef.current = null;
-      setActiveField(null);
+      safeSetActiveField(null);
       return;
     }
 
@@ -19,17 +40,17 @@ export const useSpeechRecognition = () => {
       recognitionRef.current.onend = null;
       recognitionRef.current.onerror = null;
       recognitionRef.current.onresult = null;
-      recognitionRef.current.stop();
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
 
-    setActiveField(fieldName);
+    safeSetActiveField(fieldName);
     finalTranscriptRef.current = '';
 
     // @ts-ignore
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
-      setActiveField(null);
+      safeSetActiveField(null);
       alert("Dictée vocale non supportée. Utilisez Chrome ou Edge.");
       return;
     }
@@ -41,15 +62,16 @@ export const useSpeechRecognition = () => {
 
     recognition.onend = () => {
       recognitionRef.current = null;
-      setActiveField(null);
+      safeSetActiveField(null);
     };
 
     recognition.onerror = () => {
       recognitionRef.current = null;
-      setActiveField(null);
+      safeSetActiveField(null);
     };
 
     recognition.onresult = (event: any) => {
+      if (!isMountedRef.current) return;
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -64,7 +86,13 @@ export const useSpeechRecognition = () => {
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (e) {
+      console.warn('[SpeechRecognition] start failed:', e);
+      recognitionRef.current = null;
+      safeSetActiveField(null);
+    }
   };
 
   return { activeField, toggleListening };

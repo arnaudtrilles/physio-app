@@ -1,5 +1,21 @@
 export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique' | 'geriatrique'
 
+/**
+ * Marque la clôture d'une prise en charge pour un patient sur une zone (bilanType).
+ * Tant qu'une PEC n'est pas clôturée, elle est considérée active. Les analyses IA
+ * (séance, intermédiaire, initial, évolution, courrier) ne doivent utiliser que
+ * l'historique de la zone en cours ; les zones clôturées n'apparaissent aux
+ * analyses d'autres zones que sous forme d'antécédent résumé (1 ligne).
+ */
+export interface ClosedTreatment {
+  id: number
+  patientKey: string
+  bilanType: BilanType
+  zone?: string
+  closedAt: string        // ISO
+  note?: string           // note de clôture optionnelle
+}
+
 export interface FicheExercice {
   generatedAt: string
   markdown: string
@@ -307,7 +323,7 @@ export interface EvolutionIA {
   generatedAt: string
   resume: string
   tendance: 'amelioration' | 'stationnaire' | 'regression' | 'mixte'
-  progression: Array<{ bilanNum: number; date: string; evn: number | null; commentaire: string }>
+  progression: Array<{ bilanNum: number; date: string; evn: number | null; commentaire: string; etape?: string }>
   pointsForts: string[]
   pointsVigilance: string[]
   recommandations: Array<{ titre: string; detail: string }>

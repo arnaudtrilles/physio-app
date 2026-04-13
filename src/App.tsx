@@ -35,7 +35,7 @@ import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
 import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
-import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry } from './types'
+import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
 import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
@@ -184,12 +184,19 @@ function App() {
   const [dbLetterAudit, setDbLetterAudit, auditLoaded] = useIndexedDB<LetterAuditEntry[]>('physio_letter_audit', [])
   const [dbAICallAudit, setDbAICallAudit, aiAuditLoaded] = useIndexedDB<AICallAuditEntry[]>('physio_ai_call_audit', [])
   const [dbPrescriptions, setDbPrescriptions] = useIndexedDB<PatientPrescription[]>('physio_prescriptions', [])
+  const [dbClosedTreatments, setDbClosedTreatments, closedLoaded] = useIndexedDB<ClosedTreatment[]>('physio_closed_treatments', [])
+  // Accordéon : zones repliées par patient (clé = `${patientKey}::${bilanType}`)
+  const [collapsedZones, setCollapsedZones] = useState<Set<string>>(new Set())
+  // Zone courante pour le rapport d'évolution IA (quand plusieurs PEC parallèles)
+  const [evolutionZoneType, setEvolutionZoneType] = useState<BilanType | null>(null)
+  // Modal de choix de zone pour courrier/bilan de sortie
+  const [letterZonePicker, setLetterZonePicker] = useState<{ action: 'letter' | 'bilan_sortie' } | null>(null)
   const isOnline = useOnlineStatus()
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
   const [_apiKeyStored, _setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
   // Vertex AI: auth is server-side, no client key needed — always truthy
   const apiKey = 'vertex'
-  const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded
+  const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded && closedLoaded
 
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
   const recordAIAudit = useCallback((entry: AICallAuditEntry) => {
@@ -583,6 +590,62 @@ function App() {
   const getPatientBilans = (key: string) =>
     db.filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === key)
       .sort((a, b) => a.id - b.id)
+
+  // ── Clôture de prise en charge ───────────────────────────────────────────
+  const isTreatmentClosed = (patientKey: string, bilanType: BilanType): boolean =>
+    dbClosedTreatments.some(c => c.patientKey === patientKey && c.bilanType === bilanType)
+
+  const getLastClosure = (patientKey: string, bilanType: BilanType): ClosedTreatment | undefined =>
+    dbClosedTreatments.filter(c => c.patientKey === patientKey && c.bilanType === bilanType).pop()
+
+  const closeTreatment = (patientKey: string, bilanType: BilanType, zone?: string) => {
+    if (isTreatmentClosed(patientKey, bilanType)) return
+    setDbClosedTreatments(prev => [...prev, {
+      id: Date.now(),
+      patientKey,
+      bilanType,
+      zone,
+      closedAt: new Date().toISOString(),
+    }])
+  }
+
+  const reopenTreatment = (patientKey: string, bilanType: BilanType) => {
+    setDbClosedTreatments(prev => prev.filter(c => !(c.patientKey === patientKey && c.bilanType === bilanType)))
+  }
+
+  const toggleZoneCollapsed = (patientKey: string, bilanType: BilanType) => {
+    const key = `${patientKey}::${bilanType}`
+    setCollapsedZones(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
+  const isZoneCollapsed = (patientKey: string, bilanType: BilanType): boolean =>
+    collapsedZones.has(`${patientKey}::${bilanType}`)
+
+  /** Retourne les bilanTypes pour lesquels le patient a au moins un enregistrement. */
+  const getPatientBilanTypes = (patientKey: string): BilanType[] => {
+    const set = new Set<BilanType>()
+    for (const b of getPatientBilans(patientKey)) set.add(b.bilanType ?? getBilanType(b.zone ?? ''))
+    for (const i of getPatientIntermediaires(patientKey)) set.add(i.bilanType ?? getBilanType(i.zone ?? ''))
+    for (const n of getPatientNotes(patientKey)) set.add(n.bilanType ?? getBilanType(n.zone ?? ''))
+    return Array.from(set)
+  }
+
+  /** Construit un antécédent 1-ligne par PEC clôturée dans une AUTRE zone (contexte général pour une nouvelle analyse). */
+  const getClosedAntecedents = (patientKey: string, currentBilanType: BilanType): string[] => {
+    const types = getPatientBilanTypes(patientKey).filter(t => t !== currentBilanType && isTreatmentClosed(patientKey, t))
+    return types.map(t => {
+      const bilans = getPatientBilans(patientKey).filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === t)
+      const notes = getPatientNotes(patientKey).filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === t)
+      const inters = getPatientIntermediaires(patientKey).filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === t)
+      const closure = getLastClosure(patientKey, t)
+      const closedDate = closure ? new Date(closure.closedAt).toLocaleDateString('fr-FR') : ''
+      return `PEC ${BILAN_ZONE_LABELS[t]} — terminée${closedDate ? ` le ${closedDate}` : ''} (${bilans.length} bilan(s), ${inters.length} interm., ${notes.length} séance(s))`
+    })
+  }
 
   const improvDelta = (prev: number, curr: number) => Math.round(((prev - curr) / prev) * 100)
 
@@ -1565,19 +1628,39 @@ STRUCTURE (n'inclure que si données présentes) :
                               }
                               return pts
                             })()
+                            const zoneClosed = isTreatmentClosed(selectedPatient ?? '', zoneType as BilanType)
+                            const zoneCollapsed = zoneClosed || isZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
+                            const zoneIntermCount = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType).length
+                            const zoneNotesCount = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType).length
+                            const zoneLabel = ZONE_SECTION_LABELS[zoneType] ?? zoneType
+                            const closure = getLastClosure(selectedPatient ?? '', zoneType as BilanType)
                             return (
                             <div key={zoneType} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                              {showSections && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.55rem 0.9rem', background: 'var(--secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', marginTop: '0.35rem' }}>
-                                  <div style={{ width: 3, height: 18, background: 'var(--primary)', borderRadius: 2, flexShrink: 0 }} />
-                                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary-dark)', letterSpacing: '0.03em' }}>
-                                    {ZONE_SECTION_LABELS[zoneType] ?? zoneType}
+                              <div
+                                onClick={() => toggleZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.55rem 0.9rem', background: zoneClosed ? '#f0fdf4' : 'var(--secondary)', borderRadius: 'var(--radius-lg)', border: `1px solid ${zoneClosed ? '#86efac' : 'var(--border-color)'}`, marginTop: '0.35rem', cursor: 'pointer', userSelect: 'none' }}>
+                                <div style={{ width: 3, height: 18, background: zoneClosed ? '#16a34a' : 'var(--primary)', borderRadius: 2, flexShrink: 0 }} />
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)', transform: zoneCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+                                  <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: zoneClosed ? '#166534' : 'var(--primary-dark)', letterSpacing: '0.03em' }}>
+                                  {zoneLabel}
+                                </span>
+                                {zoneClosed && (
+                                  <span style={{ fontSize: '0.62rem', fontWeight: 700, background: '#16a34a', color: 'white', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    PEC terminée
                                   </span>
-                                  <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                                    {zoneBilans.length} bilan{zoneBilans.length > 1 ? 's' : ''}
-                                  </span>
+                                )}
+                                <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                  {zoneBilans.length}B · {zoneIntermCount}I · {zoneNotesCount}S
+                                </span>
+                              </div>
+                              {zoneClosed && closure && (
+                                <div style={{ fontSize: '0.72rem', color: '#166534', padding: '0 0.4rem', fontStyle: 'italic' }}>
+                                  Clôturée le {new Date(closure.closedAt).toLocaleDateString('fr-FR')} — cette PEC est ignorée par les analyses IA des autres zones (résumée en antécédent seulement).
                                 </div>
                               )}
+                              {!zoneCollapsed && (<>
                               <EvolutionChart
                                 points={evolutionPoints}
                                 title={`Évolution EVN — ${ZONE_SECTION_LABELS[zoneType] ?? zoneType}`}
@@ -2132,87 +2215,101 @@ STRUCTURE (n'inclure que si données présentes) :
                                   </div>
                                 )
                               })()}
+                              {/* ── Actions par zone ────────────────────── */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: '0.35rem' }}>
+                                {(zoneBilans.filter(r => r.status === 'complet').length + zoneIntermCount + zoneNotesCount) >= 2 && (
+                                  <button
+                                    onClick={() => {
+                                      const firstRec = zoneBilans[0] ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType) ?? allPatientRecords[0]
+                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                                      setEvolutionZoneType(zoneType as BilanType)
+                                      setStep('evolution_ia')
+                                    }}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                    Rapport d'évolution IA — {zoneLabel}
+                                  </button>
+                                )}
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button
+                                    onClick={() => {
+                                      const firstRec = zoneBilans[0] ?? allPatientRecords[0]
+                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? ''
+                                      setNoteSeanceZone(z)
+                                      setCurrentNoteSeanceId(null)
+                                      setCurrentNoteSeanceData(null)
+                                      setStep('note_seance')
+                                    }}
+                                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #c4b5fd', background: 'transparent', color: '#6d28d9', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Séance
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const firstRec = zoneBilans[0] ?? allPatientRecords[0]
+                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                                      const patKey = selectedPatient ?? ''
+                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? ''
+                                      setBilanIntermediaireZone(z)
+                                      setCurrentBilanIntermediaireId(null)
+                                      setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
+                                      setStep('bilan_intermediaire')
+                                    }}
+                                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #fed7aa', background: 'transparent', color: '#c2410c', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan interm.
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Clôturer la prise en charge ${zoneLabel} ? Les futures analyses d'autres zones ne verront cette PEC que comme un antécédent résumé.`)) {
+                                      closeTreatment(selectedPatient ?? '', zoneType as BilanType, zoneBilans[0]?.zone)
+                                    }
+                                  }}
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #86efac', background: 'transparent', color: '#166534', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                  Clôturer la PEC {zoneLabel}
+                                </button>
+                              </div>
+                              </>)}
+                              {zoneClosed && (
+                                <button
+                                  onClick={() => reopenTreatment(selectedPatient ?? '', zoneType as BilanType)}
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid #86efac', background: 'white', color: '#166534', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                                  Rouvrir la PEC
+                                </button>
+                              )}
                             </div>
                           )
                           })
                         })()}
-                        {bilans.filter(r => r.status === 'complet').length >= 2 && (
-                          <button
-                            onClick={() => {
-                              const firstRec = bilans[0]
-                              setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                              setStep('evolution_ia')
-                            }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                            </svg>
-                            Rapport d'évolution IA
-                          </button>
-                        )}
-
-                        {/* Note de séance pleine largeur */}
+                        {/* ── Nouveau bilan initial (nouvelle zone) ─────────────────── */}
                         <button
                           onClick={() => {
                             const firstRec = allPatientRecords[0]
                             setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                            const zones = Array.from(new Map(allPatientRecords.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
-                            if (zones.length === 1) {
-                              const z = zones[0][1] ?? ''
-                              setNoteSeanceZone(z)
-                              setCurrentNoteSeanceId(null)
-                              setCurrentNoteSeanceData(null)
-                              setStep('note_seance')
-                            } else {
-                              setShowNoteSeanceZoneSelector(true)
-                            }
+                            setPatientMode('existing')
+                            setSelectedBodyZone(null)
+                            setBilanZoneBackStep('identity')
+                            setStep('identity')
                           }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #c4b5fd', background: 'transparent', color: '#6d28d9', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' }}>
-                          <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> Nouvelle note de séance
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.7rem 0.5rem', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border-color)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+                          <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Nouveau bilan initial (autre zone)
                         </button>
-                        {/* Bilan intermédiaire + Bilan initial côte à côte */}
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button
-                            onClick={() => {
-                              const firstRec = allPatientRecords[0]
-                              setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                              const patKey = selectedPatient ?? ''
-                              const zones = Array.from(new Map(allPatientRecords.map(r => [r.bilanType ?? getBilanType(r.zone ?? ''), r.zone])).entries())
-                              if (zones.length === 1) {
-                                const z = zones[0][1] ?? ''
-                                setBilanIntermediaireZone(z)
-                                setCurrentBilanIntermediaireId(null)
-                                setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
-                                setStep('bilan_intermediaire')
-                              } else {
-                                setShowIntermediaireZoneSelector(true)
-                              }
-                            }}
-                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.7rem 0.5rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #fed7aa', background: 'transparent', color: '#c2410c', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                            <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan intermédiaire
-                          </button>
-                          <button
-                            onClick={() => {
-                              const firstRec = allPatientRecords[0]
-                              setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                              setPatientMode('existing')
-                              setSelectedBodyZone(null)
-                              setBilanZoneBackStep('identity')
-                              setStep('identity')
-                            }}
-                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.7rem 0.5rem', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border-color)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                            <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan initial
-                          </button>
-                        </div>
 
-                        {/* ── Bilan de sortie ─────────────────────── */}
+                        {/* ── Bilan de sortie (avec choix de zone si multi) ─────── */}
                         {bilans.length > 0 && (
                           <button
                             onClick={() => {
                               const firstRec = allPatientRecords[0]
                               setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                              setSelectedBodyZone(bilans[bilans.length - 1]?.zone ?? null)
-                              setStep('bilan_sortie')
+                              const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
+                              if (activeTypes.length <= 1) {
+                                setSelectedBodyZone(bilans[bilans.length - 1]?.zone ?? null)
+                                setStep('bilan_sortie')
+                              } else {
+                                setLetterZonePicker({ action: 'bilan_sortie' })
+                              }
                             }}
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.7rem 0.5rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #86efac', background: 'transparent', color: '#059669', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -2220,9 +2317,19 @@ STRUCTURE (n'inclure que si données présentes) :
                           </button>
                         )}
 
-                        {/* ── Courrier ─────────────────────── */}
+                        {/* ── Courrier (avec choix de zone si multi) ─────── */}
                         <button
-                          onClick={() => setStep('letter')}
+                          onClick={() => {
+                            const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
+                            if (activeTypes.length <= 1) {
+                              // Définit la zone (si le patient a des bilans) pour que l'IA filtre
+                              const soleZone = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === activeTypes[0])?.zone ?? null
+                              setSelectedBodyZone(soleZone)
+                              setStep('letter')
+                            } else {
+                              setLetterZonePicker({ action: 'letter' })
+                            }
+                          }}
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #93c5fd', background: 'transparent', color: '#1d4ed8', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' }}>
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                           Courrier
@@ -2960,6 +3067,57 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         />
       )}
 
+      {/* ── Zone selector for letter / bilan de sortie ─────────────────────── */}
+      {letterZonePicker && selectedPatient && (() => {
+        const patKey = selectedPatient
+        const allTypes = getPatientBilanTypes(patKey)
+        const zoneLabelForType = (t: BilanType): string => BILAN_ZONE_LABELS[t]
+        const firstZoneForType = (t: BilanType): string => {
+          const firstRec = [...getPatientBilans(patKey), ...getPatientIntermediaires(patKey), ...getPatientNotes(patKey)].find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === t)
+          return firstRec?.zone ?? ''
+        }
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 3000 }}
+               onClick={() => setLetterZonePicker(null)}>
+            <div onClick={e => e.stopPropagation()}
+                 style={{ background: 'var(--surface)', padding: '1.5rem 1.25rem 2rem', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, boxShadow: 'var(--shadow-2xl)' }}>
+              <div style={{ width: 40, height: 4, background: 'var(--border-color)', borderRadius: 2, margin: '0 auto 1rem' }} />
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--primary-dark)', marginBottom: 4 }}>
+                {letterZonePicker.action === 'letter' ? 'Courrier — quelle PEC ?' : 'Bilan de sortie — quelle PEC ?'}
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
+                Ce patient a plusieurs prises en charge. Choisis celle à inclure.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {allTypes.map(t => {
+                  const closed = isTreatmentClosed(patKey, t)
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        const zone = firstZoneForType(t)
+                        setSelectedBodyZone(zone)
+                        const action = letterZonePicker.action
+                        setLetterZonePicker(null)
+                        setStep(action)
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.85rem 1rem', borderRadius: 12, border: `1.5px solid ${closed ? '#86efac' : 'var(--border-color)'}`, background: closed ? '#f0fdf4' : 'white', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'left' }}>
+                      <div style={{ width: 4, height: 22, background: closed ? '#16a34a' : 'var(--primary)', borderRadius: 2 }} />
+                      <span style={{ flex: 1 }}>{zoneLabelForType(t)}</span>
+                      {closed && <span style={{ fontSize: '0.62rem', fontWeight: 700, background: '#16a34a', color: 'white', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase' }}>Terminée</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <button onClick={() => setLetterZonePicker(null)}
+                style={{ marginTop: 12, width: '100%', padding: '0.75rem', borderRadius: 12, background: 'var(--secondary)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' }}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Zone selector for note de séance ──────────────────────────────────── */}
       {showNoteSeanceZoneSelector && selectedPatient && (
         <ZonePickerSheet
@@ -3578,7 +3736,14 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
       {/* ── Evolution IA step ─────────────────────────────────────────────────── */}
       {step === 'evolution_ia' && (() => {
         const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-        const bilans = getPatientBilans(patKey).filter(r => r.status === 'complet')
+        const targetBt = evolutionZoneType
+        const matchBt = (bt?: BilanType, zone?: string) => {
+          if (!targetBt) return true
+          return (bt ?? getBilanType(zone ?? '')) === targetBt
+        }
+        const bilans = getPatientBilans(patKey).filter(r => r.status === 'complet' && matchBt(r.bilanType, r.zone))
+        const intermediaires = getPatientIntermediaires(patKey).filter(r => r.status === 'complet' && matchBt(r.bilanType, r.zone))
+        const notes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
         const evolutionBilans = bilans.map((r, i) => ({
           num: i + 1,
           date: r.dateBilan,
@@ -3586,6 +3751,20 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           evn: r.evn ?? null,
           bilanData: r.bilanData ?? {},
         }))
+        const evolutionIntermediaires = intermediaires.map((r, i) => ({
+          num: i + 1,
+          date: r.dateBilan,
+          zone: r.zone ?? '',
+          data: r.data ?? {},
+        }))
+        const evolutionSeances = notes.map(r => ({
+          num: r.numSeance,
+          date: r.dateSeance,
+          zone: r.zone ?? '',
+          data: r.data ?? {},
+        }))
+        const currentZoneLabel = targetBt ? BILAN_ZONE_LABELS[targetBt] : undefined
+        const closedAntecedents = targetBt ? getClosedAntecedents(patKey, targetBt) : []
         return (
           <Suspense fallback={<LazyFallback />}>
           <BilanEvolutionIA
@@ -3593,13 +3772,17 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             context={{
               patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
               bilans: evolutionBilans,
+              intermediaires: evolutionIntermediaires,
+              seances: evolutionSeances,
+              currentZoneLabel,
+              closedAntecedents,
               therapistProfession: profile.profession,
             }}
             patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
             profession={profile.profession}
             onAudit={recordAIAudit}
-            onBack={() => setStep('database')}
-            onClose={() => setStep('database')}
+            onBack={() => { setEvolutionZoneType(null); setStep('database') }}
+            onClose={() => { setEvolutionZoneType(null); setStep('database') }}
             onGoToProfile={() => setStep('profile')}
           />
           </Suspense>
@@ -3749,6 +3932,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           bilanType={currentIntermediaireForNote.bilanType ?? getBilanType(currentIntermediaireForNote.zone ?? '')}
           intermData={currentIntermediaireForNote.data ?? {}}
           historique={currentIntermediaireHistorique}
+          closedAntecedents={getClosedAntecedents(currentIntermediaireForNote.patientKey, currentIntermediaireForNote.bilanType ?? getBilanType(currentIntermediaireForNote.zone ?? ''))}
           seances={(() => {
             const patKey = currentIntermediaireForNote.patientKey
             const bt = currentIntermediaireForNote.bilanType ?? getBilanType(currentIntermediaireForNote.zone ?? '')
@@ -3806,6 +3990,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             notesLibres: bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
             therapistProfession: profile.profession,
+            closedAntecedents: getClosedAntecedents(`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim(), getBilanType(selectedBodyZone ?? '')),
           }}
           patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
           profession={profile.profession}
@@ -3856,19 +4041,23 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             bilanData: ficheExerciceContextOverride?.bilanData ?? currentBilanDataOverride ?? getBilanData() ?? {},
             notesLibres: ficheExerciceContextOverride?.notesLibres ?? bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
+            closedAntecedents: getClosedAntecedents(selectedPatient ?? `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim(), getBilanType(ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? '')),
             patientHistory: (() => {
               const patKey = selectedPatient ?? `${formData.nom}_${formData.prenom}_${formData.dateNaissance}`
+              const currentZone = ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? ''
+              const currentBt = getBilanType(currentZone)
               const history: import('./utils/clinicalPrompt').PatientHistoryEntry[] = []
-              // Bilans initiaux
+              // Scope strict à la zone courante (on ne mélange pas les PEC)
               for (const b of getPatientBilans(patKey)) {
+                if ((b.bilanType ?? getBilanType(b.zone ?? '')) !== currentBt) continue
                 history.push({ type: 'bilan', date: b.dateBilan, zone: b.zone ?? '', evn: b.evn, data: b.bilanData as Record<string, unknown> | undefined, ficheExercice: b.ficheExercice })
               }
-              // Bilans intermédiaires
               for (const b of getPatientIntermediaires(patKey)) {
+                if ((b.bilanType ?? getBilanType(b.zone ?? '')) !== currentBt) continue
                 history.push({ type: 'intermediaire', date: b.dateBilan, zone: b.zone ?? '', data: b.data, analyseIA: b.analyseIA ? { resume: b.analyseIA.noteDiagnostique.description, evolution: b.analyseIA.noteDiagnostique.evolution } : null, ficheExercice: b.ficheExercice })
               }
-              // Notes de séance
               for (const n of getPatientNotes(patKey)) {
+                if ((n.bilanType ?? getBilanType(n.zone ?? '')) !== currentBt) continue
                 history.push({ type: 'note_seance', date: n.dateSeance, zone: n.zone ?? '', noteData: n.data, analyseIA: n.analyseIA ? { focus: n.analyseIA.focus } : null, ficheExercice: n.ficheExercice })
               }
               return history
@@ -3964,16 +4153,22 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
       )}
 
       {/* ── Courrier (letter) step ───────────────────────────────────────────── */}
-      {step === 'letter' && selectedPatient && (
+      {step === 'letter' && selectedPatient && (() => {
+        const letterBt: BilanType | null = selectedBodyZone ? getBilanType(selectedBodyZone) : null
+        const matchBt = (bt?: BilanType, zone?: string) => letterBt == null || (bt ?? getBilanType(zone ?? '')) === letterBt
+        const scopedBilans = getPatientBilans(selectedPatient).filter(r => matchBt(r.bilanType, r.zone))
+        const scopedInters = getPatientIntermediaires(selectedPatient).filter(r => matchBt(r.bilanType, r.zone))
+        const scopedNotes = getPatientNotes(selectedPatient).filter(r => matchBt(r.bilanType, r.zone))
+        return (
         <ErrorBoundary onReset={() => setStep('database')}>
         <Suspense fallback={<LazyFallback />}>
           <LetterGenerator
             profile={profile}
             apiKey={apiKey}
             patientKey={selectedPatient}
-            bilans={getPatientBilans(selectedPatient)}
-            intermediaires={getPatientIntermediaires(selectedPatient)}
-            notes={getPatientNotes(selectedPatient)}
+            bilans={scopedBilans}
+            intermediaires={scopedInters}
+            notes={scopedNotes}
             existingLetters={dbLetters.filter(l => l.patientKey === selectedPatient)}
             onSave={(letter) => {
               setDbLetters(prev => {
@@ -3994,14 +4189,17 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           />
         </Suspense>
         </ErrorBoundary>
-      )}
+        )
+      })()}
 
       {/* ── Bilan de sortie step ──────────────────────────────────────────── */}
       {step === 'bilan_sortie' && selectedPatient && (() => {
-        const patBilans = getPatientBilans(selectedPatient).filter(r => r.status === 'complet' || r.bilanData)
+        const sortieBt: BilanType | null = selectedBodyZone ? getBilanType(selectedBodyZone) : null
+        const matchBt = (bt?: BilanType, zone?: string) => sortieBt == null || (bt ?? getBilanType(zone ?? '')) === sortieBt
+        const patBilans = getPatientBilans(selectedPatient).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
         const firstBilan = patBilans[0]
         const lastBilan = patBilans[patBilans.length - 1]
-        const notes = getPatientNotes(selectedPatient)
+        const notes = getPatientNotes(selectedPatient).filter(r => matchBt(r.bilanType, r.zone))
         const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
         return (
           <div className="app-container" style={{ padding: '1rem 1.5rem', overflowY: 'auto' }}>
@@ -4041,11 +4239,11 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   return v != null ? Number(v) : undefined
                 })()}
                 noteCount={notes.length}
-                bilanCount={patBilans.length + getPatientIntermediaires(selectedPatient ?? '').length}
+                bilanCount={patBilans.length + getPatientIntermediaires(selectedPatient ?? '').filter(r => matchBt(r.bilanType, r.zone)).length}
                 prescribedSessions={(() => { const list = rx?.prescriptions ?? (rx?.nbSeancesPrescrites ? [{ nbSeances: rx.nbSeancesPrescrites }] : []); return list.reduce((s: number, r: { nbSeances: number }) => s + r.nbSeances, 0) || undefined })()}
                 notes={notes.map(n => ({ numSeance: n.numSeance, dateSeance: n.dateSeance, data: n.data as unknown as { eva: string; evolution: string; tolerance: string; interventions: string[]; detailDosage?: string; prochaineEtape?: string[]; noteSubjective?: string; observance?: string } }))}
                 smartObjectifs={dbObjectifs.filter(o => o.patientKey === selectedPatient).map(o => ({ titre: o.titre, status: o.status }))}
-                lastIntermediaire={(() => { const inters = getPatientIntermediaires(selectedPatient ?? ''); return inters.length > 0 ? inters[inters.length - 1].data ?? {} : undefined })()}
+                lastIntermediaire={(() => { const inters = getPatientIntermediaires(selectedPatient ?? '').filter(r => matchBt(r.bilanType, r.zone)); return inters.length > 0 ? inters[inters.length - 1].data ?? {} : undefined })()}
                 onGenerateLetter={() => { setStep('letter') }}
                 onGenerateSynthese={async () => {
                   if (!apiKey) { showToast('Clé API requise', 'error'); return }
@@ -4054,13 +4252,15 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   showToast('Génération de la synthèse...', 'success')
                   try {
                     const patKey = selectedPatient ?? ''
-                    const allBilans = getPatientBilans(patKey).filter(r => r.status === 'complet' || r.bilanData)
-                    const allInters = getPatientIntermediaires(patKey)
-                    const allNotes = getPatientNotes(patKey)
+                    const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
+                    const allInters = getPatientIntermediaires(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                    const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                    const closedLines = sortieBt ? getClosedAntecedents(patKey, sortieBt) : []
                     const historiqueStr = [
                       ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10 — Zone: ${b.zone ?? '?'}`),
                       ...allInters.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${(tc.evn as Record<string, unknown>)?.pireActuel ?? '?'}/10` }),
-                      ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`)
+                      ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`),
+                      ...(closedLines.length > 0 ? ['', 'Antécédents d\'autres PEC (clôturées, contexte) :', ...closedLines.map(l => `- ${l}`)] : [])
                     ].join('\n')
                     const raw = await callGeminiSecure({
                       apiKey,
@@ -4083,9 +4283,9 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   showToast('Génération des recommandations...', 'success')
                   try {
                     const patKey = selectedPatient ?? ''
-                    const allNotes = getPatientNotes(patKey)
+                    const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
                     const lastNote = allNotes[allNotes.length - 1]
-                    const allBilans = getPatientBilans(patKey).filter(r => r.status === 'complet' || r.bilanData)
+                    const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
                     const firstBilanData = allBilans[0]?.bilanData
                     const contrat = ((firstBilanData?.contratKine ?? firstBilanData?.contrat) as Record<string, unknown>) ?? {}
                     // Collecter TOUS les exercices réellement prescrits

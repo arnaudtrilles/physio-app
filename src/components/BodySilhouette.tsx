@@ -55,14 +55,26 @@ const DrawingCanvas = ({
 
   // Restaurer un dessin sauvegardé
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d')!;
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    if (savedDrawing) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0);
-      img.src = savedDrawing;
-    }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!savedDrawing) return;
+    const img = new Image();
+    let cancelled = false;
+    img.onload = () => {
+      // Vérifie que le canvas n'a pas été démonté pendant le chargement
+      if (cancelled) return;
+      const c = canvasRef.current;
+      if (!c) return;
+      const ctx2 = c.getContext('2d');
+      if (!ctx2) return;
+      ctx2.drawImage(img, 0, 0);
+    };
+    img.src = savedDrawing;
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoneId]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {

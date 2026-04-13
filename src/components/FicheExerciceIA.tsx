@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { jsPDF } from 'jspdf'
 import type { FicheExercice, AnalyseIA, AICallAuditEntry } from '../types'
 import { buildFicheExercicePrompt, roleTitle } from '../utils/clinicalPrompt'
@@ -97,6 +97,19 @@ export function FicheExerciceIA({ apiKey, context, patientKey, profession, analy
   const [copied, setCopied] = useState(false)
   const [shared, setShared] = useState(false)
 
+  // Cleanup : annule les setTimeout des feedbacks copied/shared après unmount
+  const isMountedRef = useRef(true)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sharedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      if (sharedTimerRef.current) clearTimeout(sharedTimerRef.current)
+    }
+  }, [])
+
 
   const generate = async () => {
     if (!apiKey) return
@@ -151,15 +164,17 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
         markdown,
         notesSeance,
       }
+      if (!isMountedRef.current) return
       setFiche(result)
       onResult(result)
     } catch (err: unknown) {
+      if (!isMountedRef.current) return
       const msg = err instanceof Error ? err.message : 'Erreur inconnue'
       if (msg.includes('quota') || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) setError('quota')
       else if (msg.includes('API_KEY_INVALID') || msg.includes('401') || msg.includes('403') || msg.includes('API key')) setError('auth')
       else setError(msg)
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) setLoading(false)
     }
   }
 
@@ -168,7 +183,11 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
     try {
       await navigator.clipboard.writeText(fiche.markdown)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = setTimeout(() => {
+        copiedTimerRef.current = null
+        if (isMountedRef.current) setCopied(false)
+      }, 2000)
     } catch { /* ignore */ }
   }
 
@@ -306,31 +325,56 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
     return doc
   }
 
+  // Helper : extrait nom/prénom même si context.patient est partiel/manquant
+  const safePatientNames = () => {
+    const patient = context.patient ?? {}
+    const nom = (patient.nom || 'Anonyme').replace(/\s+/g, '_')
+    const prenom = (patient.prenom || '').replace(/\s+/g, '_')
+    return { nom, prenom }
+  }
+
   const handleExportPDF = () => {
     if (!fiche) return
-    const doc = buildPDF()
-    const safeName = (context.patient.nom || 'Anonyme').replace(/\s+/g, '_')
-    const safeFirst = (context.patient.prenom || '').replace(/\s+/g, '_')
-    const dateFile = new Date(fiche.generatedAt).toISOString().split('T')[0]
-    doc.save(`Exercices_${safeName}_${safeFirst}_${dateFile}.pdf`)
+    try {
+      const doc = buildPDF()
+      const { nom, prenom } = safePatientNames()
+      const dateFile = new Date(fiche.generatedAt).toISOString().split('T')[0]
+      doc.save(`Exercices_${nom}_${prenom}_${dateFile}.pdf`)
+    } catch (e) {
+      setError(`Erreur PDF : ${(e as Error).message}`)
+    }
   }
 
   const handleShare = async () => {
     if (!fiche) return
-    const doc = buildPDF()
-    const safeName = (context.patient.nom || 'Anonyme').replace(/\s+/g, '_')
-    const safeFirst = (context.patient.prenom || '').replace(/\s+/g, '_')
+    let doc: jsPDF
+    try {
+      doc = buildPDF()
+    } catch (e) {
+      setError(`Erreur PDF : ${(e as Error).message}`)
+      return
+    }
+    const { nom, prenom } = safePatientNames()
     const dateFile = new Date(fiche.generatedAt).toISOString().split('T')[0]
-    const filename = `Exercices_${safeName}_${safeFirst}_${dateFile}.pdf`
+    const filename = `Exercices_${nom}_${prenom}_${dateFile}.pdf`
     const pdfBlob = doc.output('blob')
     const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' })
+
+    const triggerSharedFeedback = () => {
+      if (!isMountedRef.current) return
+      setShared(true)
+      if (sharedTimerRef.current) clearTimeout(sharedTimerRef.current)
+      sharedTimerRef.current = setTimeout(() => {
+        sharedTimerRef.current = null
+        if (isMountedRef.current) setShared(false)
+      }, 2000)
+    }
 
     // Try Web Share API with file (mobile)
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       try {
         await navigator.share({ title: `Exercices — ${context.zone}`, files: [pdfFile] })
-        setShared(true)
-        setTimeout(() => setShared(false), 2000)
+        triggerSharedFeedback()
         return
       } catch { /* user cancelled or not supported */ }
     }
@@ -342,8 +386,7 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
       a.download = filename
       a.click()
       URL.revokeObjectURL(url)
-      setShared(true)
-      setTimeout(() => setShared(false), 2000)
+      triggerSharedFeedback()
     } catch { /* ignore */ }
   }
 
