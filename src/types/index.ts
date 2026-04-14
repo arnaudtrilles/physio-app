@@ -1,6 +1,15 @@
 export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique' | 'geriatrique'
 
 /**
+ * Interface impérative exposée par tous les composants Bilan via forwardRef.
+ * Utilisée par App.tsx pour sauvegarder / restaurer l'état d'un bilan.
+ */
+export interface BilanHandle {
+  getData: () => Record<string, unknown>
+  setData: (d: Record<string, unknown>) => void
+}
+
+/**
  * Marque la clôture d'une prise en charge pour un patient sur une zone (bilanType).
  * Tant qu'une PEC n'est pas clôturée, elle est considérée active. Les analyses IA
  * (séance, intermédiaire, initial, évolution, courrier) ne doivent utiliser que

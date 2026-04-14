@@ -1,4 +1,5 @@
-import { useState, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react'
+import { useState, useImperativeHandle, forwardRef, useMemo, useCallback, memo } from 'react'
+import type { BilanHandle } from '../types'
 import { SectionHeader, ScoreRow as SharedScoreRow, EVASlider } from './bilans/shared'
 import { useQuestionnaires, type StoredResult } from './bilans/questionnaires/useQuestionnaires'
 import { SPPBInteractiveModal } from './bilans/SPPBInteractiveModal'
@@ -7,10 +8,7 @@ import { Chrono } from './bilans/Chrono'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface BilanSortieHandle {
-  getData: () => Record<string, unknown>
-  setData: (d: Record<string, unknown>) => void
-}
+export type BilanSortieHandle = BilanHandle
 
 interface NoteData {
   eva: string; evolution: string; tolerance: string; interventions: string[]

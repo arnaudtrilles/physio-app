@@ -1,18 +1,15 @@
-import { useState, useImperativeHandle, forwardRef } from 'react'
-import { SmartObjectifsInline } from './SmartObjectifsInline'
-import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './bilans/shared'
-import { useQuestionnaires } from './bilans/questionnaires/useQuestionnaires'
-import { TestInfoButton } from './bilans/testInfo/TestInfoButton'
-import { TestResultInput } from './bilans/testInputs'
+import { useState, useImperativeHandle, forwardRef, memo } from 'react'
+import type { BilanHandle } from '../../types'
+import { SmartObjectifsInline } from '../SmartObjectifsInline'
+import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './shared'
+import { inputStyle, boolToStr } from './bilanSections'
+import { useQuestionnaires } from './questionnaires/useQuestionnaires'
+import { TestInfoButton } from './testInfo/TestInfoButton'
+import { TestResultInput } from './testInputs'
 
-export interface BilanEpauleHandle {
-  getData: () => Record<string, unknown>
-  setData: (d: Record<string, unknown>) => void
-}
+export type BilanEpauleHandle = BilanHandle
 
-const boolToStr = (v: unknown): string => v === true ? 'oui' : v === false ? 'non' : (v as string) ?? ''
-
-export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const _d  = (initialData?.douleur        as Record<string, unknown>) ?? {}
   const _rf = (initialData?.redFlags       as Record<string, unknown>) ?? {}
   const _yf = (initialData?.yellowFlags    as Record<string, unknown>) ?? {}
@@ -33,12 +30,6 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
   // Si initialData ne contient pas de redFlags existants, pré-cocher tous les booléens à "non".
   const redFlagsIsNew = !initialData?.redFlags || Object.keys(initialData.redFlags as Record<string, unknown>).length === 0
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.92rem',
-    color: 'var(--text-main)', background: 'var(--secondary)',
-    border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
-  }
 
   // ── Douleur ──
   const [debutSymptomes, setDebutSymptomes]             = useState((_d.debutSymptomes as string) ?? '')
@@ -1049,4 +1040,6 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
   )
 })
 
-BilanEpaule.displayName = 'BilanEpaule'
+BilanEpauleInner.displayName = 'BilanEpaule'
+
+export const BilanEpaule = memo(BilanEpauleInner)
