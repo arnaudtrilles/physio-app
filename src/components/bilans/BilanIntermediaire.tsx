@@ -374,7 +374,6 @@ export const BilanIntermediaire = forwardRef<
     cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
   }
 
-  const evnRowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }
   const evnInStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', textAlign: 'center' }
   const lblStyle: React.CSSProperties = { fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }
 

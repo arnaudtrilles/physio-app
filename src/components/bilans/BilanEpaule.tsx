@@ -121,8 +121,8 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, Record<string, unknown>>>(
     (initialData?.questionnaireAnswers as Record<string, Record<string, unknown>>) ?? {}
   )
-  const [questionnaireResults, setQuestionnaireResults] = useState<Record<string, import('./bilans/questionnaires/useQuestionnaires').StoredResult>>(
-    (initialData?.questionnaireResults as Record<string, import('./bilans/questionnaires/useQuestionnaires').StoredResult>) ?? {}
+  const [questionnaireResults, setQuestionnaireResults] = useState<Record<string, import('./questionnaires/useQuestionnaires').StoredResult>>(
+    (initialData?.questionnaireResults as Record<string, import('./questionnaires/useQuestionnaires').StoredResult>) ?? {}
   )
   const questionnaires = useQuestionnaires(
     (k, v) => setScores(p => ({ ...p, [k]: v })),
@@ -382,7 +382,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
       if (Object.keys(tsD).length > 0) setTestsSpec(p => ({ ...p, ...(tsD as Record<string, string>) }))
       if (cnD.conseilsRecos          !== undefined) setConseilsRecos(cnD.conseilsRecos as string)
       if (data.questionnaireAnswers) setQuestionnaireAnswers(data.questionnaireAnswers as Record<string, Record<string, unknown>>)
-      if (data.questionnaireResults) setQuestionnaireResults(data.questionnaireResults as Record<string, import('./bilans/questionnaires/useQuestionnaires').StoredResult>)
+      if (data.questionnaireResults) setQuestionnaireResults(data.questionnaireResults as Record<string, import('./questionnaires/useQuestionnaires').StoredResult>)
     },
   }))
 

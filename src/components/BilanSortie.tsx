@@ -1,4 +1,4 @@
-import { useState, useImperativeHandle, forwardRef, useMemo, useCallback, memo } from 'react'
+import { useState, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react'
 import type { BilanHandle } from '../types'
 import { SectionHeader, ScoreRow as SharedScoreRow, EVASlider } from './bilans/shared'
 import { useQuestionnaires, type StoredResult } from './bilans/questionnaires/useQuestionnaires'
@@ -138,12 +138,6 @@ const taStyle: React.CSSProperties = {
 const lblStyle: React.CSSProperties = {
   display: 'block', fontSize: '0.82rem', fontWeight: 600,
   color: 'var(--text-main)', marginBottom: 4,
-}
-
-const inStyle: React.CSSProperties = {
-  width: 70, textAlign: 'center', border: 'none',
-  borderBottom: '1px solid var(--border-color)', background: 'transparent',
-  fontSize: '0.88rem', color: 'var(--text-main)', padding: '0.1rem 0.3rem', outline: 'none',
 }
 
 // ─── AI button icon (neural/brain) ────────────────────────────────────────────
