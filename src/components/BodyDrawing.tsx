@@ -362,13 +362,28 @@ export async function composeBodyChart(drawingDataURL: string | undefined): Prom
   canvas.height = BODY_CHART_H
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, BODY_CHART_W, BODY_CHART_H)
   try {
     const bg = await loadImage(BODY_CHART_BG_URL)
-    ctx.drawImage(bg, 0, 0, BODY_CHART_W, BODY_CHART_H)
-  } catch {
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, BODY_CHART_W, BODY_CHART_H)
-  }
+    // Reproduit `object-fit: contain` du <img> de l'app pour que les coordonnées
+    // du calque dessin (toujours sur 1100×920) s'alignent avec la silhouette.
+    const bgRatio = bg.naturalWidth / bg.naturalHeight
+    const canvasRatio = BODY_CHART_W / BODY_CHART_H
+    let dw: number, dh: number, dx: number, dy: number
+    if (bgRatio > canvasRatio) {
+      dw = BODY_CHART_W
+      dh = BODY_CHART_W / bgRatio
+      dx = 0
+      dy = (BODY_CHART_H - dh) / 2
+    } else {
+      dh = BODY_CHART_H
+      dw = BODY_CHART_H * bgRatio
+      dx = (BODY_CHART_W - dw) / 2
+      dy = 0
+    }
+    ctx.drawImage(bg, dx, dy, dw, dh)
+  } catch { /* pas de fond — on garde le blanc */ }
   if (drawingDataURL) {
     try {
       const drawing = await loadImage(drawingDataURL)
