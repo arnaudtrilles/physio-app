@@ -4,8 +4,6 @@ import { useSpeechRecognition } from './hooks/useSpeechRecognition'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
-const BodySilhouette = lazy(() => import('./components/BodySilhouette').then(m => ({ default: m.BodySilhouette })))
-import { StaticBodyVisual } from './components/StaticBodyVisual'
 import { BilanEpaule } from './components/BilanEpaule'
 import type { BilanEpauleHandle } from './components/BilanEpaule'
 import { BilanCheville } from './components/bilans/BilanCheville'
@@ -50,13 +48,14 @@ import { DashboardStats } from './components/DashboardStats'
 import { PatientTimeline } from './components/PatientTimeline'
 import { EvolutionChart, type EvolutionPoint } from './components/EvolutionChart'
 import { ScoreEvolutionChart } from './components/ScoreEvolutionChart'
+import { TreatmentBodyChart } from './components/TreatmentBodyChart'
 import { DossierDocuments } from './components/DossierDocuments'
 import { BilanResumeModal } from './components/BilanResumeModal'
 import { SmartObjectifs } from './components/SmartObjectifs'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'silhouette' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -260,7 +259,7 @@ function App() {
   const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
   const [ficheExerciceContextOverride, setFicheExerciceContextOverride] = useState<{ notesLibres: string; bilanData: Record<string, unknown>; zone: string } | null>(null)
   const [ficheExerciceSource, setFicheExerciceSource] = useState<{ type: 'note' | 'intermediaire'; id: number } | null>(null)
-  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database' | 'silhouette'>('general_info')
+  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database'>('general_info')
   const [deletingBilanId, setDeletingBilanId] = useState<number | null>(null)
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
@@ -1116,7 +1115,7 @@ STRUCTURE (n'inclure que si données présentes) :
   )
 
   // ── Step progress ─────────────────────────────────────────────────────────────
-  const STEP_ORDER: Step[] = ['identity', 'general_info', 'silhouette', 'bilan_zone', 'analyse_ia']
+  const STEP_ORDER: Step[] = ['identity', 'general_info', 'bilan_zone', 'analyse_ia']
   const stepProgress = STEP_ORDER.indexOf(step) >= 0 ? ((STEP_ORDER.indexOf(step) + 1) / STEP_ORDER.length) * 100 : 0
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1569,6 +1568,16 @@ STRUCTURE (n'inclure que si données présentes) :
                             if (!groupMap.has(key)) groupMap.set(key, [])
                             groupMap.get(key)!.push(record)
                           })
+                          // Zones qui n'ont pas de bilan initial mais ont des intermédiaires ou des séances :
+                          // créer un groupe vide pour qu'elles apparaissent dans le rendu zone-scoped (avec boutons).
+                          getPatientIntermediaires(selectedPatient ?? '').forEach(r => {
+                            const key = r.bilanType ?? getBilanType(r.zone ?? '')
+                            if (!groupMap.has(key)) groupMap.set(key, [])
+                          })
+                          getPatientNotes(selectedPatient ?? '').forEach(n => {
+                            const key = n.bilanType ?? getBilanType(n.zone ?? '')
+                            if (!groupMap.has(key)) groupMap.set(key, [])
+                          })
                           const groups = Array.from(groupMap.entries())
                           const showSections = groups.length > 1
                           return groups.map(([zoneType, zoneBilans]) => {
@@ -1661,6 +1670,10 @@ STRUCTURE (n'inclure que si données présentes) :
                                 </div>
                               )}
                               {!zoneCollapsed && (<>
+                              {(() => {
+                                const initialBodyChart = (zoneBilans[0]?.bilanData?.douleur as Record<string, unknown> | undefined)?.bodyChart as string | undefined
+                                return initialBodyChart ? <TreatmentBodyChart drawing={initialBodyChart} /> : null
+                              })()}
                               <EvolutionChart
                                 points={evolutionPoints}
                                 title={`Évolution EVN — ${ZONE_SECTION_LABELS[zoneType] ?? zoneType}`}
@@ -3493,49 +3506,18 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             {renderInputWithMic("Notes complémentaires", "notes", "Précisions…", true)}
           </div>
           <div className="fixed-bottom">
-            <button className="btn-primary-luxe" onClick={() => setStep('silhouette')}>
-              Bilan corporel →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Hidden SVGs for PDF ──────────────────────────────────────────────── */}
-      <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', zIndex: -100 }}>
-        <div id="pdf-face-svg" style={{ width: '200px', background: 'var(--surface)' }}><StaticBodyVisual view="Face" zoneData={silhouetteData} /></div>
-        <div id="pdf-dos-svg"  style={{ width: '200px', background: 'var(--surface)' }}><StaticBodyVisual view="Dos"  zoneData={silhouetteData} /></div>
-      </div>
-
-      {/* ── Silhouette step ────────────────────────────────────────────────────── */}
-      {step === 'silhouette' && (
-        <div className="silhouette-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('general_info')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Bilan corporel</h2>
-            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
-          <div className="scroll-area flex-center" style={{ paddingBottom: '16rem' }}>
-            <Suspense fallback={<LazyFallback />}>
-              <BodySilhouette onContextChange={(data) => setSilhouetteData(data)} />
-            </Suspense>
-          </div>
-          <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {selectedBodyZone && (
-              <button className="btn-primary-luxe" style={{ marginBottom: 0 }} onClick={() => { setBilanZoneBackStep('silhouette'); setStep('bilan_zone') }}>
-                Commencer le bilan → {BILAN_ZONE_LABELS[getBilanType(selectedBodyZone)]}
-              </button>
-            )}
-            <button className="btn-primary-luxe" style={{background: 'var(--primary-dark)', marginBottom: 0}}
+            <button
+              className="btn-primary-luxe"
+              disabled={!selectedBodyZone}
+              style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
               onClick={() => {
-                saveBilan('incomplet')
-                goToPatientRecord()
+                if (!selectedBodyZone) return
+                setBilanZoneBackStep('general_info')
+                setStep('bilan_zone')
               }}>
-              Enregistrer brouillon
+              {selectedBodyZone
+                ? `Commencer le bilan → ${BILAN_ZONE_LABELS[getBilanType(selectedBodyZone)]}`
+                : 'Sélectionnez une zone dans l\'étape précédente'}
             </button>
           </div>
         </div>
@@ -3552,18 +3534,6 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               <h2 className="title-section" style={{ marginBottom: 0 }}>{BILAN_ZONE_LABELS[getBilanType(selectedBodyZone ?? '')]}</h2>
               <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{selectedBodyZone} · {formData.prenom} {formData.nom}{(() => { const a = formData.dateNaissance ? computeAge(formData.dateNaissance) : null; return a !== null ? ` · ${a} ans` : '' })()}</p>
             </div>
-            <button
-              onClick={() => { setBilanZoneBackStep('silhouette'); setStep('silhouette') }}
-              style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: 'none', cursor: 'pointer', flexShrink: 0, marginRight: 6 }}
-              aria-label="Revenir à la bodychart" title="Revenir à la bodychart">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="5" r="2.2"/>
-                <path d="M12 7.5v6"/>
-                <path d="M8 10h8"/>
-                <path d="M12 13.5l-2 7"/>
-                <path d="M12 13.5l2 7"/>
-              </svg>
-            </button>
             <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>

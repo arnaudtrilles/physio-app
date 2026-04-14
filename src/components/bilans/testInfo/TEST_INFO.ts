@@ -111,6 +111,18 @@ export const TEST_INFO: Record<string, TestInfo> = {
     realisation: "Patient debout, pieds joints, membres inférieurs tendus, bras relâchés pendants. Le thérapeute se place derrière le patient, les yeux au niveau du dos. Demander au patient de se pencher lentement vers l'avant (flexion antérieure du tronc), mains jointes, en gardant les genoux tendus, jusqu'à ce que le tronc soit horizontal. Observer le dos en vue postérieure pendant la descente et en position fléchie.",
     interpretation: "Positif (scoliose structurale) si apparition ou majoration d'une gibbosité (bosse costale d'un côté en thoracique ou bourrelet para-lombaire en lombaire), traduisant la rotation vertébrale fixée. Si disponible, mesurer l'angle de la gibbosité avec un scoliomètre (≥ 5-7° = seuil d'alerte, orientation radio/spécialiste). Négatif (attitude scoliotique) si le dos reste symétrique en flexion — la déformation observée debout se corrige en charge.",
   },
+  aslr: {
+    title: 'ASLR — Active Straight Leg Raise',
+    description: "Test d'élévation active du membre inférieur jambe tendue. Évalue la capacité de transfert de charge lombo-pelvi-fémorale et la stabilité de la ceinture pelvienne. Utilisé dans les douleurs pelviennes / sacro-iliaques (notamment post-partum) et comme test de contrôle moteur lombaire.",
+    realisation: "Patient en décubitus dorsal, jambes tendues, bras le long du corps. Demander au patient de lever activement une jambe (environ 20 cm au-dessus de la table) en gardant le genou tendu. Noter la difficulté perçue (échelle 0-5 : 0 = pas du tout difficile, 5 = impossible). Répéter de l'autre côté. En cas de difficulté ou de douleur : répéter le test avec une compression manuelle postéro-antérieure sur les ailes iliaques (puis compression antéro-postérieure), ce qui simule l'action d'une ceinture — si l'effort diminue nettement, cela oriente vers une instabilité de la ceinture pelvienne / dysfonction sacro-iliaque.",
+    interpretation: "Positif si effort augmenté, douleur reproduite au niveau lombo-pelvien / SIJ, ou mouvement compensatoire (bascule du bassin, tremblements, retard de contraction du transverse). Amélioration franche avec compression manuelle du bassin = signe d'instabilité pelvienne (force failure) : indication pour un travail de contrôle moteur et de stabilisation lombo-pelvienne. Négatif si le patient lève la jambe sans effort ni douleur, symétriquement des deux côtés.",
+  },
+  leri: {
+    title: 'Test de Léri (SLR inversé / Femoral Nerve Stretch Test)',
+    description: "Test de mise en tension du nerf fémoral (racines L2-L3-L4). Équivalent du PKB en décubitus ventral, mais peut aussi être réalisé en décubitus latéral.",
+    realisation: "Patient en décubitus ventral. Le thérapeute fléchit passivement le genou en amenant le talon vers la fesse, puis ajoute une extension de hanche. Noter l'angle d'apparition des symptômes et l'effet de la différenciation structurelle (flexion cervicale qui relâche la tension neurale).",
+    interpretation: "Positif si reproduction d'une douleur irradiant dans la face antérieure de cuisse (trajet du nerf fémoral / racines L2-L4). Négatif si tension uniquement sur le quadriceps sans irradiation radiculaire.",
+  },
   extensionRotation: {
     title: "Test d'Extension-Rotation",
     description: "Test de provocation pour évaluer une atteinte de l'articulation zygapophysaire (facettaire) lombaire.",

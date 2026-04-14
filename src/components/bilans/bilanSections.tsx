@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { OuiNon, ScoreRow } from './shared'
+import { OuiNon, ScoreRow, EVASlider } from './shared'
 import { SmartObjectifsInline } from '../SmartObjectifsInline'
+import { BodyDrawing } from '../BodyDrawing'
 
 // ─── Common styles ─────────────────────────────────────────────────────────
 export const inputStyle: React.CSSProperties = {
@@ -24,6 +25,7 @@ export const boolToStr = (v: unknown): string => v === true ? 'oui' : v === fals
 
 // ─── DOULEUR ───────────────────────────────────────────────────────────────
 export interface DouleurState {
+  bodyChart: string
   debutSymptomes: string
   facteurDeclenchant: string
   mecanismeLesionnel: string
@@ -44,6 +46,7 @@ export interface DouleurState {
   mouvementsSoulagent: string
 }
 export const emptyDouleur = (): DouleurState => ({
+  bodyChart: '',
   debutSymptomes: '', facteurDeclenchant: '', mecanismeLesionnel: '',
   localisationInitiale: '', localisationActuelle: '',
   evnPire: '', evnMieux: '', evnMoy: '',
@@ -57,74 +60,121 @@ export const mergeDouleur = (raw: Record<string, unknown>): DouleurState => ({
   ...Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === 'boolean' ? boolToStr(v) : String(v ?? '')])),
 })
 
-export function DouleurSection({ state, onChange, options }: {
+export function DouleurSection({ state, onChange, options, coreMode }: {
   state: DouleurState
   onChange: (patch: Partial<DouleurState>) => void
   options?: { hasFacteurDeclenchant?: boolean; hasMecanismeLesionnel?: boolean }
+  coreMode?: boolean
 }) {
   const hasFacteur = options?.hasFacteurDeclenchant !== false
   const hasMecanisme = options?.hasMecanismeLesionnel === true
+  const [bodyChartOpen, setBodyChartOpen] = useState(true)
+  // Noyau EBP (JOSPT 2025): début + mécanisme + localisation actuelle + EVN + mouvements qui améliorent/aggravent.
+  // Approfondissement: loc. initiale, type, situation, dérouillage, nocturne détaillée.
   const textFields: [keyof DouleurState, string, string][] = [
     ['debutSymptomes', 'Début des symptômes', 'Date / circonstances…'],
     ...(hasFacteur ? [['facteurDeclenchant', 'Facteur déclenchant (ou aucun)', 'Chute, effort, progressif…'] as [keyof DouleurState, string, string]] : []),
     ...(hasMecanisme ? [['mecanismeLesionnel', 'Mécanisme lésionnel', 'Inversion forcée, valgus, torsion…'] as [keyof DouleurState, string, string]] : []),
-    ['localisationInitiale', 'Localisation des symptômes initiaux', 'Zone concernée au départ…'],
+    ...(!coreMode ? [['localisationInitiale', 'Localisation des symptômes initiaux', 'Zone concernée au départ…'] as [keyof DouleurState, string, string]] : []),
     ['localisationActuelle', 'Localisation des symptômes actuels', 'Zone actuelle…'],
   ]
   return (
     <>
+      {/* ── Schéma corporel (body chart) — placé en tête de l'interrogatoire
+           conformément au raisonnement clinique EBP (Maitland / Jones) ──── */}
+      <div style={{
+        marginBottom: 12,
+        border: '1px solid var(--border-color)',
+        borderRadius: 12,
+        overflow: 'hidden',
+        background: 'var(--surface)',
+      }}>
+        <button
+          type="button"
+          onClick={() => setBodyChartOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px', background: 'var(--secondary)',
+            border: 'none', cursor: 'pointer', textAlign: 'left',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z" />
+            <circle cx="12" cy="9" r="2.5" />
+          </svg>
+          <span style={{ flex: 1, fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)' }}>
+            Schéma corporel
+          </span>
+          {state.bodyChart && (
+            <span style={{ fontSize: '0.62rem', fontWeight: 700, background: 'var(--primary)', color: '#fff', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Rempli</span>
+          )}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)', transform: bodyChartOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} aria-hidden="true">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        {bodyChartOpen && (
+          <div style={{ padding: 10 }}>
+            <BodyDrawing value={state.bodyChart} onChange={v => onChange({ bodyChart: v })} />
+          </div>
+        )}
+      </div>
+
       {textFields.map(([k, lbl, ph]) => (
         <div key={k} style={{ marginBottom: 8 }}>
           <label style={lblStyle}>{lbl}</label>
           <input value={state[k]} onChange={e => onChange({ [k]: e.target.value } as Partial<DouleurState>)} placeholder={ph} style={inputStyle} />
         </div>
       ))}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-        {(['evnPire', 'evnMieux', 'evnMoy'] as const).map((k, i) => (
-          <div key={k}>
-            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{['EVN Pire', 'EVN Mieux', 'EVN Moy.'][i]}</label>
-            <input type="number" min="0" max="10" value={state[k]} onChange={e => onChange({ [k]: e.target.value } as Partial<DouleurState>)} style={{ ...inputStyle, textAlign: 'center', marginBottom: 0 }} placeholder="0-10" />
-          </div>
-        ))}
+      <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>EVA (0-10)</div>
+        <EVASlider label="EVA Max" value={state.evnPire} onChange={v => onChange({ evnPire: v })} compact />
+        <div style={{ height: 8 }} />
+        <EVASlider label="EVA Min" value={state.evnMieux} onChange={v => onChange({ evnMieux: v })} compact />
+        <div style={{ height: 8 }} />
+        <EVASlider label="EVA Moy." value={state.evnMoy} onChange={v => onChange({ evnMoy: v })} compact />
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-        <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Type de douleur</label>
-        {['Constante', 'Intermittente'].map(v => {
-          const key = v.toLowerCase()
-          return (
-            <button key={v} className={`choix-btn${state.douleurType === key ? ' active' : ''}`} onClick={() => onChange({ douleurType: state.douleurType === key ? '' : key })}>{v}</button>
-          )
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-        <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Situation</label>
-        {([["↑ S'améliore", 'ameliore'], ['→ Stationnaire', 'stationnaire'], ['↓ Se dégrade', 'degrade']] as [string, string][]).map(([lbl, v]) => (
-          <button key={v} className={`choix-btn${state.situation === v ? ' active' : ''}`} onClick={() => onChange({ situation: state.situation === v ? '' : v })}>{lbl}</button>
-        ))}
-      </div>
-      <OuiNon label="Douleur nocturne" value={state.douleurNocturne} onChange={v => onChange({ douleurNocturne: v })} />
-      {state.douleurNocturne === 'oui' && (
+      {!coreMode && (
         <>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
-            {([['Au mouvement', 'mouvement'], ['Sans bouger', 'sans_bouger']] as [string, string][]).map(([lbl, v]) => (
-              <button key={v} className={`choix-btn${state.douleurNocturneType === v ? ' active' : ''}`} onClick={() => onChange({ douleurNocturneType: state.douleurNocturneType === v ? '' : v })}>{lbl}</button>
-            ))}
-          </div>
-          <OuiNon label="Insomniante" value={state.insomniante} onChange={v => onChange({ insomniante: v })} />
-        </>
-      )}
-      <OuiNon label="Dérouillage matinal" value={state.derouillageMatinal} onChange={v => onChange({ derouillageMatinal: v })} />
-      {state.derouillageMatinal === 'oui' && (
-        <>
-          <input value={state.derouillageTemps} onChange={e => onChange({ derouillageTemps: e.target.value })} placeholder="Durée du dérouillage…" style={{ ...inputStyle, marginTop: 6 }} />
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 8px' }}>
-            {['Toujours', 'Parfois'].map(v => {
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Type de douleur</label>
+            {['Constante', 'Intermittente'].map(v => {
               const key = v.toLowerCase()
               return (
-                <button key={v} className={`choix-btn${state.derouillageFrequence === key ? ' active' : ''}`} onClick={() => onChange({ derouillageFrequence: state.derouillageFrequence === key ? '' : key })}>{v}</button>
+                <button key={v} className={`choix-btn${state.douleurType === key ? ' active' : ''}`} onClick={() => onChange({ douleurType: state.douleurType === key ? '' : key })}>{v}</button>
               )
             })}
           </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Situation</label>
+            {([["↑ S'améliore", 'ameliore'], ['→ Stationnaire', 'stationnaire'], ['↓ Se dégrade', 'degrade']] as [string, string][]).map(([lbl, v]) => (
+              <button key={v} className={`choix-btn${state.situation === v ? ' active' : ''}`} onClick={() => onChange({ situation: state.situation === v ? '' : v })}>{lbl}</button>
+            ))}
+          </div>
+          <OuiNon label="Douleur nocturne" value={state.douleurNocturne} onChange={v => onChange({ douleurNocturne: v })} />
+          {state.douleurNocturne === 'oui' && (
+            <>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+                {([['Au mouvement', 'mouvement'], ['Sans bouger', 'sans_bouger']] as [string, string][]).map(([lbl, v]) => (
+                  <button key={v} className={`choix-btn${state.douleurNocturneType === v ? ' active' : ''}`} onClick={() => onChange({ douleurNocturneType: state.douleurNocturneType === v ? '' : v })}>{lbl}</button>
+                ))}
+              </div>
+              <OuiNon label="Insomniante" value={state.insomniante} onChange={v => onChange({ insomniante: v })} />
+            </>
+          )}
+          <OuiNon label="Dérouillage matinal" value={state.derouillageMatinal} onChange={v => onChange({ derouillageMatinal: v })} />
+          {state.derouillageMatinal === 'oui' && (
+            <>
+              <input value={state.derouillageTemps} onChange={e => onChange({ derouillageTemps: e.target.value })} placeholder="Durée du dérouillage…" style={{ ...inputStyle, marginTop: 6 }} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 8px' }}>
+                {['Toujours', 'Parfois'].map(v => {
+                  const key = v.toLowerCase()
+                  return (
+                    <button key={v} className={`choix-btn${state.derouillageFrequence === key ? ' active' : ''}`} onClick={() => onChange({ derouillageFrequence: state.derouillageFrequence === key ? '' : key })}>{v}</button>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </>
       )}
       <div style={{ marginTop: 8, marginBottom: 8 }}>
@@ -178,22 +228,55 @@ export const mergeRedFlags = (raw: Record<string, unknown>): RedFlagsState => {
   return base as unknown as RedFlagsState
 }
 
+// Liste des booléens red flags partagés — utilisés pour pré-cocher "non" lors d'un nouveau bilan.
+const RED_FLAGS_BOOLEAN_KEYS: (keyof RedFlagsState)[] = [
+  'traumatismeRecent', 'troublesMarche', 'perteAppetit', 'pertePoids',
+  'fatigueInexpliquee', 'csIs', 'atcdCancer',
+  'tabagisme', 'cephalees', 'troublesMotricite', 'fievre',
+  'douleurThoracique', 'douleurDigestion', 'douleurTouxEternuement',
+  'fonctionVesicaleAnale',
+  'dizziness', 'dropAttacks', 'diplopie', 'dysarthrie',
+  'dysphagie', 'nystagmus', 'nausees', 'numbness',
+]
+
+// Pour un NOUVEAU bilan : pré-cocher tous les booléens red flags à "non"
+// pour gagner du temps (le kiné modifie uniquement les exceptions positives).
+// Les bilans existants ne sont pas affectés — cette fonction n'est appelée que
+// si aucune donnée redFlags n'est présente dans initialData.
+export const preFilledRedFlags = (): RedFlagsState => {
+  const base = emptyRedFlags() as unknown as Record<string, string>
+  RED_FLAGS_BOOLEAN_KEYS.forEach(k => { base[k as string] = 'non' })
+  return base as unknown as RedFlagsState
+}
+
+// Retourne un RedFlagsState pré-rempli si initialData est vide, sinon merge.
+// À utiliser dans tous les BilanXxx.tsx au lieu de mergeRedFlags direct.
+export const initRedFlags = (raw: Record<string, unknown> | undefined): RedFlagsState => {
+  if (!raw || Object.keys(raw).length === 0) return preFilledRedFlags()
+  return mergeRedFlags(raw)
+}
+
 export type RedFlagsVariant = 'upper' | 'lower' | 'ankle'
 
-export function RedFlagsSection({ state, onChange, variant }: {
+export function RedFlagsSection({ state, onChange, variant, coreMode }: {
   state: RedFlagsState
   onChange: (patch: Partial<RedFlagsState>) => void
   variant: RedFlagsVariant
+  coreMode?: boolean
 }) {
   const set = (k: keyof RedFlagsState, v: string) => onChange({ [k]: v } as Partial<RedFlagsState>)
-  const textRows: [keyof RedFlagsState, string, string][] = [
-    ['tttMedical', 'TTT médical actuel', 'Médicaments…'],
-    ['antecedents', 'Antécédents', 'Chirurgies, pathologies…'],
-    ['comorbidites', 'Comorbidités', 'Diabète, HTA…'],
-    ['sommeilQuantite', 'Sommeil — Quantité', 'Nb heures…'],
-    ['sommeilQualite', 'Sommeil — Qualité', 'Perturbé, bon…'],
-    ['imageries', 'Imagerie(s)', 'Radio, IRM, écho…'],
-  ]
+  // En mode noyau : seules les imageries sont gardées comme champ texte anamnestique.
+  // Les champs texte détaillés (TTT, antécédents, comorbidités, sommeil) passent en approfondissement.
+  const textRows: [keyof RedFlagsState, string, string][] = coreMode
+    ? [['imageries', 'Imagerie(s)', 'Radio, IRM, écho…']]
+    : [
+        ['tttMedical', 'TTT médical actuel', 'Médicaments…'],
+        ['antecedents', 'Antécédents', 'Chirurgies, pathologies…'],
+        ['comorbidites', 'Comorbidités', 'Diabète, HTA…'],
+        ['sommeilQuantite', 'Sommeil — Quantité', 'Nb heures…'],
+        ['sommeilQualite', 'Sommeil — Qualité', 'Perturbé, bon…'],
+        ['imageries', 'Imagerie(s)', 'Radio, IRM, écho…'],
+      ]
   // common booleans
   const commonBools: [keyof RedFlagsState, string][] = [
     ...(variant !== 'ankle' ? [['traumatismeRecent', 'Traumatisme récent'] as [keyof RedFlagsState, string]] : []),
@@ -303,11 +386,35 @@ export const mergeYellow = (raw: Record<string, unknown>): YellowFlagsState => {
   return base as unknown as YellowFlagsState
 }
 
-export function YellowFlagsSection({ state, onChange }: {
+export function YellowFlagsSection({ state, onChange, coreMode }: {
   state: YellowFlagsState
   onChange: (patch: Partial<YellowFlagsState>) => void
+  coreMode?: boolean
 }) {
   const set = (k: keyof YellowFlagsState, v: string) => onChange({ [k]: v } as Partial<YellowFlagsState>)
+  // En mode noyau : dépistage rapide des 4 drapeaux jaunes les plus prédictifs selon l'EBP
+  // (catastrophisme, peur-évitement, anxiété, dépression — prédicteurs majeurs de chronicisation).
+  // Le reste (croyances détaillées, coping, flexibilité, attentes, auto-efficacité) → approfondissement.
+  if (coreMode) {
+    return (
+      <>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 10, fontStyle: 'italic' }}>
+          Dépistage rapide des prédicteurs majeurs de chronicisation.
+        </div>
+        {([
+          ['catastrophisme', 'Catastrophisme'],
+          ['peurEvitement', 'Peur-évitement du mouvement'],
+          ['anxiete', 'Anxiété'],
+          ['depression', 'Humeur dépressive'],
+        ] as [keyof YellowFlagsState, string][]).map(([k, lbl]) => (
+          <OuiNon key={k} label={lbl} value={state[k]} onChange={v => set(k, v)} />
+        ))}
+        {state.peurEvitement === 'oui' && (
+          <input value={state.peurEvitementMouvements} onChange={e => set('peurEvitementMouvements', e.target.value)} placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+        )}
+      </>
+    )
+  }
   return (
     <>
       <div style={{ marginBottom: 8 }}>
@@ -380,24 +487,32 @@ export const mergeBlueBlack = (raw: Record<string, unknown>): BlueBlackState => 
   return base as unknown as BlueBlackState
 }
 
-export function BlueBlackFlagsSection({ state, onChange }: {
+export function BlueBlackFlagsSection({ state, onChange, coreMode }: {
   state: BlueBlackState
   onChange: (patch: Partial<BlueBlackState>) => void
+  coreMode?: boolean
 }) {
   const set = (k: keyof BlueBlackState, v: string) => onChange({ [k]: v } as Partial<BlueBlackState>)
-  const items: [keyof BlueBlackState, string][] = [
-    ['enAt', 'Actuellement en AT'],
-    ['antecedentsAt', "Antécédents d'AT"],
-    ['travailExigeant', 'Travail physiquement exigeant et/ou dangereux'],
-    ['sousEstimeCollegues', "Sentiment d'être sous-estimé(e) par les collègues"],
-    ['sousEstimeDirection', "Sentiment d'être sous-estimé(e) par la direction"],
-    ['manqueControle', 'Manque de contrôle sur ses tâches'],
-    ['travailAggrave', 'Croyance que le travail aggrave la douleur'],
-    ['politiqueFlexible', "Politique d'entreprise flexible pour reprise"],
-    ['difficultesAcces', "Difficulté d'accès aux soins"],
-    ['conditionsSocioEco', 'Conditions socio-économiques défavorables'],
-    ['litige', 'Litige et/ou conflit liés aux indemnisations'],
-  ]
+  // En mode noyau : seulement les 3 indicateurs professionnels les plus directs
+  // (AT en cours, croyance travail = douleur, niveau de stress). Le reste → approfondissement.
+  const items: [keyof BlueBlackState, string][] = coreMode
+    ? [
+        ['enAt', 'Actuellement en AT'],
+        ['travailAggrave', 'Croyance que le travail aggrave la douleur'],
+      ]
+    : [
+        ['enAt', 'Actuellement en AT'],
+        ['antecedentsAt', "Antécédents d'AT"],
+        ['travailExigeant', 'Travail physiquement exigeant et/ou dangereux'],
+        ['sousEstimeCollegues', "Sentiment d'être sous-estimé(e) par les collègues"],
+        ['sousEstimeDirection', "Sentiment d'être sous-estimé(e) par la direction"],
+        ['manqueControle', 'Manque de contrôle sur ses tâches'],
+        ['travailAggrave', 'Croyance que le travail aggrave la douleur'],
+        ['politiqueFlexible', "Politique d'entreprise flexible pour reprise"],
+        ['difficultesAcces', "Difficulté d'accès aux soins"],
+        ['conditionsSocioEco', 'Conditions socio-économiques défavorables'],
+        ['litige', 'Litige et/ou conflit liés aux indemnisations'],
+      ]
   return (
     <>
       {items.map(([k, lbl]) => (

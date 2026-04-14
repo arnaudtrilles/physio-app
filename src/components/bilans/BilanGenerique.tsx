@@ -1,11 +1,11 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
-import { SectionHeader, ScoreRow } from './shared'
+import { SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import {
   DouleurSection, RedFlagsSection, YellowFlagsSection, BlueBlackFlagsSection,
   ContratKineSection, ConseilsSection, PSFSCards,
   mergeDouleur,
-  mergeRedFlags,
+  initRedFlags,
   mergeYellow,
   mergeBlueBlack,
   mergeContrat,
@@ -23,9 +23,11 @@ export interface BilanGeneriqueHandle {
 export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
+  const [coreMode, setCoreMode] = useState(true)
+
   // ── Sections partagées V2 ────────────────────────────────────────────────
   const [douleur, setDouleur]   = useState<DouleurState>(()   => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))
-  const [redFlags, setRedFlags] = useState<RedFlagsState>(()  => mergeRedFlags((init.redFlags as Record<string, unknown>) ?? {}))
+  const [redFlags, setRedFlags] = useState<RedFlagsState>(()  => initRedFlags(init.redFlags as Record<string, unknown> | undefined))
   const [yellow, setYellow]     = useState<YellowFlagsState>(() => mergeYellow((init.yellowFlags as Record<string, unknown>) ?? {}))
   const [blueBlack, setBlueBlack] = useState<BlueBlackState>(() => mergeBlueBlack((init.blueBlackFlags as Record<string, unknown>) ?? {}))
   const [contrat, setContrat]   = useState<ContratState>(()   => mergeContrat((init.contrat as Record<string, unknown>) ?? {}))
@@ -81,7 +83,7 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
     }),
     setData: (d: Record<string, unknown>) => {
       if (d.douleur)        setDouleur(mergeDouleur(d.douleur as Record<string, unknown>))
-      if (d.redFlags)       setRedFlags(mergeRedFlags(d.redFlags as Record<string, unknown>))
+      if (d.redFlags)       setRedFlags(initRedFlags(d.redFlags as Record<string, unknown>))
       if (d.yellowFlags)    setYellow(mergeYellow(d.yellowFlags as Record<string, unknown>))
       if (d.blueBlackFlags) setBlueBlack(mergeBlueBlack(d.blueBlackFlags as Record<string, unknown>))
       if (d.contrat)        setContrat(mergeContrat(d.contrat as Record<string, unknown>))
@@ -102,17 +104,20 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
     },
   }))
 
-  const sections = [
-    { id: 'douleur',        title: 'Douleur',                          color: 'var(--primary)' },
-    { id: 'redFlags',       title: 'Red Flags 🚩',                      color: '#dc2626' },
-    { id: 'yellowFlags',    title: 'Yellow Flags 🟡',                   color: '#d97706' },
-    { id: 'blueBlackFlags', title: 'Blue / Black Flags',                color: '#7c3aed' },
-    { id: 'examClinique',   title: 'Examen clinique',                   color: 'var(--primary)' },
-    { id: 'testsSpec',      title: 'Tests cliniques',                   color: 'var(--primary)' },
-    { id: 'scores',         title: 'Scores fonctionnels',               color: 'var(--primary)' },
-    { id: 'contrat',        title: 'Contrat kiné',                      color: '#059669' },
-    { id: 'conseils',       title: 'Conseils & recommandations',        color: '#059669' },
+  // Bilan générique : déjà court (~17 champs). Noyau EBP minimal.
+  type Priority = 'noyau' | 'approfondissement'
+  const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'douleur',        title: 'Douleur',                          color: 'var(--primary)', priority: 'noyau' },
+    { id: 'redFlags',       title: 'Red Flags 🚩',                      color: '#dc2626',        priority: 'noyau' },
+    { id: 'yellowFlags',    title: 'Yellow Flags 🟡',                   color: '#d97706',        priority: 'noyau' },
+    { id: 'blueBlackFlags', title: 'Blue / Black Flags',                color: '#7c3aed',        priority: 'approfondissement' },
+    { id: 'examClinique',   title: 'Examen clinique',                   color: 'var(--primary)', priority: 'noyau' },
+    { id: 'testsSpec',      title: 'Tests cliniques',                   color: 'var(--primary)', priority: 'noyau' },
+    { id: 'scores',         title: 'Scores fonctionnels',               color: 'var(--primary)', priority: 'noyau' },
+    { id: 'contrat',        title: 'Contrat kiné',                      color: '#059669',        priority: 'noyau' },
+    { id: 'conseils',       title: 'Conseils & recommandations',        color: '#059669',        priority: 'noyau' },
   ]
+  const sections = coreMode ? allSections.filter(s => s.priority === 'noyau') : allSections
 
   return (
     <div>
@@ -126,26 +131,28 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
         </p>
       </div>
 
+      <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
+
       {sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
-          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} />
+          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
               {sec.id === 'douleur' && (
-                <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} options={{ hasFacteurDeclenchant: true, hasMecanismeLesionnel: true }} />
+                <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} options={{ hasFacteurDeclenchant: true, hasMecanismeLesionnel: true }} coreMode={coreMode} />
               )}
 
               {sec.id === 'redFlags' && (
-                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="lower" />
+                <RedFlagsSection state={redFlags} onChange={p => setRedFlags(s => ({ ...s, ...p }) as RedFlagsState)} variant="lower" coreMode={coreMode} />
               )}
 
               {sec.id === 'yellowFlags' && (
-                <YellowFlagsSection state={yellow} onChange={p => setYellow(s => ({ ...s, ...p }))} />
+                <YellowFlagsSection state={yellow} onChange={p => setYellow(s => ({ ...s, ...p }))} coreMode={coreMode} />
               )}
 
               {sec.id === 'blueBlackFlags' && (
-                <BlueBlackFlagsSection state={blueBlack} onChange={p => setBlueBlack(s => ({ ...s, ...p }))} />
+                <BlueBlackFlagsSection state={blueBlack} onChange={p => setBlueBlack(s => ({ ...s, ...p }))} coreMode={coreMode} />
               )}
 
               {sec.id === 'examClinique' && (
@@ -176,7 +183,8 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
 
               {sec.id === 'scores' && (
                 <>
-                  {([
+                  {/* Noyau : PSFS seul. HAD, DN4, PainDetect, CSI, SF-36 → approfondissement. */}
+                  {!coreMode && ([
                     ['had',             'HAD — Anxiété / Dépression',           'had'],
                     ['dn4',             'DN4 — Douleur neuropathique',          'dn4'],
                     ['painDetect',      'Pain DETECT',                          'painDetect'],
@@ -190,8 +198,12 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
 
                   <PSFSCards items={psfs} onChange={setPsfs} />
 
-                  <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
-                  <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Nom du score et résultat…" />
+                  {!coreMode && (
+                    <>
+                      <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
+                      <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Nom du score et résultat…" />
+                    </>
+                  )}
                 </>
               )}
 

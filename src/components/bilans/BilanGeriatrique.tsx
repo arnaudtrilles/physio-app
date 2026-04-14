@@ -1,5 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
-import { OuiNon, SectionHeader, ScoreRow } from './shared'
+import { OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { Chrono } from './Chrono'
 import { SPPBInteractiveModal } from './SPPBInteractiveModal'
@@ -78,6 +78,8 @@ function MobInput({ label, value, onChange }: { label: string; value: string; on
 export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
+  const [coreMode, setCoreMode] = useState(true)
+
   // ── Section 1 : Contexte de vie ──────────────────────────────────────────
   const _ctx = (init.contexte as Record<string, unknown>) ?? {}
   const [lieuVie, setLieuVie] = useState((_ctx.lieuVie as string) ?? '')
@@ -148,8 +150,8 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   const [openTinetti, setOpenTinetti] = useState(false)
   const [doubleTache, setDoubleTache] = useState((_t.doubleTache as string) ?? '')
   const [cinqLeverTime, setCinqLeverTime] = useState((_t.cinqLeverTime as string) ?? '')
-  const [vitesseMarche, setVitesseMarche] = useState((_t.vitesseMarche as string) ?? '')
   const [appuiMonopodal, setAppuiMonopodal] = useState((_t.appuiMonopodal as string) ?? '')
+  const [appuiMonopodalPossible, setAppuiMonopodalPossible] = useState((_t.appuiMonopodalPossible as string) ?? '')
 
   const sppbTotal = (() => {
     const e = Number(sppbEquilibre) || 0
@@ -189,8 +191,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   // ── Interpretations rapides ──────────────────────────────────────────────
   const tugRisk = tug !== '' && Number(tug) > 12
   const cinqLeverRisk = cinqLeverTime !== '' && Number(cinqLeverTime) > 15
-  const vitesseLente = vitesseMarche !== '' && Number(vitesseMarche) < 0.8
-  const monopodalRisk = appuiMonopodal !== '' && Number(appuiMonopodal) < 5
+  const monopodalRisk = appuiMonopodalPossible === 'non' || (appuiMonopodal !== '' && Number(appuiMonopodal) < 5)
 
   useImperativeHandle(ref, () => ({
     getData: () => ({
@@ -211,7 +212,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
       },
       tests: {
         tug, sppbEquilibre, sppbVitesse, sppbLever, sppbRawData,
-        tinetti, tinettiAnswers, doubleTache, cinqLeverTime, vitesseMarche, appuiMonopodal,
+        tinetti, tinettiAnswers, doubleTache, cinqLeverTime, appuiMonopodal, appuiMonopodalPossible,
       },
       scores: { ...scores, sppbTotal: sppbTotal ?? '', fesI, miniGds, tinetti },
       psfs,
@@ -271,8 +272,8 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
       if (t.tinettiAnswers !== undefined) setTinettiAnswers(t.tinettiAnswers as Record<string, number>)
       if (t.doubleTache !== undefined)    setDoubleTache(t.doubleTache as string)
       if (t.cinqLeverTime !== undefined)  setCinqLeverTime(t.cinqLeverTime as string)
-      if (t.vitesseMarche !== undefined)  setVitesseMarche(t.vitesseMarche as string)
       if (t.appuiMonopodal !== undefined) setAppuiMonopodal(t.appuiMonopodal as string)
+      if (t.appuiMonopodalPossible !== undefined) setAppuiMonopodalPossible(t.appuiMonopodalPossible as string)
       if (data.scores)  setScores(p => ({ ...p, ...(data.scores as Record<string, string>) }))
       if (data.psfs)    setPsfs(mergePsfs(data.psfs))
       if (data.contrat) setContrat(mergeContrat(data.contrat as Record<string, unknown>))
@@ -283,24 +284,30 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
     },
   }))
 
-  // ─── Liste des sections collapsibles ────────────────────────────────────
-  const sections = [
-    { id: 'contexte',     title: '1. Contexte de vie & autonomie',         color: 'var(--primary)' },
-    { id: 'chutes',       title: '2. Chutes & Red Flags 🚩',                color: '#dc2626' },
-    { id: 'douleur',      title: '3. Douleur',                              color: 'var(--primary)' },
-    { id: 'yellow',       title: '4. Yellow Flags 🟡 — psycho-social',      color: '#d97706' },
-    { id: 'examClinique', title: '5. Examen clinique & mobilité',           color: 'var(--primary)' },
-    { id: 'tests',        title: '6. Tests fonctionnels (5 piliers)',       color: 'var(--primary)' },
-    { id: 'scores',       title: '7. Scores gériatriques',                  color: 'var(--primary)' },
-    { id: 'contrat',      title: '8. Contrat kiné & objectifs SMART',       color: '#059669' },
-    { id: 'conseils',     title: '9. Conseils & recommandations',           color: '#059669' },
+  // Noyau EBP gériatrie (CDC STEADI + OARSI + Fried) : contexte de vie, chutes + red flags, douleur,
+  // examen clinique simplifié, tests fonctionnels (TUG + 5 lever chaise + appui monopodal — 3 piliers STEADI),
+  // scores (PSFS seul), contrat, conseils. Yellow flags (FES-I, Mini GDS) et scores gériatriques (KATZ, Lawton,
+  // MNA-SF, Fried, SPPB, Tinetti) → approfondissement.
+  type Priority = 'noyau' | 'approfondissement'
+  const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'contexte',     title: '1. Contexte de vie & autonomie',         color: 'var(--primary)', priority: 'noyau' },
+    { id: 'chutes',       title: '2. Chutes & Red Flags 🚩',                color: '#dc2626',        priority: 'noyau' },
+    { id: 'douleur',      title: '3. Douleur',                              color: 'var(--primary)', priority: 'noyau' },
+    { id: 'yellow',       title: '4. Yellow Flags 🟡 — psycho-social',      color: '#d97706',        priority: 'approfondissement' },
+    { id: 'examClinique', title: '5. Examen clinique & mobilité',           color: 'var(--primary)', priority: 'noyau' },
+    { id: 'tests',        title: '6. Tests fonctionnels',                   color: 'var(--primary)', priority: 'noyau' },
+    { id: 'scores',       title: '7. Scores gériatriques',                  color: 'var(--primary)', priority: 'noyau' },
+    { id: 'contrat',      title: '8. Contrat kiné & objectifs SMART',       color: '#059669',        priority: 'noyau' },
+    { id: 'conseils',     title: '9. Conseils & recommandations',           color: '#059669',        priority: 'noyau' },
   ]
+  const sections = coreMode ? allSections.filter(s => s.priority === 'noyau') : allSections
 
   return (
     <div>
+      <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
       {sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
-          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} />
+          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
@@ -374,15 +381,11 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                   <label style={lblStyle}>Échelle utilisée</label>
                   <ChoixGroup options={['EN', 'EVA', 'Algoplus', 'EVS', 'Doloplus-2']} value={echelle} onChange={setEchelle} />
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <div>
-                      <label style={lblStyle}>Au repos</label>
-                      <input type="number" min="0" max="10" value={evnRepos} onChange={e => setEvnRepos(e.target.value)} style={{ ...inputStyle, textAlign: 'center', marginBottom: 0 }} placeholder="0-10" />
-                    </div>
-                    <div>
-                      <label style={lblStyle}>Au mouvement</label>
-                      <input type="number" min="0" max="10" value={evnMvt} onChange={e => setEvnMvt(e.target.value)} style={{ ...inputStyle, textAlign: 'center', marginBottom: 0 }} placeholder="0-10" />
-                    </div>
+                  <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>EVA (0-10)</div>
+                    <EVASlider label="EVA au repos" value={evnRepos} onChange={setEvnRepos} compact />
+                    <div style={{ height: 8 }} />
+                    <EVASlider label="EVA au mouvement" value={evnMvt} onChange={setEvnMvt} compact />
                   </div>
 
                   <OuiNon label="Dérouillage matinal" value={derouillage} onChange={setDerouillage} />
@@ -488,7 +491,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>Patient assis → marche 3 m → demi-tour → revient s'asseoir. Norme : &gt; 12 sec = risque de chute.</div>
                   </div>
 
-                  {/* SPPB */}
+                  {/* SPPB — maintenu dans le noyau : batterie multifactorielle de référence (équilibre + vitesse + lever). */}
                   <div style={{ marginBottom: 14 }}>
                     <label style={{ ...lblStyle, marginBottom: 6 }}>SPPB — Short Physical Performance Battery</label>
                     <button
@@ -547,17 +550,18 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                     </button>
                   </div>
 
-                  {/* Double tâche */}
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ ...lblStyle, marginBottom: 4 }}>Double tâche (Walking While Talking)</label>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 6 }}>Le patient s'arrête de marcher pour parler ?</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button className={`choix-btn${doubleTache === 'oui' ? ' active' : ''}`} onClick={() => setDoubleTache(doubleTache === 'oui' ? '' : 'oui')} style={doubleTache === 'oui' ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' } : undefined}>Oui — haut risque</button>
-                      <button className={`choix-btn${doubleTache === 'non' ? ' active' : ''}`} onClick={() => setDoubleTache(doubleTache === 'non' ? '' : 'non')}>Non</button>
+                  {!coreMode && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ ...lblStyle, marginBottom: 4 }}>Double tâche (Walking While Talking)</label>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 6 }}>Le patient s'arrête de marcher pour parler ?</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button className={`choix-btn${doubleTache === 'oui' ? ' active' : ''}`} onClick={() => setDoubleTache(doubleTache === 'oui' ? '' : 'oui')} style={doubleTache === 'oui' ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' } : undefined}>Oui — haut risque</button>
+                        <button className={`choix-btn${doubleTache === 'non' ? ' active' : ''}`} onClick={() => setDoubleTache(doubleTache === 'non' ? '' : 'non')}>Non</button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* 5 Levers de chaise */}
+                  {/* 5 Levers de chaise — noyau STEADI */}
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                       <label style={{ ...lblStyle, marginBottom: 0 }}>5 Levers de chaise (chronométré)</label>
@@ -567,24 +571,37 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>Patient bras croisés. Seuil : &gt; 15 sec = sarcopénie / risque de chute.</div>
                   </div>
 
-                  {/* Vitesse de marche 4m */}
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <label style={{ ...lblStyle, marginBottom: 0 }}>Vitesse de marche (m/s) sur 4 mètres</label>
-                      {vitesseLente && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#dc2626' }}>Lenteur (Fried)</span>}
-                    </div>
-                    <input type="number" step="0.01" min="0" value={vitesseMarche} onChange={e => setVitesseMarche(e.target.value)} placeholder="ex: 0.92" style={{ ...inputStyle, textAlign: 'center', marginBottom: 4 }} />
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Seuils : &lt; 0,8 m/s = critère de fragilité (Fried) · &lt; 0,6 m/s = dépendance future probable.</div>
-                  </div>
+                  {/* Vitesse de marche sur 4 m retirée — déjà incluse dans le SPPB (composante marche). */}
 
-                  {/* Appui monopodal */}
+                  {/* Appui monopodal — noyau STEADI : possible ou non + durée chronométrée si possible */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <label style={{ ...lblStyle, marginBottom: 0 }}>Appui monopodal (secondes, meilleur côté)</label>
+                      <label style={{ ...lblStyle, marginBottom: 0 }}>Appui monopodal (meilleur côté)</label>
                       {monopodalRisk && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#dc2626' }}>Équilibre précaire</span>}
                     </div>
-                    <input type="number" min="0" value={appuiMonopodal} onChange={e => setAppuiMonopodal(e.target.value)} placeholder="ex: 8" style={{ ...inputStyle, textAlign: 'center', marginBottom: 4 }} />
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Norme : &gt; 5 sec. &lt; 5 sec = risque de chute multiplié par 2.</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <button
+                        type="button"
+                        className={`choix-btn${appuiMonopodalPossible === 'oui' ? ' active' : ''}`}
+                        onClick={() => setAppuiMonopodalPossible(appuiMonopodalPossible === 'oui' ? '' : 'oui')}
+                      >Possible</button>
+                      <button
+                        type="button"
+                        className={`choix-btn${appuiMonopodalPossible === 'non' ? ' active' : ''}`}
+                        onClick={() => {
+                          const next = appuiMonopodalPossible === 'non' ? '' : 'non'
+                          setAppuiMonopodalPossible(next)
+                          if (next === 'non') setAppuiMonopodal('')
+                        }}
+                        style={appuiMonopodalPossible === 'non' ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' } : undefined}
+                      >Non possible</button>
+                    </div>
+                    {appuiMonopodalPossible === 'oui' && (
+                      <>
+                        <Chrono value={appuiMonopodal} onChange={setAppuiMonopodal} />
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>Norme : &gt; 5 sec. &lt; 5 sec = risque de chute multiplié par 2.</div>
+                      </>
+                    )}
                   </div>
                 </>
               )}
@@ -592,7 +609,8 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
               {/* ── 7. Scores gériatriques (Katz / Lawton / MNA-SF / Fried) ── */}
               {sec.id === 'scores' && (
                 <>
-                  {([
+                  {/* Noyau : PSFS seul. Katz, Lawton, MNA-SF, Fried → approfondissement (questionnaires longs). */}
+                  {!coreMode && ([
                     ['katzAdl',    'ADL — Katz (autonomie de base) / 6',           'katzAdl'],
                     ['lawtonIadl', 'IADL — Lawton (autonomie instrumentale) / 8',  'lawtonIadl'],
                     ['mnaSf',      'MNA-SF — Dépistage dénutrition / 14',          'mnaSf'],
@@ -605,8 +623,12 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
 
                   <PSFSCards items={psfs} onChange={setPsfs} />
 
-                  <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
-                  <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="MMSE, Barthel, Norton, autres…" />
+                  {!coreMode && (
+                    <>
+                      <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
+                      <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="MMSE, Barthel, Norton, autres…" />
+                    </>
+                  )}
                 </>
               )}
 

@@ -2,7 +2,7 @@ import { useState, useImperativeHandle, forwardRef, useMemo } from 'react'
 import { Chrono } from './Chrono'
 import { SPPBInteractiveModal } from './SPPBInteractiveModal'
 import { QuestionnaireModal, TINETTI_QUESTIONS, interpretTinetti } from './QuestionnaireModal'
-import { OuiNon } from './shared'
+import { OuiNon, EVASlider } from './shared'
 
 export interface BilanIntermediaireGeriatriqueHandle {
   getData: () => Record<string, unknown>
@@ -340,10 +340,14 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
           <ChoixGroup options={['Diminuée', 'Stable', 'Augmentée']} value={peurTomber} onChange={setPeurTomber} />
         </div>
 
-        <div style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Évolution de la douleur (0-10)</div>
+        <div style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Évolution de la douleur (EVA 0-10)</div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0 0.75rem' }}>
-          <CompareRow label="EVN au repos" unit="/10" initial={base.evnRepos} actuel={evnReposAct} onChangeActuel={setEvnReposAct} />
-          <CompareRow label="EVN au mouvement" unit="/10" initial={base.evnMvt} actuel={evnMvtAct} onChangeActuel={setEvnMvtAct} />
+          <CompareRow label="EVA au repos" unit="/10" initial={base.evnRepos} actuel={evnReposAct}>
+            <EVASlider label="" value={evnReposAct} onChange={setEvnReposAct} compact />
+          </CompareRow>
+          <CompareRow label="EVA au mouvement" unit="/10" initial={base.evnMvt} actuel={evnMvtAct}>
+            <EVASlider label="" value={evnMvtAct} onChange={setEvnMvtAct} compact />
+          </CompareRow>
         </div>
       </div>
 

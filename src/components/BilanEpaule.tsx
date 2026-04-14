@@ -1,8 +1,9 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
 import { SmartObjectifsInline } from './SmartObjectifsInline'
-import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow } from './bilans/shared'
+import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './bilans/shared'
 import { useQuestionnaires } from './bilans/questionnaires/useQuestionnaires'
 import { TestInfoButton } from './bilans/testInfo/TestInfoButton'
+import { TestResultInput } from './bilans/testInputs'
 
 export interface BilanEpauleHandle {
   getData: () => Record<string, unknown>
@@ -26,6 +27,12 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
   const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
+
+  // Mode Noyau EBP (JOSPT 2025 Rotator Cuff) activé par défaut.
+  const [coreMode, setCoreMode] = useState(true)
+
+  // Si initialData ne contient pas de redFlags existants, pré-cocher tous les booléens à "non".
+  const redFlagsIsNew = !initialData?.redFlags || Object.keys(initialData.redFlags as Record<string, unknown>).length === 0
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.92rem',
@@ -59,14 +66,17 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
   const [sommeilQualite, setSommeilQualite]   = useState((_rf.sommeilQualite as string) ?? '')
   const [cinqD3N, setCinqD3N]               = useState((_rf.cinqD3N as string) ?? '')
   const [imageries, setImageries]           = useState((_rf.imageries as string) ?? '')
+  // Pour un nouveau bilan : tous les booléens red flags pré-cochés à "non".
+  // Cela permet au kiné de cocher uniquement les exceptions positives (gain de temps majeur).
+  const rfDefault = redFlagsIsNew ? 'non' : ''
   const [rf, setRf] = useState<Record<string, string>>({
-    tabagisme: boolToStr(_rf.tabagisme), traumatismeRecent: boolToStr(_rf.traumatismeRecent),
-    troublesMotricite: boolToStr(_rf.troublesMotricite), troublesMarche: boolToStr(_rf.troublesMarche),
-    perteAppetit: boolToStr(_rf.perteAppetit), pertePoids: boolToStr(_rf.pertePoids),
-    atcdCancer: boolToStr(_rf.atcdCancer), cephalees: boolToStr(_rf.cephalees),
-    cephaleesIntenses: boolToStr(_rf.cephaleesIntenses), fievre: boolToStr(_rf.fievre),
-    csIs: boolToStr(_rf.csIs), douleurThoracique: boolToStr(_rf.douleurThoracique),
-    douleurDigestion: boolToStr(_rf.douleurDigestion), fatigueRF: boolToStr(_rf.fatigueRF),
+    tabagisme: boolToStr(_rf.tabagisme) || rfDefault, traumatismeRecent: boolToStr(_rf.traumatismeRecent) || rfDefault,
+    troublesMotricite: boolToStr(_rf.troublesMotricite) || rfDefault, troublesMarche: boolToStr(_rf.troublesMarche) || rfDefault,
+    perteAppetit: boolToStr(_rf.perteAppetit) || rfDefault, pertePoids: boolToStr(_rf.pertePoids) || rfDefault,
+    atcdCancer: boolToStr(_rf.atcdCancer) || rfDefault, cephalees: boolToStr(_rf.cephalees) || rfDefault,
+    cephaleesIntenses: boolToStr(_rf.cephaleesIntenses), fievre: boolToStr(_rf.fievre) || rfDefault,
+    csIs: boolToStr(_rf.csIs) || rfDefault, douleurThoracique: boolToStr(_rf.douleurThoracique) || rfDefault,
+    douleurDigestion: boolToStr(_rf.douleurDigestion) || rfDefault, fatigueRF: boolToStr(_rf.fatigueRF) || rfDefault,
   })
 
   // ── Yellow Flags ──
@@ -185,9 +195,13 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
     setForce(p => ({ ...p, [k]: { ...p[k], [side]: v } }))
   const [autresTestsForce, setAutresTestsForce] = useState((_fo.autresTestsForce as string) ?? '')
 
-  // Mouvements répétés
+  // Mouvements améliorant la symptomatologie (ex "mouvements répétés")
+  // État structuré : marqueurs avant / mouvement testé / nb répétitions / type de contraction / résultats
   const [marqueursAvant, setMarqueursAvant]       = useState((_fo.marqueursAvant as string) ?? '')
   const [resultatsMvtRep, setResultatsMvtRep]     = useState((_fo.resultatsMvtRep as string) ?? '')
+  const [mvtAmelMouvement, setMvtAmelMouvement]   = useState((_fo.mvtAmelMouvement as string) ?? '')
+  const [mvtAmelNbRep, setMvtAmelNbRep]           = useState((_fo.mvtAmelNbRep as string) ?? '')
+  const [mvtAmelContraction, setMvtAmelContraction] = useState((_fo.mvtAmelContraction as string) ?? '')
 
   // ── Neurologique + Mécanosensibilité ──
   const [reflexes, setReflexes]               = useState((_nr.reflexes as string) ?? '')
@@ -207,7 +221,7 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
   // ── Tests spécifiques ──
   const [testsSpec, setTestsSpec] = useState<Record<string, string>>({
-    bearHug: '', bellyPress: '', externalRotLagSign: '',
+    bearHug: '', bellyPress: '', externalRotLagSign: '', internalRotLagSign: '',
     obrien: '', palpationAC: '', crossArm: '', abdHorizResist: '',
     apprehensionRelocation: '', signeSulcus: '', jerkTest: '',
     ckcuest: '', ulrt: '', uqYbt: '', setPset: '', smbtSasspt: '',
@@ -233,7 +247,7 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
         mobilite: mob, mobiliteRachisCervical, mobiliteRachisThoracique, mobiliteAutresZones,
         modifSymp,
       },
-      forceMusculaire: { force, autresTestsForce, marqueursAvant, resultatsMvtRep },
+      forceMusculaire: { force, autresTestsForce, marqueursAvant, resultatsMvtRep, mvtAmelMouvement, mvtAmelNbRep, mvtAmelContraction },
       neurologique: {
         reflexes, force: forceNeuro, sensibilite, hoffmanTromner,
         reversibilite, comportement, palpationNerfs,
@@ -352,6 +366,9 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
       if (foD.autresTestsForce       !== undefined) setAutresTestsForce(foD.autresTestsForce as string)
       if (foD.marqueursAvant         !== undefined) setMarqueursAvant(foD.marqueursAvant as string)
       if (foD.resultatsMvtRep        !== undefined) setResultatsMvtRep(foD.resultatsMvtRep as string)
+      if (foD.mvtAmelMouvement       !== undefined) setMvtAmelMouvement(foD.mvtAmelMouvement as string)
+      if (foD.mvtAmelNbRep           !== undefined) setMvtAmelNbRep(foD.mvtAmelNbRep as string)
+      if (foD.mvtAmelContraction     !== undefined) setMvtAmelContraction(foD.mvtAmelContraction as string)
       if (nrD.reflexes               !== undefined) setReflexes(nrD.reflexes as string)
       if (nrD.force                  !== undefined) setForceNeuro(nrD.force as string)
       else if (nrD.deficitMoteur     !== undefined) setForceNeuro(nrD.deficitMoteur as string)
@@ -378,74 +395,93 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
     },
   }))
 
+  // Noyau EBP épaule (JOSPT 2025 Rotator Cuff Tendinopathy CPG) : douleur, red flags, yellow flags simplifiés,
+  // examen clinique (mobilité 4-6 mouvements), force (3 tests clés coiffe), neuro bref, tests spécifiques (3 tests
+  // pour rupture de coiffe), scores (PSFS seul — tous les autres scores en approfondissement), contrat, conseils.
+  // Blue/Black flags → approfondissement.
+  type Priority = 'noyau' | 'approfondissement'
+  const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'douleur',       title: 'Douleur',                              color: 'var(--primary)', priority: 'noyau' },
+    { id: 'redFlags',      title: 'Red Flags 🚩',                          color: '#dc2626',        priority: 'noyau' },
+    { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                       color: '#d97706',        priority: 'noyau' },
+    { id: 'blueBlackFlags',title: 'Blue / Black Flags',                    color: '#7c3aed',        priority: 'approfondissement' },
+    { id: 'examClinique',  title: 'Examen clinique',                       color: 'var(--primary)', priority: 'noyau' },
+    { id: 'force',         title: 'Force musculaire',                      color: 'var(--primary)', priority: 'noyau' },
+    { id: 'neuro',         title: 'Neurologique & mécanosensibilité',      color: 'var(--primary)', priority: 'noyau' },
+    { id: 'testsSpec',     title: 'Tests spécifiques',                     color: 'var(--primary)', priority: 'noyau' },
+    { id: 'scores',        title: 'Scores fonctionnels',                   color: 'var(--primary)', priority: 'noyau' },
+    { id: 'contrat',       title: 'Contrat kiné',                          color: '#059669',        priority: 'noyau' },
+    { id: 'conseils',      title: 'Conseils & recommandations',            color: '#059669',        priority: 'noyau' },
+  ]
+  const sectionList = coreMode ? allSections.filter(s => s.priority === 'noyau') : allSections
+
   return (
     <div>
-      {[
-        { id: 'douleur',       title: 'Douleur',               color: 'var(--primary)' },
-        { id: 'redFlags',      title: 'Red Flags 🚩',           color: '#dc2626' },
-        { id: 'yellowFlags',   title: 'Yellow Flags 🟡',        color: '#d97706' },
-        { id: 'blueBlackFlags',title: 'Blue / Black Flags',     color: '#7c3aed' },
-        { id: 'examClinique',  title: 'Examen clinique',        color: 'var(--primary)' },
-        { id: 'force',         title: 'Force musculaire',       color: 'var(--primary)' },
-        { id: 'neuro',         title: 'Neurologique & mécanosensibilité', color: 'var(--primary)' },
-        { id: 'testsSpec',     title: 'Tests spécifiques',      color: 'var(--primary)' },
-        { id: 'scores',        title: 'Scores fonctionnels',    color: 'var(--primary)' },
-        { id: 'contrat',       title: 'Contrat kiné',           color: '#059669' },
-        { id: 'conseils',      title: 'Conseils & recommandations', color: '#059669' },
-      ].map(sec => (
+      <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
+      {sectionList.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
-          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} />
+          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
               {sec.id === 'douleur' && (
                 <>
-                  {([
-                    ['Début des symptômes',                 debutSymptomes,    setDebutSymptomes,    'Date / circonstances…'],
-                    ['Facteur déclenchant (ou aucun)',      facteurDeclenchant, setFacteurDeclenchant, 'Chute, effort, progressif…'],
-                    ['Localisation des symptômes initiaux', localisationInitiale, setLocalisationInitiale, 'Zone concernée au départ…'],
-                    ['Localisation des symptômes actuels',  localisationActuelle, setLocalisationActuelle, 'Zone actuelle…'],
-                  ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
+                  {((coreMode
+                    ? [
+                        ['Début des symptômes',                 debutSymptomes,    setDebutSymptomes,    'Date / circonstances…'],
+                        ['Facteur déclenchant (ou aucun)',      facteurDeclenchant, setFacteurDeclenchant, 'Chute, effort, progressif…'],
+                        ['Localisation des symptômes actuels',  localisationActuelle, setLocalisationActuelle, 'Zone actuelle…'],
+                      ]
+                    : [
+                        ['Début des symptômes',                 debutSymptomes,    setDebutSymptomes,    'Date / circonstances…'],
+                        ['Facteur déclenchant (ou aucun)',      facteurDeclenchant, setFacteurDeclenchant, 'Chute, effort, progressif…'],
+                        ['Localisation des symptômes initiaux', localisationInitiale, setLocalisationInitiale, 'Zone concernée au départ…'],
+                        ['Localisation des symptômes actuels',  localisationActuelle, setLocalisationActuelle, 'Zone actuelle…'],
+                      ]
+                  ) as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
                     <div key={lbl} style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
                       <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
                     </div>
                   ))}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-                    {([['EVN Pire', evnPire, setEvnPire], ['EVN Mieux', evnMieux, setEvnMieux], ['EVN Moy.', evnMoy, setEvnMoy]] as [string, string, (v: string) => void][]).map(([lbl, val, setter]) => (
-                      <div key={lbl}>
-                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                        <input type="number" min="0" max="10" value={val} onChange={e => setter(e.target.value)}
-                          style={{ ...inputStyle, textAlign: 'center', marginBottom: 0 }} placeholder="0-10" />
-                      </div>
-                    ))}
+                  <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>EVA (0-10)</div>
+                    <EVASlider label="EVA Max" value={evnPire} onChange={setEvnPire} compact />
+                    <div style={{ height: 8 }} />
+                    <EVASlider label="EVA Min" value={evnMieux} onChange={setEvnMieux} compact />
+                    <div style={{ height: 8 }} />
+                    <EVASlider label="EVA Moy." value={evnMoy} onChange={setEvnMoy} compact />
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Type de douleur</label>
-                    {['Constante', 'Intermittente'].map(v => (
-                      <button key={v} className={`choix-btn${douleurType === v.toLowerCase() ? ' active' : ''}`} onClick={() => setDouleurType(douleurType === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Situation</label>
-                    {([["↑ S'améliore", 'ameliore'], ['→ Stationnaire', 'stationnaire'], ['↓ Se dégrade', 'degrade']] as [string, string][]).map(([lbl, v]) => (
-                      <button key={v} className={`choix-btn${situation === v ? ' active' : ''}`} onClick={() => setSituation(situation === v ? '' : v)}>{lbl}</button>
-                    ))}
-                  </div>
-                  <OuiNon label="Douleur nocturne" value={douleurNocturne} onChange={setDouleurNocturne} />
-                  {douleurNocturne === 'oui' && (
+                  {!coreMode && (
                     <>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
-                        {([['Au mouvement', 'mouvement'], ['Sans bouger', 'sans_bouger']] as [string, string][]).map(([lbl, v]) => (
-                          <button key={v} className={`choix-btn${douleurNocturneType === v ? ' active' : ''}`} onClick={() => setDouleurNocturneType(douleurNocturneType === v ? '' : v)}>{lbl}</button>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Type de douleur</label>
+                        {['Constante', 'Intermittente'].map(v => (
+                          <button key={v} className={`choix-btn${douleurType === v.toLowerCase() ? ' active' : ''}`} onClick={() => setDouleurType(douleurType === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
                         ))}
                       </div>
-                      <OuiNon label="Insomniante" value={insomniante} onChange={setInsomniante} />
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Situation</label>
+                        {([["↑ S'améliore", 'ameliore'], ['→ Stationnaire', 'stationnaire'], ['↓ Se dégrade', 'degrade']] as [string, string][]).map(([lbl, v]) => (
+                          <button key={v} className={`choix-btn${situation === v ? ' active' : ''}`} onClick={() => setSituation(situation === v ? '' : v)}>{lbl}</button>
+                        ))}
+                      </div>
+                      <OuiNon label="Douleur nocturne" value={douleurNocturne} onChange={setDouleurNocturne} />
+                      {douleurNocturne === 'oui' && (
+                        <>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+                            {([['Au mouvement', 'mouvement'], ['Sans bouger', 'sans_bouger']] as [string, string][]).map(([lbl, v]) => (
+                              <button key={v} className={`choix-btn${douleurNocturneType === v ? ' active' : ''}`} onClick={() => setDouleurNocturneType(douleurNocturneType === v ? '' : v)}>{lbl}</button>
+                            ))}
+                          </div>
+                          <OuiNon label="Insomniante" value={insomniante} onChange={setInsomniante} />
+                        </>
+                      )}
+                      <OuiNon label="Dérouillage matinal" value={derouillageMatinal} onChange={setDerouillageMatinal} />
+                      {derouillageMatinal === 'oui' && (
+                        <input value={derouillageTemps} onChange={e => setDerouillageTemps(e.target.value)} placeholder="Durée du dérouillage…" style={{ ...inputStyle, marginTop: 6 }} />
+                      )}
                     </>
-                  )}
-                  <OuiNon label="Dérouillage matinal" value={derouillageMatinal} onChange={setDerouillageMatinal} />
-                  {derouillageMatinal === 'oui' && (
-                    <input value={derouillageTemps} onChange={e => setDerouillageTemps(e.target.value)} placeholder="Durée du dérouillage…" style={{ ...inputStyle, marginTop: 6 }} />
                   )}
                   <div style={{ marginTop: 8, marginBottom: 8 }}>
                     <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mouvements / situations qui EMPIRENT</label>
@@ -460,15 +496,23 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
               {sec.id === 'redFlags' && (
                 <>
-                  {([
-                    ['tttMedical',    'TTT médical actuel',      tttMedical,    setTttMedical,    'Médicaments…'],
-                    ['antecedents',   'Antécédents',             antecedents,   setAntecedents,   'Chirurgies, pathologies…'],
-                    ['comorbidites',  'Comorbidités',            comorbidites,  setComorbidites,  'Diabète, HTA…'],
-                    ['sommeilQ',      'Sommeil — Quantité',      sommeilQuantite, setSommeilQuantite, 'Nb heures…'],
-                    ['sommeilQual',   'Sommeil — Qualité',       sommeilQualite,  setSommeilQualite,  'Perturbé, bon…'],
-                    ['cinqD3N',       '5D 3N',                   cinqD3N,       setCinqD3N,       'Dizziness, Drop attacks, Diplopie, Dysarthrie, Dysphagie, Nystagmus…'],
-                    ['imageries',     'Imagerie(s)',             imageries,     setImageries,     'Radio, IRM, écho…'],
-                  ] as [string, string, string, (v: string) => void, string][]).map(([k, lbl, val, setter, ph]) => (
+                  {/* Texte anamnestique détaillé : imageries + 5D/3N en noyau (5D/3N sécurité vertébro-basilaire),
+                      le reste (TTT, antécédents, comorbidités, sommeil) → approfondissement. */}
+                  {((coreMode
+                    ? [
+                        ['cinqD3N',       '5D 3N (sécurité vertébro-basilaire)',    cinqD3N,       setCinqD3N,       'Dizziness, Drop attacks, Diplopie, Dysarthrie, Dysphagie, Nystagmus…'],
+                        ['imageries',     'Imagerie(s)',             imageries,     setImageries,     'Radio, IRM, écho…'],
+                      ]
+                    : [
+                        ['tttMedical',    'TTT médical actuel',      tttMedical,    setTttMedical,    'Médicaments…'],
+                        ['antecedents',   'Antécédents',             antecedents,   setAntecedents,   'Chirurgies, pathologies…'],
+                        ['comorbidites',  'Comorbidités',            comorbidites,  setComorbidites,  'Diabète, HTA…'],
+                        ['sommeilQ',      'Sommeil — Quantité',      sommeilQuantite, setSommeilQuantite, 'Nb heures…'],
+                        ['sommeilQual',   'Sommeil — Qualité',       sommeilQualite,  setSommeilQualite,  'Perturbé, bon…'],
+                        ['cinqD3N',       '5D 3N',                   cinqD3N,       setCinqD3N,       'Dizziness, Drop attacks, Diplopie, Dysarthrie, Dysphagie, Nystagmus…'],
+                        ['imageries',     'Imagerie(s)',             imageries,     setImageries,     'Radio, IRM, écho…'],
+                      ]
+                  ) as [string, string, string, (v: string) => void, string][]).map(([k, lbl, val, setter, ph]) => (
                     <div key={k} style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
                       <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
@@ -497,47 +541,70 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
               {sec.id === 'yellowFlags' && (
                 <>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Croyances — Origine de la douleur</label>
-                    <input value={croyancesOrigine} onChange={e => setCroyancesOrigine(e.target.value)} placeholder="Ce que pense le patient…" style={inputStyle} />
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Croyances — TTT qui serait adapté</label>
-                    <input value={croyancesTtt} onChange={e => setCroyancesTtt(e.target.value)} placeholder="Selon le patient…" style={inputStyle} />
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Attentes</label>
-                    <textarea value={attentes} onChange={e => setAttentes(e.target.value)} placeholder="Objectifs du patient…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Auto-efficacité</label>
-                    {['Faible', 'Moyen', 'Fort'].map(v => (
-                      <button key={v} className={`choix-btn${autoEfficacite === v.toLowerCase() ? ' active' : ''}`} onClick={() => setAutoEfficacite(autoEfficacite === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-                    ))}
-                  </div>
-                  {([
-                    ['catastrophisme',  'Catastrophisme'],
-                    ['peurEvitement',   'Croyance(s) de Peur - Évitement'],
-                    ['hypervigilance',  'Hypervigilance'],
-                    ['anxiete',         'Anxiété'],
-                    ['depression',      'Dépression'],
-                  ] as [string, string][]).map(([k, lbl]) => (
-                    <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
-                  ))}
-                  {yf.peurEvitement === 'oui' && (
-                    <input value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
-                      placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+                  {/* Noyau : dépistage rapide 4 drapeaux jaunes prédictifs (catastrophisme, peur, anxiété, dépression). */}
+                  {coreMode ? (
+                    <>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 10, fontStyle: 'italic' }}>
+                        Dépistage rapide des prédicteurs majeurs de chronicisation.
+                      </div>
+                      {([
+                        ['catastrophisme',  'Catastrophisme'],
+                        ['peurEvitement',   'Peur-évitement du mouvement'],
+                        ['anxiete',         'Anxiété'],
+                        ['depression',      'Humeur dépressive'],
+                      ] as [string, string][]).map(([k, lbl]) => (
+                        <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
+                      ))}
+                      {yf.peurEvitement === 'oui' && (
+                        <input value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
+                          placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Croyances — Origine de la douleur</label>
+                        <input value={croyancesOrigine} onChange={e => setCroyancesOrigine(e.target.value)} placeholder="Ce que pense le patient…" style={inputStyle} />
+                      </div>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Croyances — TTT qui serait adapté</label>
+                        <input value={croyancesTtt} onChange={e => setCroyancesTtt(e.target.value)} placeholder="Selon le patient…" style={inputStyle} />
+                      </div>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Attentes</label>
+                        <textarea value={attentes} onChange={e => setAttentes(e.target.value)} placeholder="Objectifs du patient…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Auto-efficacité</label>
+                        {['Faible', 'Moyen', 'Fort'].map(v => (
+                          <button key={v} className={`choix-btn${autoEfficacite === v.toLowerCase() ? ' active' : ''}`} onClick={() => setAutoEfficacite(autoEfficacite === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+                        ))}
+                      </div>
+                      {([
+                        ['catastrophisme',  'Catastrophisme'],
+                        ['peurEvitement',   'Croyance(s) de Peur - Évitement'],
+                        ['hypervigilance',  'Hypervigilance'],
+                        ['anxiete',         'Anxiété'],
+                        ['depression',      'Dépression'],
+                      ] as [string, string][]).map(([k, lbl]) => (
+                        <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
+                      ))}
+                      {yf.peurEvitement === 'oui' && (
+                        <input value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
+                          placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+                      )}
+                      <div style={{ marginTop: 8, marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Stratégie(s) de Coping</label>
+                        <textarea value={strategieCoping} onChange={e => setStrategieCoping(e.target.value)} placeholder="Repos, chaleur, médicaments…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Flexibilité psychologique</label>
+                        {['Faible', 'Moyenne', 'Forte'].map(v => (
+                          <button key={v} className={`choix-btn${flexibilitePsy === v.toLowerCase() ? ' active' : ''}`} onClick={() => setFlexibilitePsy(flexibilitePsy === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
+                        ))}
+                      </div>
+                    </>
                   )}
-                  <div style={{ marginTop: 8, marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Stratégie(s) de Coping</label>
-                    <textarea value={strategieCoping} onChange={e => setStrategieCoping(e.target.value)} placeholder="Repos, chaleur, médicaments…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Flexibilité psychologique</label>
-                    {['Faible', 'Moyenne', 'Forte'].map(v => (
-                      <button key={v} className={`choix-btn${flexibilitePsy === v.toLowerCase() ? ' active' : ''}`} onClick={() => setFlexibilitePsy(flexibilitePsy === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-                    ))}
-                  </div>
                 </>
               )}
 
@@ -573,7 +640,8 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
               {sec.id === 'scores' && (
                 <>
-                  {([
+                  {/* Noyau : PSFS seul (gold standard EBP patient-centré). Tous les autres scores → approfondissement. */}
+                  {!coreMode && ([
                     ['oss',           "Score d'Oxford Épaule (OSS)", 'oss'],
                     ['constant',      'Constant-Murley',              'constant'],
                     ['dash',          'DASH',                          'dash'],
@@ -634,10 +702,12 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                       </div>
                     )
                   })}
-                  <div style={{ marginTop: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autre(s) Score(s)</label>
-                    <textarea value={scores.autres} onChange={e => updateScore('autres', e.target.value)} placeholder="Nom et score…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
+                  {!coreMode && (
+                    <div style={{ marginTop: 8 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autre(s) Score(s)</label>
+                      <textarea value={scores.autres} onChange={e => updateScore('autres', e.target.value)} placeholder="Nom et score…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                    </div>
+                  )}
                 </>
               )}
 
@@ -654,17 +724,21 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
 
               {sec.id === 'examClinique' && (
                 <>
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Morphostatique</p>
-                  {([
-                    ['Attitude du rachis cervical',    morphoRachisCervical,   setMorphoRachisCervical,   'Antéprojection, rectitude…'],
-                    ['Attitude du rachis thoracique',  morphoRachisThoracique, setMorphoRachisThoracique, 'Cyphose, rectitude…'],
-                    ['Attitude de la ceinture scapulaire', morphoCeintureScap, setMorphoCeintureScap,     'Enroulement, sonnette…'],
-                  ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
-                    <div key={lbl} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                      <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
-                    </div>
-                  ))}
+                  {!coreMode && (
+                    <>
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Morphostatique</p>
+                      {([
+                        ['Attitude du rachis cervical',    morphoRachisCervical,   setMorphoRachisCervical,   'Antéprojection, rectitude…'],
+                        ['Attitude du rachis thoracique',  morphoRachisThoracique, setMorphoRachisThoracique, 'Cyphose, rectitude…'],
+                        ['Attitude de la ceinture scapulaire', morphoCeintureScap, setMorphoCeintureScap,     'Enroulement, sonnette…'],
+                      ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
+                        <div key={lbl} style={{ marginBottom: 8 }}>
+                          <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                          <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
+                        </div>
+                      ))}
+                    </>
+                  )}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                     <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Modification de la posture</label>
                     {(['Pire', 'Pareil', 'Mieux']).map(v => (
@@ -672,17 +746,21 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                     ))}
                   </div>
 
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Observation — amyotrophies</p>
-                  {([
-                    ['Deltoïde',                       amyoDeltoide,        setAmyoDeltoide],
-                    ['Fosse supra / infra-épineuse',   amyoFosseSupraInfra, setAmyoFosseSupraInfra],
-                    ['Péri-scapulaire',                amyoPeriScapulaire,  setAmyoPeriScapulaire],
-                  ] as [string, string, (v: string) => void][]).map(([lbl, val, setter]) => (
-                    <div key={lbl} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                      <input value={val} onChange={e => setter(e.target.value)} placeholder="Observation…" style={inputStyle} />
-                    </div>
-                  ))}
+                  {!coreMode && (
+                    <>
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Observation — amyotrophies</p>
+                      {([
+                        ['Deltoïde',                       amyoDeltoide,        setAmyoDeltoide],
+                        ['Fosse supra / infra-épineuse',   amyoFosseSupraInfra, setAmyoFosseSupraInfra],
+                        ['Péri-scapulaire',                amyoPeriScapulaire,  setAmyoPeriScapulaire],
+                      ] as [string, string, (v: string) => void][]).map(([lbl, val, setter]) => (
+                        <div key={lbl} style={{ marginBottom: 8 }}>
+                          <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                          <input value={val} onChange={e => setter(e.target.value)} placeholder="Observation…" style={inputStyle} />
+                        </div>
+                      ))}
+                    </>
+                  )}
 
                   <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)', display: 'block', margin: '14px 0 6px' }}>Mobilité (°)</label>
                   <table className="mobility-table">
@@ -700,7 +778,12 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                       </tr>
                     </thead>
                     <tbody>
-                      {MOBILITE_KEYS.map(([k, lbl]) => (
+                      {/* Noyau : 4 mouvements clés JOSPT 2025 (flexion, abduction, RE1, RI2).
+                          Complet : 8 mouvements avec adduction, extension, RE2, RI1. */}
+                      {(coreMode
+                        ? MOBILITE_KEYS.filter(([k]) => ['flexion', 'abduction', 're1', 'ri2'].includes(k))
+                        : MOBILITE_KEYS
+                      ).map(([k, lbl]) => (
                         <tr key={k}>
                           <td>{lbl}</td>
                           <td><AmplitudeInput value={mob[k].ag} onChange={v => updateMob(k, 'ag', v)} /></td>
@@ -712,34 +795,38 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                     </tbody>
                   </table>
 
-                  <div style={{ marginTop: 10 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis cervical</label>
-                    <input value={mobiliteRachisCervical} onChange={e => setMobiliteRachisCervical(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis thoracique</label>
-                    <input value={mobiliteRachisThoracique} onChange={e => setMobiliteRachisThoracique(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres zones</label>
-                    <textarea value={mobiliteAutresZones} onChange={e => setMobiliteAutresZones(e.target.value)} placeholder="Coude, poignet…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
+                  {!coreMode && (
+                    <>
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis cervical</label>
+                        <input value={mobiliteRachisCervical} onChange={e => setMobiliteRachisCervical(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis thoracique</label>
+                        <input value={mobiliteRachisThoracique} onChange={e => setMobiliteRachisThoracique(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
+                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres zones</label>
+                        <textarea value={mobiliteAutresZones} onChange={e => setMobiliteAutresZones(e.target.value)} placeholder="Coude, poignet…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      </div>
 
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Modifications des symptômes</p>
-                  {([
-                    ['testAssistanceScap',   "Test d'assistance scapulaire"],
-                    ['stabilisationScapula', 'Stabilisation de la scapula'],
-                    ['testRetractionScap',   'Test de rétraction scapulaire'],
-                    ['testTrapezeSup',       'Test du trapèze supérieur'],
-                    ['serrerPoings',         'Serrer les poings'],
-                    ['ajoutResistance',      'Ajout de résistance'],
-                    ['activationCoiffe',     'Activation spécifique de la coiffe'],
-                    ['pasAvantPrealable',    'Pas en avant préalable'],
-                    ['diminutionLevier',     'Diminution du bras de levier'],
-                    ['modifPositionThoracique', 'Modification de la position thoracique'],
-                    ['modifPositionCervicale',  'Modification de la position cervicale'],
-                  ] as [string, string][]).map(([k, lbl]) => (
-                    <div key={k} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                      <input value={modifSymp[k] ?? ''} onChange={e => updateModifSymp(k, e.target.value)} placeholder="Résultat / observation…" style={inputStyle} />
-                    </div>
-                  ))}
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Modifications des symptômes</p>
+                      {([
+                        ['testAssistanceScap',   "Test d'assistance scapulaire"],
+                        ['stabilisationScapula', 'Stabilisation de la scapula'],
+                        ['testRetractionScap',   'Test de rétraction scapulaire'],
+                        ['testTrapezeSup',       'Test du trapèze supérieur'],
+                        ['serrerPoings',         'Serrer les poings'],
+                        ['ajoutResistance',      'Ajout de résistance'],
+                        ['activationCoiffe',     'Activation spécifique de la coiffe'],
+                        ['pasAvantPrealable',    'Pas en avant préalable'],
+                        ['diminutionLevier',     'Diminution du bras de levier'],
+                        ['modifPositionThoracique', 'Modification de la position thoracique'],
+                        ['modifPositionCervicale',  'Modification de la position cervicale'],
+                      ] as [string, string][]).map(([k, lbl]) => (
+                        <div key={k} style={{ marginBottom: 8 }}>
+                          <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                          <input value={modifSymp[k] ?? ''} onChange={e => updateModifSymp(k, e.target.value)} placeholder="Résultat / observation…" style={inputStyle} />
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </>
               )}
 
@@ -751,7 +838,12 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                   <table className="mobility-table">
                     <thead><tr><th>Test</th><th style={{ textAlign: 'center' }}>Gauche</th><th style={{ textAlign: 'center' }}>Droite</th></tr></thead>
                     <tbody>
-                      {FORCE_KEYS.map(([k, lbl]) => (
+                      {/* Noyau JOSPT 2025 : 3 tests coiffe clés — Plan de la scapula 90° (sus-épineux/Jobe),
+                          RE1 isométrique (infra-épineux/petit rond), RI2 stabilisée (subscapulaire). */}
+                      {(coreMode
+                        ? FORCE_KEYS.filter(([k]) => ['planScapula90', 're1Force', 'ri2StabEpaule'].includes(k))
+                        : FORCE_KEYS
+                      ).map(([k, lbl]) => (
                         <tr key={k}>
                           <td>{lbl}</td>
                           <td><ForceInput value={force[k].gauche} onChange={v => updateForce(k, 'gauche', v)} /></td>
@@ -760,28 +852,59 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                       ))}
                     </tbody>
                   </table>
-                  <div style={{ marginTop: 10 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests de force</label>
-                    <textarea value={autresTestsForce} onChange={e => setAutresTestsForce(e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  {!coreMode && (
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests de force</label>
+                      <textarea value={autresTestsForce} onChange={e => setAutresTestsForce(e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                    </div>
+                  )}
+
+                  {/* Mouvements améliorant la symptomatologie — gardé en noyau (identification de préférence directionnelle). */}
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Examen des mouvements améliorant la symptomatologie</p>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Marqueurs avant procédure</label>
+                  <input value={marqueursAvant} onChange={e => setMarqueursAvant(e.target.value)} placeholder="EVN, amplitude, douleur…" style={inputStyle} />
+
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mouvement testé</label>
+                  <input value={mvtAmelMouvement} onChange={e => setMvtAmelMouvement(e.target.value)} placeholder="Ex : rétraction scapulaire, RE2, flexion, abduction…" style={inputStyle} />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Nb répétitions</label>
+                      <input value={mvtAmelNbRep} onChange={e => setMvtAmelNbRep(e.target.value)} placeholder="Ex : 10" style={{ ...inputStyle, marginBottom: 0 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Type de contraction</label>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {['Concentrique', 'Excentrique', 'Isométrique'].map(v => {
+                          const key = v.toLowerCase()
+                          return <button key={v} className={`choix-btn${mvtAmelContraction === key ? ' active' : ''}`} onClick={() => setMvtAmelContraction(mvtAmelContraction === key ? '' : key)}>{v}</button>
+                        })}
+                      </div>
+                    </div>
                   </div>
 
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Examen des mouvements répétés</p>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Marqueurs avant procédure</label>
-                  <input value={marqueursAvant} onChange={e => setMarqueursAvant(e.target.value)} placeholder="Douleur, amplitude…" style={inputStyle} />
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Résultats</label>
-                  <textarea value={resultatsMvtRep} onChange={e => setResultatsMvtRep(e.target.value)} placeholder="Centralisation, périphérisation…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Résultats après procédure</label>
+                  <textarea value={resultatsMvtRep} onChange={e => setResultatsMvtRep(e.target.value)} placeholder="Effet sur EVN / amplitude / douleur — centralisation, périphérisation…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
                 </>
               )}
 
               {sec.id === 'neuro' && (
                 <>
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Examen neurologique</p>
-                  {([
-                    ['Réflexes',          reflexes,       setReflexes,       'Bicipital, tricipital, stylo-radial…'],
-                    ['Force',             forceNeuro,     setForceNeuro,     'Territoire concerné…'],
-                    ['Sensibilité',       sensibilite,    setSensibilite,    'Pinceau / Monofilaments / Roulette / NeuroPen / Chaud-Froid…'],
-                    ['Hoffman / Tromner', hoffmanTromner, setHoffmanTromner, '+ / -'],
-                  ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
+                  {/* Screening neuro bref (JOSPT 2025 : screening cervical recommandé). */}
+                  {((coreMode
+                    ? [
+                        ['Réflexes',          reflexes,       setReflexes,       'Bicipital, tricipital, stylo-radial…'],
+                        ['Force',             forceNeuro,     setForceNeuro,     'Territoire concerné…'],
+                        ['Sensibilité',       sensibilite,    setSensibilite,    'Dermatomes C5-T1…'],
+                      ]
+                    : [
+                        ['Réflexes',          reflexes,       setReflexes,       'Bicipital, tricipital, stylo-radial…'],
+                        ['Force',             forceNeuro,     setForceNeuro,     'Territoire concerné…'],
+                        ['Sensibilité',       sensibilite,    setSensibilite,    'Pinceau / Monofilaments / Roulette / NeuroPen / Chaud-Froid…'],
+                        ['Hoffman / Tromner', hoffmanTromner, setHoffmanTromner, '+ / -'],
+                      ]
+                  ) as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
                     <div key={lbl} style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
                         {lbl}
@@ -790,96 +913,123 @@ export const BilanEpaule = forwardRef<BilanEpauleHandle, { initialData?: Record<
                       <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
                     </div>
                   ))}
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Réversibilité</label>
-                  <input value={reversibilite} onChange={e => setReversibilite(e.target.value)} placeholder="Oui / Non — Force, Pinceau/Monofilaments…" style={inputStyle} />
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Comportement</label>
-                  <input value={comportement} onChange={e => setComportement(e.target.value)} placeholder="Utile / Inutile — Type…" style={inputStyle} />
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Palpation Nerf(s)</label>
-                  <input value={palpationNerfs} onChange={e => setPalpationNerfs(e.target.value)} placeholder="Douleur, lequel…" style={inputStyle} />
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>Nerf / Racine</p>
-                  <OuiNon label="Sous pression" value={nerfSousPression} onChange={setNerfSousPression} />
-                  <OuiNon label="Malade" value={nerfMalade} onChange={setNerfMalade} />
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Précision(s)</label>
-                  <input value={nerfPrecisions} onChange={e => setNerfPrecisions(e.target.value)} placeholder="—" style={inputStyle} />
+                  {!coreMode && (
+                    <>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Réversibilité</label>
+                      <input value={reversibilite} onChange={e => setReversibilite(e.target.value)} placeholder="Oui / Non — Force, Pinceau/Monofilaments…" style={inputStyle} />
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Comportement</label>
+                      <input value={comportement} onChange={e => setComportement(e.target.value)} placeholder="Utile / Inutile — Type…" style={inputStyle} />
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Palpation Nerf(s)</label>
+                      <input value={palpationNerfs} onChange={e => setPalpationNerfs(e.target.value)} placeholder="Douleur, lequel…" style={inputStyle} />
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>Nerf / Racine</p>
+                      <OuiNon label="Sous pression" value={nerfSousPression} onChange={setNerfSousPression} />
+                      <OuiNon label="Malade" value={nerfMalade} onChange={setNerfMalade} />
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Précision(s)</label>
+                      <input value={nerfPrecisions} onChange={e => setNerfPrecisions(e.target.value)} placeholder="—" style={inputStyle} />
 
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', margin: '12px 0 4px' }}>Schéma des troubles sensitifs</label>
-                  <textarea value={troublesSensitifsNotes} onChange={e => setTroublesSensitifsNotes(e.target.value)} placeholder="Localisation, qualité (fourmillements, engourdissement…)" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', margin: '12px 0 4px' }}>Schéma des troubles sensitifs</label>
+                      <textarea value={troublesSensitifsNotes} onChange={e => setTroublesSensitifsNotes(e.target.value)} placeholder="Localisation, qualité (fourmillements, engourdissement…)" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                    </>
+                  )}
 
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Mécanosensibilité</p>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Mécanosensibilité — ULNT</p>
+                  {/* Gardé en noyau : 3 nerfs du MS pour la neurodynamique complète (ULNT1/2b/3). */}
                   {([
-                    ['Nerf médian',  'nerfMedian',  nerfMedian,  setNerfMedian],
-                    ['Nerf ulnaire', 'nerfUlnaire', nerfUlnaire, setNerfUlnaire],
-                    ['Nerf radial',  'nerfRadial',  nerfRadial,  setNerfRadial],
+                    ['Nerf médian (ULNT1)',   'nerfMedian',  nerfMedian,  setNerfMedian],
+                    ['Nerf radial (ULNT2b)',  'nerfRadial',  nerfRadial,  setNerfRadial],
+                    ['Nerf ulnaire (ULNT3)',  'nerfUlnaire', nerfUlnaire, setNerfUlnaire],
                   ] as [string, string, string, (v: string) => void][]).map(([lbl, tKey, val, setter]) => (
-                    <div key={lbl} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={tKey} /></label>
-                      <input value={val} onChange={e => setter(e.target.value)} placeholder="+ / − / reproduction symptômes…" style={inputStyle} />
-                    </div>
+                    <TestResultInput
+                      key={lbl}
+                      label={lbl}
+                      testKey={tKey}
+                      value={val}
+                      onChange={setter}
+                      placeholder="Reproduction symptômes, différenciation structurelle…"
+                    />
                   ))}
                 </>
               )}
 
               {sec.id === 'testsSpec' && (
                 <>
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Rupture de coiffe</p>
+                  {/* Noyau aligné sur la catégorisation clinique EBP : syndrome sous-acromial / épaule raide / instabilité.
+                      Rupture de coiffe : Bear Hug (subscap), Belly Press (subscap), ERLS (sus/infra-épineux), IRLS (subscap). */}
+                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Rupture de coiffe (lag signs inclus)</p>
                   {([
                     ['bearHug',            'Bear Hug Test'],
                     ['bellyPress',         'Belly Press Test'],
-                    ['externalRotLagSign', 'External Rotation Lag Sign'],
+                    ['externalRotLagSign', 'External Rotation Lag Sign (ERLS)'],
+                    ['internalRotLagSign', 'Internal Rotation Lag Sign (IRLS — subscapulaire)'],
                   ] as [string, string][]).map(([k, lbl]) => (
-                    <div key={k} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={k} /></label>
-                      <input value={testsSpec[k] ?? ''} onChange={e => updateTestSpec(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
-                    </div>
+                    <TestResultInput
+                      key={k}
+                      label={lbl}
+                      testKey={k}
+                      value={testsSpec[k] ?? ''}
+                      onChange={v => updateTestSpec(k, v)}
+                    />
                   ))}
 
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Cluster acromio-claviculaire</p>
-                  {([
-                    ['obrien',            "O'Brien"],
-                    ['palpationAC',       'Palpation AC'],
-                    ['crossArm',          'Cross-Arm'],
-                    ['abdHorizResist',    'Abduction horizontale contre résistance'],
-                  ] as [string, string][]).map(([k, lbl]) => (
-                    <div key={k} className="oui-non-group">
-                      <span className="oui-non-label">{lbl}<TestInfoButton testKey={k} /></span>
-                      <div className="oui-non-btns">
-                        {(['+', '−'] as const).map(v => {
-                          const stored = v === '+' ? 'positif' : 'negatif'
-                          return (
-                            <button key={v} className={`oui-non-btn${testsSpec[k] === stored ? ' active' : ''}`} onClick={() => updateTestSpec(k, testsSpec[k] === stored ? '' : stored)}>{v}</button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-
+                  {/* Tests d'instabilité — GARDÉS en noyau pour la catégorisation (syndrome sous-acromial / raide / instabilité). */}
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Instabilité</p>
                   {([
                     ['apprehensionRelocation', 'Apprehension / Relocation Test'],
                     ['signeSulcus',            'Test du signe du Sulcus'],
                     ['jerkTest',               'Jerk Test'],
                   ] as [string, string][]).map(([k, lbl]) => (
-                    <div key={k} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={k} /></label>
-                      <input value={testsSpec[k] ?? ''} onChange={e => updateTestSpec(k, e.target.value)} placeholder="Résultat…" style={inputStyle} />
-                    </div>
+                    <TestResultInput
+                      key={k}
+                      label={lbl}
+                      testKey={k}
+                      value={testsSpec[k] ?? ''}
+                      onChange={v => updateTestSpec(k, v)}
+                    />
                   ))}
 
-                  <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Tests fonctionnels</p>
-                  {([
-                    ['ckcuest',     'CKCUEST'],
-                    ['ulrt',        'ULRT'],
-                    ['uqYbt',       'UQ-YBT'],
-                    ['setPset',     'SET / PSET'],
-                    ['smbtSasspt',  'SMBT / SASSPT'],
-                  ] as [string, string][]).map(([k, lbl]) => (
-                    <div key={k} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}<TestInfoButton testKey={k} /></label>
-                      <input value={testsSpec[k] ?? ''} onChange={e => updateTestSpec(k, e.target.value)} placeholder="Score / résultat…" style={inputStyle} />
-                    </div>
-                  ))}
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests</label>
-                  <textarea value={testsSpec.autresTestsFonctionnels ?? ''} onChange={e => updateTestSpec('autresTestsFonctionnels', e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  {!coreMode && (
+                    <>
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Cluster acromio-claviculaire</p>
+                      {([
+                        ['obrien',            "O'Brien"],
+                        ['palpationAC',       'Palpation AC'],
+                        ['crossArm',          'Cross-Arm'],
+                        ['abdHorizResist',    'Abduction horizontale contre résistance'],
+                      ] as [string, string][]).map(([k, lbl]) => (
+                        <div key={k} className="oui-non-group">
+                          <span className="oui-non-label">{lbl}<TestInfoButton testKey={k} /></span>
+                          <div className="oui-non-btns">
+                            {(['+', '−'] as const).map(v => {
+                              const stored = v === '+' ? 'positif' : 'negatif'
+                              return (
+                                <button key={v} className={`oui-non-btn${testsSpec[k] === stored ? ' active' : ''}`} onClick={() => updateTestSpec(k, testsSpec[k] === stored ? '' : stored)}>{v}</button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Tests fonctionnels</p>
+                      {([
+                        ['ckcuest',     'CKCUEST'],
+                        ['ulrt',        'ULRT'],
+                        ['uqYbt',       'UQ-YBT'],
+                        ['setPset',     'SET / PSET'],
+                        ['smbtSasspt',  'SMBT / SASSPT'],
+                      ] as [string, string][]).map(([k, lbl]) => (
+                        <TestResultInput
+                          key={k}
+                          label={lbl}
+                          testKey={k}
+                          value={testsSpec[k] ?? ''}
+                          onChange={v => updateTestSpec(k, v)}
+                          placeholder="Score, nombre, côté…"
+                        />
+                      ))}
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests</label>
+                      <textarea value={testsSpec.autresTestsFonctionnels ?? ''} onChange={e => updateTestSpec('autresTestsFonctionnels', e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                    </>
+                  )}
                 </>
               )}
 

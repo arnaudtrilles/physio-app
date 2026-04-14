@@ -1,6 +1,6 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
 import type { BilanType } from '../../types'
-import { SectionHeader, OuiNon } from './shared'
+import { SectionHeader, OuiNon, EVASlider } from './shared'
 
 export interface BilanIntermediaireHandle {
   getData: () => Record<string, unknown>
@@ -411,26 +411,18 @@ export const BilanIntermediaire = forwardRef<
                   <RadioGroup label="Localisation actuelle" value={localisation} onChange={setLocalisation}
                     options={['Idem', 'Modifiée', 'Étendue', 'Réduite']} />
 
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>EVN (0-10) Actuelle vs Initiale</div>
-                    {[
-                      ['Pire', evnPireAct, setEvnPireAct, evnPireInit, setEvnPireInit],
-                      ['Mieux', evnMieuxAct, setEvnMieuxAct, evnMieuxInit, setEvnMieuxInit],
-                      ['Moy.', evnMoyAct, setEvnMoyAct, evnMoyInit, setEvnMoyInit],
-                    ].map(([lbl, actVal, actSet, initVal, initSet]) => (
-                      <div key={lbl as string} style={evnRowStyle}>
-                        <div>
-                          <label style={lblStyle}>{lbl as string} — Actuelle</label>
-                          <input type="number" min="0" max="10" value={actVal as string}
-                            onChange={e => (actSet as (v: string) => void)(e.target.value)}
-                            style={evnInStyle} placeholder="0-10" />
-                        </div>
-                        <div>
-                          <label style={lblStyle}>{lbl as string} — Initiale</label>
-                          <input type="number" min="0" max="10" value={initVal as string}
-                            onChange={e => (initSet as (v: string) => void)(e.target.value)}
-                            style={{ ...evnInStyle, opacity: 0.7 }} placeholder="0-10" />
-                        </div>
+                  <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>EVA — Actuelle vs Initiale</div>
+                    {([
+                      ['EVA Max',  evnPireAct,  setEvnPireAct,  evnPireInit,  setEvnPireInit],
+                      ['EVA Min',  evnMieuxAct, setEvnMieuxAct, evnMieuxInit, setEvnMieuxInit],
+                      ['EVA Moy.', evnMoyAct,   setEvnMoyAct,   evnMoyInit,   setEvnMoyInit],
+                    ] as [string, string, (v: string) => void, string, (v: string) => void][]).map(([lbl, actVal, actSet, initVal, initSet]) => (
+                      <div key={lbl} style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>{lbl}</div>
+                        <EVASlider label="Actuelle" value={actVal} onChange={actSet} compact />
+                        <div style={{ height: 6 }} />
+                        <EVASlider label="Initiale" value={initVal} onChange={initSet} compact />
                       </div>
                     ))}
                   </div>
@@ -563,20 +555,9 @@ export const BilanIntermediaire = forwardRef<
                         <input value={nomV as string} onChange={e => (nomS as (v: string) => void)(e.target.value)}
                           placeholder={`${lbl as string} — nom de l'activité (ex: monter les escaliers)`}
                           style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.82rem', fontStyle: nomV ? 'normal' : 'italic', color: 'var(--text-main)', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-color)', marginBottom: 8, boxSizing: 'border-box', outline: 'none' }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          <div>
-                            <label style={lblStyle}>Score actuel /10</label>
-                            <input type="number" min="0" max="10" value={actV as string}
-                              onChange={e => (actS as (v: string) => void)(e.target.value)}
-                              style={evnInStyle} placeholder="0-10" />
-                          </div>
-                          <div>
-                            <label style={lblStyle}>Score initial /10</label>
-                            <input type="number" min="0" max="10" value={initV as string}
-                              onChange={e => (initS as (v: string) => void)(e.target.value)}
-                              style={{ ...evnInStyle, opacity: 0.7 }} placeholder="0-10" />
-                          </div>
-                        </div>
+                        <EVASlider label="Score actuel" value={actV as string} onChange={actS as (v: string) => void} compact />
+                        <div style={{ height: 6 }} />
+                        <EVASlider label="Score initial" value={initV as string} onChange={initS as (v: string) => void} compact />
                       </div>
                     ))}
                   </div>

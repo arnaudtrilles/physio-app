@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { computeAge } from './clinicalPrompt';
+import { composeBodyChart, BODY_CHART_W, BODY_CHART_H } from '../components/BodyDrawing';
 
 // ── Nettoyage texte pour jsPDF (Helvetica ne supporte pas certains caractères) ─
 // Robuste face au texte généré par IA : guillemets typographiques, tirets,
@@ -34,7 +35,7 @@ const sanitize = (text: string): string => {
     // Strip emoji + autres symboles non-WinAnsi qui crashent jsPDF
     .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
     .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
-    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+    .replace(/[\u{2500}-\u{27BF}]/gu, '') // box drawing, geometric shapes, arrows, dingbats
 }
 
 // ── Couleurs ──────────────────────────────────────────────────────────────────
@@ -225,18 +226,52 @@ const TESTS_LABELS: Record<string, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Les tests cliniques sont souvent stockés comme { status: '+'/'-', details: '' }
+// (parfois sérialisés en JSON). On convertit ça en chaîne lisible et on élimine
+// les tests négatifs (status '-') qui n'apportent pas d'info diagnostique.
+const formatStatusDetails = (obj: { status?: unknown; details?: unknown }): string | null => {
+  const status = typeof obj.status === 'string' ? obj.status.trim() : ''
+  const details = typeof obj.details === 'string' ? obj.details.trim() : ''
+  if (!status && !details) return null
+  if (status === '-' || status === 'Négatif' || status === 'negatif') return null
+  const label = status === '+' || status === 'Positif' || status === 'positif' ? 'Positif' : status
+  return details ? `${label} — ${details}` : (label || null)
+}
+
 const fmt = (val: unknown): string | null => {
   if (val === null || val === undefined) return null
   if (typeof val === 'boolean') return val ? 'Oui' : 'Non'
-  if (typeof val === 'string') return val.trim() || null
   if (typeof val === 'number') return String(val)
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (!trimmed) return null
+    // Certains tests sont sérialisés en JSON dans le store
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (parsed && typeof parsed === 'object' && ('status' in parsed || 'details' in parsed)) {
+          return formatStatusDetails(parsed as { status?: unknown; details?: unknown })
+        }
+      } catch { /* pas du JSON valide, on garde la string brute */ }
+    }
+    return trimmed
+  }
+  if (typeof val === 'object') {
+    const o = val as { status?: unknown; details?: unknown }
+    if ('status' in o || 'details' in o) return formatStatusDetails(o)
+    return null
+  }
   return null
 }
+
+// Clés à ne jamais imprimer en texte : body chart (dataURL base64, rendu en
+// image en section 2), notes libres, et champs "_detail" dérivés.
+const SKIP_KEYS = new Set(['bodyChart', 'notes', 'silhouette', 'silhouetteData'])
 
 const renderObj = (obj: Record<string, unknown>, labels: Record<string, string>): { label: string; value: string }[] => {
   const out: { label: string; value: string }[] = []
   for (const [k, v] of Object.entries(obj)) {
-    if (k.endsWith('_detail') || k === 'notes') continue
+    if (k.endsWith('_detail') || SKIP_KEYS.has(k)) continue
     const display = fmt(v)
     if (!display) continue
     const label = labels[k] ?? k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())
@@ -247,6 +282,19 @@ const renderObj = (obj: Record<string, unknown>, labels: Record<string, string>)
   }
   return out
 }
+
+// Filtre le bruit clinique : on garde uniquement les valeurs qui apportent
+// une information positive. "Non", "Aucun", "Normal", "RAS"… disparaissent
+// pour compresser radicalement la longueur du PDF.
+const NON_INFORMATIVE = new Set(['non', 'aucun', 'aucune', 'ras', 'normal', 'normale', 'n/a', 'na', '—', '-'])
+const isRelevant = (val: string): boolean => {
+  const v = val.trim().toLowerCase()
+  if (!v) return false
+  return !NON_INFORMATIVE.has(v)
+}
+
+const renderObjCompact = (obj: Record<string, unknown>, labels: Record<string, string>): { label: string; value: string }[] =>
+  renderObj(obj, labels).filter(e => isRelevant(e.value))
 
 // ── Export types ──────────────────────────────────────────────────────────────
 
@@ -343,7 +391,7 @@ export const generatePDF = async (
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9.5)
     doc.setTextColor(...C.primary)
-    doc.text(`▸ ${title}`, ML + 2, y)
+    doc.text(`> ${title}`, ML + 2, y)
     doc.setTextColor(...C.text)
     y += 5
   }
@@ -415,58 +463,79 @@ export const generatePDF = async (
     fieldLine('Chirurgie', generalInfo.chirurgie ?? '')
   }
 
-  // ── 2. Cartographie corporelle ────────────────────────────────────────────
-  const savedZones = Object.keys(zoneData).filter(z => zoneData[z]?.saved)
-  if (savedZones.length > 0) {
-    sectionTitle('Cartographie corporelle', secNum++)
-
-    const renderView = async (divId: string, keys: string[], label: string) => {
-      const el = document.getElementById(divId)
-      if (!el) return
-      const active = savedZones.filter(z => keys.some(k => z.includes(k)))
-      if (active.length === 0) return
-      check(85)
-      const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 })
-      const img = canvas.toDataURL('image/png')
-      doc.addImage(img, 'PNG', ML, y, 38, 72)
-
-      let ty = y + 4
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text(label, ML + 42, ty)
-      ty += 5
-      drawLine(ty - 2, C.light)
-
-      active.forEach(zone => {
-        const d = zoneData[zone]
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(8.5)
-        doc.text(zone, ML + 42, ty + 2)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        let info = `EVN ${d.intensite}/10`
-        if (d.type) info += ` · ${d.type}`
-        if (d.fondDouloureux) info += ' · Fond douloureux'
-        if (d.douleurNocturne) info += ' · Nocturne'
-        doc.text(info, ML + 42, ty + 6.5)
-        if (d.notes) {
-          doc.setFontSize(7.5)
-          doc.setTextColor(...C.muted)
-          const noteLines = split(d.notes, MW - 46)
-          doc.text(noteLines[0] ?? '', ML + 42, ty + 10.5)
-          doc.setTextColor(...C.text)
-          ty += 15
-        } else {
-          ty += 11
-        }
-      })
-      y = Math.max(y + 76, ty + 4)
+  // ── 2. Schéma corporel (body chart) ───────────────────────────────────────
+  // Priorité au nouveau body chart (dessin libre sur silhouette image).
+  // Fallback : ancienne cartographie par zones (silhouetteData) pour les
+  // bilans créés avant la refonte.
+  const bodyChartDrawing = (
+    ((bilanZoneData?.data?.douleur as Record<string, unknown> | undefined)?.bodyChart as string | undefined) ?? ''
+  )
+  if (bodyChartDrawing) {
+    sectionTitle('Schéma corporel', secNum++)
+    const composite = await composeBodyChart(bodyChartDrawing)
+    if (composite) {
+      const aspect = BODY_CHART_H / BODY_CHART_W
+      const imgW = Math.min(MW, 120)
+      const imgH = imgW * aspect
+      check(imgH + 6)
+      const imgX = ML + (MW - imgW) / 2
+      doc.addImage(composite, 'PNG', imgX, y, imgW, imgH)
+      y += imgH + 4
     }
+  } else {
+    // Legacy : ancienne cartographie par zones
+    const savedZones = Object.keys(zoneData).filter(z => zoneData[z]?.saved)
+    if (savedZones.length > 0) {
+      sectionTitle('Cartographie corporelle', secNum++)
 
-    const faceKeys = ['Face', 'Poitrine', 'Abdomen', 'Genou Droit', 'Tibia Droit', 'Pied Droit', 'Genou Gauche', 'Tibia Gauche', 'Pied Gauche']
-    const dosKeys = ['Dos', 'Lombaires', 'Fessiers', 'Ischio', 'Creux Poplité', 'Mollet', 'Talon']
-    await renderView('pdf-face-svg', faceKeys, 'Vue antérieure')
-    await renderView('pdf-dos-svg', dosKeys, 'Vue postérieure')
+      const renderView = async (divId: string, keys: string[], label: string) => {
+        const el = document.getElementById(divId)
+        if (!el) return
+        const active = savedZones.filter(z => keys.some(k => z.includes(k)))
+        if (active.length === 0) return
+        check(85)
+        const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 })
+        const img = canvas.toDataURL('image/png')
+        doc.addImage(img, 'PNG', ML, y, 38, 72)
+
+        let ty = y + 4
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.text(label, ML + 42, ty)
+        ty += 5
+        drawLine(ty - 2, C.light)
+
+        active.forEach(zone => {
+          const d = zoneData[zone]
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(8.5)
+          doc.text(zone, ML + 42, ty + 2)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          let info = `EVN ${d.intensite}/10`
+          if (d.type) info += ` · ${d.type}`
+          if (d.fondDouloureux) info += ' · Fond douloureux'
+          if (d.douleurNocturne) info += ' · Nocturne'
+          doc.text(info, ML + 42, ty + 6.5)
+          if (d.notes) {
+            doc.setFontSize(7.5)
+            doc.setTextColor(...C.muted)
+            const noteLines = split(d.notes, MW - 46)
+            doc.text(noteLines[0] ?? '', ML + 42, ty + 10.5)
+            doc.setTextColor(...C.text)
+            ty += 15
+          } else {
+            ty += 11
+          }
+        })
+        y = Math.max(y + 76, ty + 4)
+      }
+
+      const faceKeys = ['Face', 'Poitrine', 'Abdomen', 'Genou Droit', 'Tibia Droit', 'Pied Droit', 'Genou Gauche', 'Tibia Gauche', 'Pied Gauche']
+      const dosKeys = ['Dos', 'Lombaires', 'Fessiers', 'Ischio', 'Creux Poplité', 'Mollet', 'Talon']
+      await renderView('pdf-face-svg', faceKeys, 'Vue antérieure')
+      await renderView('pdf-dos-svg', dosKeys, 'Vue postérieure')
+    }
   }
 
   // ── 3. Bilan spécifique par zone ──────────────────────────────────────────
@@ -474,60 +543,75 @@ export const generatePDF = async (
     sectionTitle(`Bilan spécifique — ${bilanZoneData.sectionTitle}`, secNum++)
     const d = bilanZoneData.data
 
-    // Douleur
+    // Douleur — on ne conserve que les champs informatifs
     if (d.douleur) {
-      subTitle('Douleur')
-      const entries = renderObj(d.douleur as Record<string, unknown>, DOULEUR_LABELS)
-      entries.forEach(e => field(e.label, e.value))
-      y += 2
-    }
-
-    // Red Flags
-    if (d.redFlags) {
-      const entries = renderObj(d.redFlags as Record<string, unknown>, FLAG_LABELS)
+      const entries = renderObjCompact(d.douleur as Record<string, unknown>, DOULEUR_LABELS)
       if (entries.length > 0) {
-        subTitle('Red Flags')
+        subTitle('Douleur')
         entries.forEach(e => field(e.label, e.value))
         y += 2
       }
     }
 
-    // 5D3N (cervical)
+    // Drapeaux cliniques — Red / Yellow / Blue-Black fusionnés, positifs uniquement.
+    // Masqué quand l'analyse IA est jointe : les alertes IA couvrent déjà ce contenu
+    // avec interprétation, pas la peine d'imprimer les données brutes deux fois.
+    const showFlagsBlock = !analyseIA || analyseIA.alertes.length === 0
+    if (showFlagsBlock) {
+      const flagPositives: Array<{ cat: string; label: string; value: string }> = []
+      const collectFlags = (cat: string, obj: unknown) => {
+        if (!obj || typeof obj !== 'object') return
+        for (const e of renderObjCompact(obj as Record<string, unknown>, FLAG_LABELS)) {
+          flagPositives.push({ cat, label: e.label, value: e.value })
+        }
+      }
+      collectFlags('Red', d.redFlags)
+      collectFlags('Yellow', d.yellowFlags)
+      collectFlags('Blue/Black', d.blueBlackFlags)
+      if (flagPositives.length > 0) {
+        subTitle('Drapeaux cliniques (positifs)')
+        for (const p of flagPositives) {
+          const txt = p.value === 'Oui' ? `${p.cat} · ${p.label}` : `${p.cat} · ${p.label} — ${p.value}`
+          bulletPoint(txt, 6)
+        }
+        y += 2
+      }
+    }
+
+    // 5D 3N (cervical — signes de VBI) — positifs uniquement
     if (d.cinqD3N) {
-      const entries = renderObj(d.cinqD3N as Record<string, unknown>, {
+      const entries = renderObjCompact(d.cinqD3N as Record<string, unknown>, {
         dizziness: 'Vertiges', dropAttacks: 'Drop attacks', diplopie: 'Diplopie',
         dysarthrie: 'Dysarthrie', dysphagie: 'Dysphagie', nystagmus: 'Nystagmus',
         nausees: 'Nausées', numbness: 'Engourdissements',
       })
       if (entries.length > 0) {
         subTitle('5D 3N')
-        entries.forEach(e => field(e.label, e.value))
+        bulletPoint(entries.map(e => e.value === 'Oui' ? e.label : `${e.label} — ${e.value}`).join(' · '), 6)
         y += 2
       }
     }
 
-    // Ottawa (cheville)
+    // Ottawa (cheville) — critères positifs uniquement
     if (d.ottawa) {
-      const entries = renderObj(d.ottawa as Record<string, unknown>, {
-        // Legacy keys
+      const entries = renderObjCompact(d.ottawa as Record<string, unknown>, {
         malleoleExternePalpation: 'Malléole externe', malleoleInternePalpation: 'Malléole interne',
         naviculairePalpation: 'Naviculaire', base5ePalpation: 'Base 5e métatarsien',
         appuiImpossible: 'Appui impossible',
-        // New keys
         malleoleMediale: 'Malléole médiale', malleoleLaterale: 'Malléole latérale',
         cinquiemeMetatarsien: 'Base 5e métatarsien', naviculaire: 'Naviculaire',
         appuiUnipodal: 'Appui unipodal impossible',
       })
       if (entries.length > 0) {
         subTitle("Critères d'Ottawa")
-        entries.forEach(e => field(e.label, e.value))
+        bulletPoint(entries.map(e => e.value === 'Oui' ? e.label : `${e.label} — ${e.value}`).join(' · '), 6)
         y += 2
       }
     }
 
     // Antécédents d'entorse (cheville)
     if (d.antecedentsEntorse) {
-      const entries = renderObj(d.antecedentsEntorse as Record<string, unknown>, {
+      const entries = renderObjCompact(d.antecedentsEntorse as Record<string, unknown>, {
         precedentes: 'Précédentes entorses', precedentesMemeCheville: 'Même cheville',
         precedentesCombien: 'Combien', precedentesType: 'Type',
         autreCheville: 'Autre cheville', autreChevilleCombien: 'Combien (autre)', autreChevilleType: 'Type (autre)',
@@ -539,139 +623,112 @@ export const generatePDF = async (
       }
     }
 
-    // Yellow Flags
-    if (d.yellowFlags) {
-      const entries = renderObj(d.yellowFlags as Record<string, unknown>, FLAG_LABELS)
-      if (entries.length > 0) {
-        subTitle('Yellow Flags')
-        entries.forEach(e => field(e.label, e.value))
-        y += 2
-      }
-    }
-
-    // Blue / Black Flags
-    if (d.blueBlackFlags) {
-      const entries = renderObj(d.blueBlackFlags as Record<string, unknown>, FLAG_LABELS)
-      if (entries.length > 0) {
-        subTitle('Blue / Black Flags')
-        entries.forEach(e => field(e.label, e.value))
-        y += 2
-      }
-    }
-
-    // Examen clinique
+    // Examen clinique — chaque sous-groupe est compacté sur une seule ligne
+    // wrappée (label + valeurs séparées par " · "). L'ancienne version
+    // imprimait un tableau par sous-groupe, ce qui produisait 2-3 pages de
+    // bruit pour un bilan complet.
     if (d.examClinique) {
       const ec = d.examClinique as Record<string, unknown>
-      // Helper: render a sub-section table from an APGD or simple Record
-      const renderSubGroup = (title: string, obj: unknown, labels: Record<string, string> = {}) => {
-        if (!obj || typeof obj !== 'object') return
-        const entries: { label: string; value: string }[] = []
+      const compactSubGroup = (label: string, obj: unknown, labels: Record<string, string> = {}): { label: string; value: string } | null => {
+        if (!obj || typeof obj !== 'object') return null
+        const parts: string[] = []
         for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+          if (k.endsWith('_detail') || SKIP_KEYS.has(k)) continue
+          const key = labels[k] ?? k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())
           if (v && typeof v === 'object') {
-            // APGD row { ag, ad, pg, pd } or { gauche, droite } or { initial, actuel } or { perte, symptomes }
+            // APGD { ag, ad, pg, pd } | { gauche, droite } | { perte, symptomes }
             const r = v as Record<string, string>
-            const parts: string[] = []
             if (r.ag || r.ad || r.pg || r.pd) {
-              if (r.ag || r.ad) parts.push(`A: G ${r.ag || '—'} / D ${r.ad || '—'}`)
-              if (r.pg || r.pd) parts.push(`P: G ${r.pg || '—'} / D ${r.pd || '—'}`)
+              const bits: string[] = []
+              if (r.ag || r.ad) bits.push(`A G${r.ag || '—'}/D${r.ad || '—'}`)
+              if (r.pg || r.pd) bits.push(`P G${r.pg || '—'}/D${r.pd || '—'}`)
+              if (bits.length > 0) parts.push(`${key} ${bits.join(' ')}`)
             } else if (r.gauche || r.droite) {
-              parts.push(`G ${r.gauche || '—'} / D ${r.droite || '—'}`)
+              parts.push(`${key} G${r.gauche || '—'}/D${r.droite || '—'}`)
             } else if (r.perte || r.symptomes) {
-              if (r.perte) parts.push(`Perte: ${r.perte}`)
-              if (r.symptomes) parts.push(r.symptomes)
-            }
-            if (parts.length > 0) {
-              entries.push({ label: labels[k] ?? k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), value: parts.join(' · ') })
+              const bits: string[] = []
+              if (r.perte) bits.push(`perte ${r.perte}`)
+              if (r.symptomes) bits.push(r.symptomes)
+              if (bits.length > 0) parts.push(`${key} ${bits.join(', ')}`)
             }
           } else {
             const display = fmt(v)
-            if (display) entries.push({ label: labels[k] ?? k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), value: display })
+            if (!display || !isRelevant(display)) continue
+            parts.push(display === 'Oui' ? key : `${key} ${display}`)
           }
         }
-        if (entries.length === 0) return
-        check(8)
-        doc.setFont('helvetica', 'italic')
-        doc.setFontSize(8)
-        doc.setTextColor(...C.muted)
-        doc.text(title, ML + 6, y)
-        doc.setTextColor(...C.text)
-        y += 4
-        entries.forEach(e => field(e.label, e.value, 4))
+        return parts.length > 0 ? { label, value: parts.join(' · ') } : null
       }
 
-      subTitle('Examen clinique')
-      // Top-level simple fields (legacy morfho string, oedeme string)
-      const simpleEntries: { label: string; value: string }[] = []
+      // Champs simples de premier niveau (ancien 'morfho'/'oedeme' en string)
+      const ecSimple: { label: string; value: string }[] = []
       for (const [k, v] of Object.entries(ec)) {
         if (typeof v === 'object') continue
         const display = fmt(v)
-        if (display) simpleEntries.push({ label: EXAM_LABELS[k] ?? k, value: display })
+        if (display && isRelevant(display)) ecSimple.push({ label: EXAM_LABELS[k] ?? k, value: display })
       }
-      simpleEntries.forEach(e => field(e.label, e.value))
-      // Structured sub-groups
-      renderSubGroup('Morphostatique', ec.morpho, EXAM_LABELS)
-      renderSubGroup('Observation', ec.observation, EXAM_LABELS)
-      renderSubGroup('Œdème', ec.oedeme, EXAM_LABELS)
-      renderSubGroup('Mobilité (legacy)', ec.mobilite, EXAM_LABELS)
-      renderSubGroup('Mobilité — Épaule', ec.mobiliteEpaule, EXAM_LABELS)
-      renderSubGroup('Mobilité — Hanche', ec.mobiliteHanche, EXAM_LABELS)
-      renderSubGroup('Mobilité — Genou', ec.mobiliteGenou, EXAM_LABELS)
-      renderSubGroup('Mobilité — Cheville', ec.mobiliteCheville, EXAM_LABELS)
-      renderSubGroup('Mobilité — Rachis lombaire', ec.mobiliteLombaire, EXAM_LABELS)
-      renderSubGroup('Mobilité — Rachis cervical', ec.mobiliteCervical, EXAM_LABELS)
-      renderSubGroup('Mobilité — Autres', ec.mobAutres, EXAM_LABELS)
-      renderSubGroup('Zones adjacentes', ec.zones, EXAM_LABELS)
-      renderSubGroup('Fonctionnel', ec.fonctionnel, EXAM_LABELS)
-      renderSubGroup('WBLT', ec.wblt, EXAM_LABELS)
-      renderSubGroup('Modifications des symptômes', ec.modifSymp, EXAM_LABELS)
-      renderSubGroup('Force (legacy)', ec.force, FORCE_LABELS)
-      y += 2
+      const ecGroups = [
+        compactSubGroup('Morphostatique', ec.morpho, EXAM_LABELS),
+        compactSubGroup('Observation', ec.observation, EXAM_LABELS),
+        compactSubGroup('Œdème', ec.oedeme, EXAM_LABELS),
+        compactSubGroup('Mobilité', ec.mobilite, EXAM_LABELS),
+        compactSubGroup('Mobilité épaule', ec.mobiliteEpaule, EXAM_LABELS),
+        compactSubGroup('Mobilité hanche', ec.mobiliteHanche, EXAM_LABELS),
+        compactSubGroup('Mobilité genou', ec.mobiliteGenou, EXAM_LABELS),
+        compactSubGroup('Mobilité cheville', ec.mobiliteCheville, EXAM_LABELS),
+        compactSubGroup('Mobilité lombaire', ec.mobiliteLombaire, EXAM_LABELS),
+        compactSubGroup('Mobilité cervicale', ec.mobiliteCervical, EXAM_LABELS),
+        compactSubGroup('Mobilité autres', ec.mobAutres, EXAM_LABELS),
+        compactSubGroup('Zones adjacentes', ec.zones, EXAM_LABELS),
+        compactSubGroup('Fonctionnel', ec.fonctionnel, EXAM_LABELS),
+        compactSubGroup('WBLT', ec.wblt, EXAM_LABELS),
+        compactSubGroup('Modifs symptômes', ec.modifSymp, EXAM_LABELS),
+        compactSubGroup('Force (legacy)', ec.force, FORCE_LABELS),
+      ].filter((e): e is { label: string; value: string } => e !== null)
+      if (ecSimple.length + ecGroups.length > 0) {
+        subTitle('Examen clinique')
+        ecSimple.forEach(e => field(e.label, e.value))
+        ecGroups.forEach(e => field(e.label, e.value))
+        y += 2
+      }
     }
 
-    // Force musculaire (nouvelle structure)
+    // Force musculaire — compacté : une ligne "Force" + une ligne "Abdo"
     if (d.forceMusculaire) {
       const fm = d.forceMusculaire as Record<string, unknown>
-      const forceEntries: { label: string; value: string }[] = []
+      const fmEntries: { label: string; value: string }[] = []
       if (fm.force && typeof fm.force === 'object') {
+        const parts: string[] = []
         for (const [k, v] of Object.entries(fm.force as Record<string, unknown>)) {
           const r = v as { gauche?: string; droite?: string }
-          if (r.gauche || r.droite) {
-            forceEntries.push({ label: FORCE_LABELS[k] ?? k, value: `G ${r.gauche || '—'} / D ${r.droite || '—'}` })
-          }
+          if (r.gauche || r.droite) parts.push(`${FORCE_LABELS[k] ?? k} G${r.gauche || '—'}/D${r.droite || '—'}`)
         }
+        if (parts.length > 0) fmEntries.push({ label: 'Force', value: parts.join(' · ') })
       }
-      const abdoEntries: { label: string; value: string }[] = []
       if (fm.abdo && typeof fm.abdo === 'object') {
+        const parts: string[] = []
         for (const [k, v] of Object.entries(fm.abdo as Record<string, unknown>)) {
           const display = fmt(v)
-          if (display) abdoEntries.push({ label: FORCE_LABELS[k] ?? k, value: display })
+          if (!display || !isRelevant(display)) continue
+          parts.push(display === 'Oui' ? (FORCE_LABELS[k] ?? k) : `${FORCE_LABELS[k] ?? k} ${display}`)
         }
+        if (parts.length > 0) fmEntries.push({ label: 'Abdo', value: parts.join(' · ') })
       }
-      const otherEntries = renderObj(
+      const otherEntries = renderObjCompact(
         Object.fromEntries(Object.entries(fm).filter(([k]) => !['force', 'abdo'].includes(k))),
         { autresForce: 'Autres tests force', marqueursAvant: 'Mvts répétés — marqueurs', resultats: 'Mvts répétés — résultats' }
       )
-      if (forceEntries.length + abdoEntries.length + otherEntries.length > 0) {
+      if (fmEntries.length + otherEntries.length > 0) {
         subTitle('Force musculaire')
-        forceEntries.forEach(e => field(e.label, e.value))
-        if (abdoEntries.length > 0) {
-          check(8)
-          doc.setFont('helvetica', 'italic')
-          doc.setFontSize(8)
-          doc.setTextColor(...C.muted)
-          doc.text('Muscles abdominaux', ML + 6, y)
-          doc.setTextColor(...C.text)
-          y += 4
-          abdoEntries.forEach(e => field(e.label, e.value, 4))
-        }
+        fmEntries.forEach(e => field(e.label, e.value))
         otherEntries.forEach(e => field(e.label, e.value))
         y += 2
       }
     }
 
-    // Neurologique
+    // Neurologique — positifs uniquement
     if (d.neurologique) {
-      const entries = renderObj(d.neurologique as Record<string, unknown>, NEURO_LABELS)
+      const entries = renderObjCompact(d.neurologique as Record<string, unknown>, NEURO_LABELS)
       if (entries.length > 0) {
         subTitle('Examen neurologique')
         entries.forEach(e => field(e.label, e.value))
@@ -679,9 +736,9 @@ export const generatePDF = async (
       }
     }
 
-    // Mécanosensibilité
+    // Mécanosensibilité — positifs uniquement
     if (d.mecanosensibilite) {
-      const entries = renderObj(d.mecanosensibilite as Record<string, unknown>, NEURO_LABELS)
+      const entries = renderObjCompact(d.mecanosensibilite as Record<string, unknown>, NEURO_LABELS)
       if (entries.length > 0) {
         subTitle('Mécanosensibilité')
         entries.forEach(e => field(e.label, e.value))
@@ -702,9 +759,9 @@ export const generatePDF = async (
       }
     }
 
-    // Tests ligamentaires (genou)
+    // Tests ligamentaires — positifs uniquement
     if (d.testsLigamentaires) {
-      const entries = renderObj(d.testsLigamentaires as Record<string, unknown>, TESTS_LABELS)
+      const entries = renderObjCompact(d.testsLigamentaires as Record<string, unknown>, TESTS_LABELS)
       if (entries.length > 0) {
         subTitle('Tests ligamentaires')
         entries.forEach(e => field(e.label, e.value))
@@ -712,10 +769,10 @@ export const generatePDF = async (
       }
     }
 
-    // Tests spécifiques (legacy `tests` ou nouvelle clé `testsSpecifiques`)
+    // Tests spécifiques — positifs uniquement
     if (d.tests || d.testsSpecifiques) {
       const src = (d.testsSpecifiques ?? d.tests) as Record<string, unknown>
-      const entries = renderObj(src, TESTS_LABELS)
+      const entries = renderObjCompact(src, TESTS_LABELS)
       if (entries.length > 0) {
         subTitle('Tests spécifiques')
         entries.forEach(e => field(e.label, e.value))
@@ -723,16 +780,16 @@ export const generatePDF = async (
       }
     }
 
-    // Équilibre (cheville)
+    // Équilibre (cheville) — scores chiffrés, on les conserve tous
     if (d.equilibre) {
-      const entries = renderObj(d.equilibre as Record<string, unknown>, {
+      const entries = renderObjCompact(d.equilibre as Record<string, unknown>, {
         footLiftGauche: 'Foot Lift G', footLiftDroite: 'Foot Lift D',
         bessGauche: 'BESS G /60', bessDroite: 'BESS D /60',
         yBalanceGauche: 'Y Balance G', yBalanceDroite: 'Y Balance D',
       })
       if (entries.length > 0) {
         subTitle('Équilibre postural')
-        entries.forEach(e => field(e.label, e.value))
+        bulletPoint(entries.map(e => `${e.label} ${e.value}`).join(' · '), 6)
         y += 2
       }
     }
@@ -750,12 +807,12 @@ export const generatePDF = async (
       }
     }
 
-    // Scores fonctionnels
+    // Scores fonctionnels — compactés sur une ligne wrappée
     if (d.scores) {
-      const entries = renderObj(d.scores as Record<string, unknown>, SCORE_LABELS)
+      const entries = renderObjCompact(d.scores as Record<string, unknown>, SCORE_LABELS)
       if (entries.length > 0) {
         subTitle('Scores fonctionnels')
-        entries.forEach(e => field(e.label, e.value))
+        bulletPoint(entries.map(e => `${e.label} ${e.value}`).join(' · '), 6)
         y += 2
       }
     }

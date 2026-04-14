@@ -1,5 +1,5 @@
 import { useState, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react'
-import { SectionHeader, ScoreRow as SharedScoreRow } from './bilans/shared'
+import { SectionHeader, ScoreRow as SharedScoreRow, EVASlider } from './bilans/shared'
 import { useQuestionnaires, type StoredResult } from './bilans/questionnaires/useQuestionnaires'
 import { SPPBInteractiveModal } from './bilans/SPPBInteractiveModal'
 import { QuestionnaireModal, TINETTI_QUESTIONS, interpretTinetti } from './bilans/QuestionnaireModal'
@@ -454,26 +454,13 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
               {/* ── BILAN COMPARATIF ─────────────────────────────── */}
               {sec.id === 'bilanComparatif' && (
                 <>
-                  {/* EVN row */}
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>EVN (0-10) Initial vs Final</div>
-
-                  <div className="oui-non-group">
-                    <span className="oui-non-label" style={{ fontSize: '0.85rem' }}>EVN</span>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input
-                        type="number" min="0" max="10"
-                        value={evnFinal}
-                        onChange={e => setEvnFinal(e.target.value)}
-                        style={inStyle}
-                        placeholder="Final"
-                      />
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/ Init :</span>
-                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', minWidth: 40, textAlign: 'center' }}>
-                        {evnInitial != null ? `${evnInitial}` : '--'}
-                      </span>
+                  {/* EVA row */}
+                  <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>EVA — Initial vs Final</span>
                       {evnImprovement !== null && (
                         <span style={{
-                          fontSize: '0.72rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                          fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4,
                           background: evnImprovement > 0 ? '#dcfce7' : evnImprovement < 0 ? '#fef2f2' : '#f1f5f9',
                           color: evnImprovement > 0 ? '#166534' : evnImprovement < 0 ? '#991b1b' : '#64748b',
                         }}>
@@ -481,6 +468,13 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                         </span>
                       )}
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', minWidth: 56 }}>INITIAL</span>
+                      <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
+                        {evnInitial != null ? evnInitial : '—'}<span style={{ fontSize: '0.65em', fontWeight: 600, color: 'var(--text-muted)', marginLeft: 2 }}>/10</span>
+                      </span>
+                    </div>
+                    <EVASlider label="FINAL" value={evnFinal} onChange={setEvnFinal} compact />
                   </div>
 
                   {/* Score comparisons with interactive questionnaires */}
