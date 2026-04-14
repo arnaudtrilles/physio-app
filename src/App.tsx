@@ -1701,25 +1701,36 @@ STRUCTURE (n'inclure que si données présentes) :
                             const zoneLabel = ZONE_SECTION_LABELS[zoneType] ?? zoneType
                             const closure = getLastClosure(selectedPatient ?? '', zoneType as BilanType)
                             return (
-                            <div key={zoneType} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                            <div key={zoneType} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', background: c.surface, border: `1px solid ${c.borderSoft}`, borderLeft: `3px solid ${zoneClosed ? c.textFaint : c.primary}`, borderRadius: 16, padding: '0.25rem 0.85rem 0.85rem', marginTop: '0.5rem', boxShadow: '0 1px 2px 0 rgba(15, 23, 42, 0.04)', opacity: zoneClosed ? 0.75 : 1 }}>
                               <div
                                 onClick={() => toggleZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.55rem 0.9rem', background: zoneClosed ? '#f0fdf4' : 'var(--secondary)', borderRadius: 'var(--radius-lg)', border: `1px solid ${zoneClosed ? '#86efac' : 'var(--border-color)'}`, marginTop: '0.35rem', cursor: 'pointer', userSelect: 'none' }}>
-                                <div style={{ width: 3, height: 18, background: zoneClosed ? '#16a34a' : 'var(--primary)', borderRadius: 2, flexShrink: 0 }} />
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)', transform: zoneCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 0.1rem 0.5rem', cursor: 'pointer', userSelect: 'none', borderBottom: zoneCollapsed ? 'none' : `1px solid ${c.borderSoft}`, marginBottom: zoneCollapsed ? 0 : '0.35rem' }}>
+                                <div style={{ width: 32, height: 32, borderRadius: 8, background: zoneClosed ? c.surfaceMuted : `${c.primary}15`, color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {zoneClosed ? (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                  ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1"/></svg>
+                                  )}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 800, fontSize: '1rem', color: c.text, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {zoneLabel}
+                                    {zoneClosed && (
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0.15rem 0.5rem', borderRadius: 9999, background: c.successBg, color: c.success, fontSize: '0.68rem', fontWeight: 700 }}>
+                                        PEC terminée
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.72rem', color: c.textMuted, marginTop: 2, display: 'flex', gap: 12 }}>
+                                    {zoneBilans.length > 0 && <span>{zoneBilans.length} bilan{zoneBilans.length > 1 ? 's' : ''}</span>}
+                                    {zoneNotesCount > 0 && <span>{zoneNotesCount} séance{zoneNotesCount > 1 ? 's' : ''}</span>}
+                                    {zoneIntermCount > 0 && <span>{zoneIntermCount} interm.</span>}
+                                    {zoneBilans.length === 0 && zoneNotesCount === 0 && zoneIntermCount === 0 && <span>Aucune activité</span>}
+                                  </div>
+                                </div>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.textMuted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: zoneCollapsed ? 'rotate(0)' : 'rotate(180deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
                                   <polyline points="6 9 12 15 18 9"/>
                                 </svg>
-                                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: zoneClosed ? '#166534' : 'var(--primary-dark)', letterSpacing: '0.03em' }}>
-                                  {zoneLabel}
-                                </span>
-                                {zoneClosed && (
-                                  <span style={{ fontSize: '0.62rem', fontWeight: 700, background: '#16a34a', color: 'white', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    PEC terminée
-                                  </span>
-                                )}
-                                <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                                  {zoneBilans.length}B · {zoneIntermCount}I · {zoneNotesCount}S
-                                </span>
                               </div>
                               {zoneClosed && closure && (
                                 <div style={{ fontSize: '0.72rem', color: '#166534', padding: '0 0.4rem', fontStyle: 'italic' }}>
