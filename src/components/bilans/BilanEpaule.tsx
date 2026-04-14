@@ -1,8 +1,8 @@
 import { useState, useImperativeHandle, forwardRef, memo } from 'react'
 import type { BilanHandle } from '../../types'
 import { SmartObjectifsInline } from '../SmartObjectifsInline'
-import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './shared'
-import { inputStyle, boolToStr } from './bilanSections'
+import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
+import { inputStyle, boolToStr, DouleurSection, mergeDouleur, type DouleurState } from './bilanSections'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
 import { TestResultInput } from './testInputs'
@@ -31,23 +31,8 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   // Si initialData ne contient pas de redFlags existants, pré-cocher tous les booléens à "non".
   const redFlagsIsNew = !initialData?.redFlags || Object.keys(initialData.redFlags as Record<string, unknown>).length === 0
 
-  // ── Douleur ──
-  const [debutSymptomes, setDebutSymptomes]             = useState((_d.debutSymptomes as string) ?? '')
-  const [facteurDeclenchant, setFacteurDeclenchant]     = useState((_d.facteurDeclenchant as string) ?? '')
-  const [localisationInitiale, setLocalisationInitiale] = useState((_d.localisationInitiale as string) ?? '')
-  const [localisationActuelle, setLocalisationActuelle] = useState((_d.localisationActuelle as string) ?? '')
-  const [evnPire, setEvnPire]     = useState(String(_d.evnPire ?? ''))
-  const [evnMieux, setEvnMieux]   = useState(String(_d.evnMieux ?? ''))
-  const [evnMoy, setEvnMoy]       = useState(String(_d.evnMoy ?? ''))
-  const [douleurType, setDouleurType]   = useState((_d.douleurType as string) ?? '')
-  const [situation, setSituation]       = useState((_d.situation as string) ?? '')
-  const [douleurNocturne, setDouleurNocturne]           = useState(boolToStr(_d.douleurNocturne))
-  const [douleurNocturneType, setDouleurNocturneType]   = useState((_d.douleurNocturneType as string) ?? '')
-  const [insomniante, setInsomniante]                   = useState(boolToStr(_d.insomniante))
-  const [derouillageMatinal, setDerouillageMatinal]     = useState(boolToStr(_d.derouillageMatinal))
-  const [derouillageTemps, setDerouillageTemps]         = useState((_d.derouillageTemps as string) ?? '')
-  const [mouvementsEmpirent, setMouvementsEmpirent]     = useState((_d.mouvementsEmpirent as string) ?? '')
-  const [mouvementsSoulagent, setMouvementsSoulagent]   = useState((_d.mouvementsSoulagent as string) ?? '')
+  // ── Douleur (partagée avec les autres bilans — inclut body chart) ──
+  const [douleur, setDouleur] = useState<DouleurState>(() => mergeDouleur(_d))
 
   // ── Red Flags ──
   const [tttMedical, setTttMedical]         = useState((_rf.tttMedical as string) ?? '')
@@ -226,7 +211,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
 
   useImperativeHandle(ref, () => ({
     getData: () => ({
-      douleur: { debutSymptomes, facteurDeclenchant, localisationInitiale, localisationActuelle, evnPire, evnMieux, evnMoy, douleurType, situation, douleurNocturne, douleurNocturneType, insomniante, derouillageMatinal, derouillageTemps, mouvementsEmpirent, mouvementsSoulagent },
+      douleur,
       redFlags: { tttMedical, antecedents, comorbidites, sommeilQuantite, sommeilQualite, cinqD3N, imageries, ...rf },
       yellowFlags: { croyancesOrigine, croyancesTtt, attentes, autoEfficacite, flexibilitePsy, strategieCoping, peurEvitementMouvements, ...yf },
       blueBlackFlags: { stressNiveau, antecedentsAtDetails, ...bb },
@@ -258,22 +243,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
       const bbD = (data.blueBlackFlags as Record<string, unknown>) ?? {}
       const scD = (data.scores        as Record<string, unknown>) ?? {}
       const ckD = (data.contratKine   as Record<string, unknown>) ?? {}
-      if (d.debutSymptomes !== undefined)      setDebutSymptomes(d.debutSymptomes as string)
-      if (d.facteurDeclenchant !== undefined)  setFacteurDeclenchant(d.facteurDeclenchant as string)
-      if (d.localisationInitiale !== undefined) setLocalisationInitiale(d.localisationInitiale as string)
-      if (d.localisationActuelle !== undefined) setLocalisationActuelle(d.localisationActuelle as string)
-      if (d.evnPire !== undefined)             setEvnPire(String(d.evnPire))
-      if (d.evnMieux !== undefined)            setEvnMieux(String(d.evnMieux))
-      if (d.evnMoy !== undefined)              setEvnMoy(String(d.evnMoy))
-      if (d.douleurType !== undefined)         setDouleurType(d.douleurType as string)
-      if (d.situation !== undefined)           setSituation(d.situation as string)
-      if (d.douleurNocturne !== undefined)     setDouleurNocturne(boolToStr(d.douleurNocturne))
-      if (d.douleurNocturneType !== undefined) setDouleurNocturneType(d.douleurNocturneType as string)
-      if (d.insomniante !== undefined)         setInsomniante(boolToStr(d.insomniante))
-      if (d.derouillageMatinal !== undefined)  setDerouillageMatinal(boolToStr(d.derouillageMatinal))
-      if (d.derouillageTemps !== undefined)    setDerouillageTemps(d.derouillageTemps as string)
-      if (d.mouvementsEmpirent !== undefined)  setMouvementsEmpirent(d.mouvementsEmpirent as string)
-      if (d.mouvementsSoulagent !== undefined) setMouvementsSoulagent(d.mouvementsSoulagent as string)
+      if (Object.keys(d).length > 0) setDouleur(prev => ({ ...prev, ...mergeDouleur(d) }))
       if (rfD.tttMedical !== undefined)        setTttMedical(rfD.tttMedical as string)
       if (rfD.antecedents !== undefined)       setAntecedents(rfD.antecedents as string)
       if (rfD.comorbidites !== undefined)      setComorbidites(rfD.comorbidites as string)
@@ -416,73 +386,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
               {sec.id === 'douleur' && (
-                <>
-                  {((coreMode
-                    ? [
-                        ['Début des symptômes',                 debutSymptomes,    setDebutSymptomes,    'Date / circonstances…'],
-                        ['Facteur déclenchant (ou aucun)',      facteurDeclenchant, setFacteurDeclenchant, 'Chute, effort, progressif…'],
-                        ['Localisation des symptômes actuels',  localisationActuelle, setLocalisationActuelle, 'Zone actuelle…'],
-                      ]
-                    : [
-                        ['Début des symptômes',                 debutSymptomes,    setDebutSymptomes,    'Date / circonstances…'],
-                        ['Facteur déclenchant (ou aucun)',      facteurDeclenchant, setFacteurDeclenchant, 'Chute, effort, progressif…'],
-                        ['Localisation des symptômes initiaux', localisationInitiale, setLocalisationInitiale, 'Zone concernée au départ…'],
-                        ['Localisation des symptômes actuels',  localisationActuelle, setLocalisationActuelle, 'Zone actuelle…'],
-                      ]
-                  ) as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
-                    <div key={lbl} style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                      <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
-                    </div>
-                  ))}
-                  <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>EVA (0-10)</div>
-                    <EVASlider label="EVA Max" value={evnPire} onChange={setEvnPire} compact />
-                    <div style={{ height: 8 }} />
-                    <EVASlider label="EVA Min" value={evnMieux} onChange={setEvnMieux} compact />
-                    <div style={{ height: 8 }} />
-                    <EVASlider label="EVA Moy." value={evnMoy} onChange={setEvnMoy} compact />
-                  </div>
-                  {!coreMode && (
-                    <>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Type de douleur</label>
-                        {['Constante', 'Intermittente'].map(v => (
-                          <button key={v} className={`choix-btn${douleurType === v.toLowerCase() ? ' active' : ''}`} onClick={() => setDouleurType(douleurType === v.toLowerCase() ? '' : v.toLowerCase())}>{v}</button>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                        <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Situation</label>
-                        {([["↑ S'améliore", 'ameliore'], ['→ Stationnaire', 'stationnaire'], ['↓ Se dégrade', 'degrade']] as [string, string][]).map(([lbl, v]) => (
-                          <button key={v} className={`choix-btn${situation === v ? ' active' : ''}`} onClick={() => setSituation(situation === v ? '' : v)}>{lbl}</button>
-                        ))}
-                      </div>
-                      <OuiNon label="Douleur nocturne" value={douleurNocturne} onChange={setDouleurNocturne} />
-                      {douleurNocturne === 'oui' && (
-                        <>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
-                            {([['Au mouvement', 'mouvement'], ['Sans bouger', 'sans_bouger']] as [string, string][]).map(([lbl, v]) => (
-                              <button key={v} className={`choix-btn${douleurNocturneType === v ? ' active' : ''}`} onClick={() => setDouleurNocturneType(douleurNocturneType === v ? '' : v)}>{lbl}</button>
-                            ))}
-                          </div>
-                          <OuiNon label="Insomniante" value={insomniante} onChange={setInsomniante} />
-                        </>
-                      )}
-                      <OuiNon label="Dérouillage matinal" value={derouillageMatinal} onChange={setDerouillageMatinal} />
-                      {derouillageMatinal === 'oui' && (
-                        <input value={derouillageTemps} onChange={e => setDerouillageTemps(e.target.value)} placeholder="Durée du dérouillage…" style={{ ...inputStyle, marginTop: 6 }} />
-                      )}
-                    </>
-                  )}
-                  <div style={{ marginTop: 8, marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mouvements / situations qui EMPIRENT</label>
-                    <textarea value={mouvementsEmpirent} onChange={e => setMouvementsEmpirent(e.target.value)} placeholder="Élévation, rotation…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mouvements / situations qui SOULAGENT</label>
-                    <textarea value={mouvementsSoulagent} onChange={e => setMouvementsSoulagent(e.target.value)} placeholder="Repos, chaleur…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
-                </>
+                <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} coreMode={coreMode} />
               )}
 
               {sec.id === 'redFlags' && (
