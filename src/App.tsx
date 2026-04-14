@@ -1152,32 +1152,39 @@ STRUCTURE (n'inclure que si données présentes) :
       {/* ── Database ───────────────────────────────────────────────────────────── */}
       {step === 'database' && (
         <div className="general-info-screen fade-in">
-          <header className="screen-header">
-            {selectedPatient
-              ? <button className="btn-back" onClick={() => setSelectedPatient(null)}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
-              : <div style={{width: '24px'}} />}
-            <h2 className="title-section">Tous les patients</h2>
-            <div style={{width: '24px'}} />
-          </header>
+          {selectedPatient ? (
+            <header className="screen-header">
+              <button className="btn-back" onClick={() => setSelectedPatient(null)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <h2 className="title-section">Tous les patients</h2>
+              <div style={{width: '24px'}} />
+            </header>
+          ) : (
+            <div style={{ padding: '1rem 1.1rem 0.5rem', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.66rem', fontWeight: 800, color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Dossiers</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: c.text, letterSpacing: '-0.02em', lineHeight: 1.1 }}>Patients</div>
+              </div>
+              <button
+                onClick={() => setShowAddPatientChoice(true)}
+                aria-label="Ajouter un patient"
+                style={{ width: 44, height: 44, borderRadius: 999, background: `linear-gradient(135deg, ${c.primary}, ${c.primaryDark})`, color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px rgba(30,58,138,0.3)', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+          )}
           <div className="scroll-area">
             {!selectedPatient ? (
               <>
                 <div style={{marginBottom: '1rem'}}>
-                  <button
-                    onClick={() => setShowAddPatientChoice(true)}
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.92rem', border: '1.5px solid var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Ajouter un patient
-                  </button>
                   <div style={{ position: 'relative' }}>
-                    <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
-                    <input type="text" placeholder="Rechercher un nom…" className="input-luxe"
+                    <input type="text" placeholder="Rechercher un nom…"
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{borderRadius: 'var(--radius-full)', paddingLeft: 36}} />
+                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: c.surfaceMuted, color: c.text, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </div>
                 {(() => {
