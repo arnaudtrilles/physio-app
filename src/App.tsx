@@ -1130,24 +1130,134 @@ STRUCTURE (n'inclure que si données présentes) :
     <div className="app-container">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      {/* ── Dashboard ──────────────────────────────────────────────────────────── */}
-      {step === 'dashboard' && (
-        <div className="start-screen fade-in">
-          <div style={{ width:80, height:80, borderRadius:'50%', overflow:'hidden', marginBottom:'2rem', boxShadow:'var(--shadow-lg)', flexShrink:0, background: profile.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            {profile.photo
-              ? <img src={profile.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
-              : <span style={{ fontSize:'2rem', fontWeight:700, color:'white' }}>{(profile.nom || profile.prenom || 'W')[0]}</span>}
-          </div>
-          <h1 className="title-premium" style={{fontSize: '1.8rem'}}>Bonjour, {profile.nom || profile.prenom}</h1>
-          <p className="subtitle">Bienvenue sur votre espace Physio</p>
-          <div className="spacer" />
-          <div style={{ width: '100%', marginBottom: '5.5rem' }}>
-            <button className="btn-primary-luxe" onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }} style={{marginBottom: 0}}>
-              Nouveau Patient
+      {/* ── Dashboard (Accueil Command Center) ─────────────────────────────────── */}
+      {step === 'dashboard' && (() => {
+        const allKeys = new Set<string>()
+        db.forEach(r => allKeys.add(`${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()))
+        dbNotes.forEach(n => allKeys.add(n.patientKey))
+        dbIntermediaires.forEach(r => allKeys.add(r.patientKey))
+        const totalPatients = allKeys.size
+        const parseDateFR = (raw?: string): Date | null => {
+          if (!raw) return null
+          const parts = raw.includes('/') ? raw.split('/') : raw.split('-').reverse()
+          if (parts.length !== 3) return null
+          const d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`)
+          return isNaN(d.getTime()) ? null : d
+        }
+        const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+        const weekSeances = dbNotes.filter(n => {
+          const d = parseDateFR(n.dateSeance)
+          return d !== null && d >= weekAgo
+        }).length
+        const alerts = Array.from(allKeys).filter(key => {
+          const rx = dbPrescriptions.find(p => p.patientKey === key)
+          if (!rx) return false
+          const rxList = rx.prescriptions ?? (rx.nbSeancesPrescrites ? [{ id: 1, nbSeances: rx.nbSeancesPrescrites, datePrescription: rx.datePrescription ?? '', prescripteur: rx.prescripteur ?? '' }] : [])
+          const totalPrescribed = rxList.reduce((s, e) => s + e.nbSeances, 0)
+          if (!totalPrescribed) return false
+          const noteCount = dbNotes.filter(n => n.patientKey === key).length
+          const total = noteCount + (rx.seancesAnterieures ?? 0)
+          const remaining = totalPrescribed - total
+          return total >= 6 && remaining > 0 && remaining <= 3
+        }).length
+        // Recent activity per patient
+        const byKey = new Map<string, { date: string; iso: number }>()
+        const toIso = (raw?: string) => {
+          const d = parseDateFR(raw)
+          return d ? d.getTime() : 0
+        }
+        db.forEach(r => {
+          const k = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+          const iso = toIso(r.dateBilan)
+          const cur = byKey.get(k)
+          if (!cur || iso > cur.iso) byKey.set(k, { date: r.dateBilan ?? '', iso })
+        })
+        dbNotes.forEach(n => {
+          const k = n.patientKey
+          const iso = toIso(n.dateSeance)
+          const cur = byKey.get(k)
+          if (!cur || iso > cur.iso) byKey.set(k, { date: n.dateSeance ?? '', iso })
+        })
+        dbIntermediaires.forEach(r => {
+          const k = r.patientKey
+          const iso = toIso(r.dateBilan)
+          const cur = byKey.get(k)
+          if (!cur || iso > cur.iso) byKey.set(k, { date: r.dateBilan ?? '', iso })
+        })
+        const recent = Array.from(byKey.entries()).sort((a, b) => b[1].iso - a[1].iso).slice(0, 4)
+        const greetingPrefix = (() => {
+          const h = new Date().getHours()
+          if (h < 12) return 'Bonne matinée'
+          if (h < 18) return 'Bon après-midi'
+          return 'Bonsoir'
+        })()
+        return (
+          <div className="fade-in" style={{ padding: '1.1rem 1.1rem 6rem', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Greeting */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 54, height: 54, borderRadius: 999, overflow: 'hidden', flexShrink: 0, background: profile.photo ? 'transparent' : `linear-gradient(135deg, ${c.primary}, ${c.primaryDark})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px rgba(30,58,138,0.22)' }}>
+                {profile.photo
+                  ? <img src={profile.photo} alt="Profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'white' }}>{(profile.nom || profile.prenom || 'W')[0]}</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.68rem', color: c.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{greetingPrefix}</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: c.text, letterSpacing: '-0.02em', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {profile.prenom || profile.nom || 'Bienvenue'}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick stats row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {([
+                { value: totalPatients, label: 'Patients', accent: c.primary, bg: '#eff6ff' },
+                { value: weekSeances, label: 'Séances · 7j', accent: c.seance, bg: '#f5f3ff' },
+                { value: alerts, label: 'Alertes Rx', accent: alerts > 0 ? c.warning : c.textFaint, bg: alerts > 0 ? '#fff7ed' : '#f8fafc' },
+              ] as const).map(s => (
+                <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.accent}20`, borderRadius: 14, padding: '0.85rem 0.7rem', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: '1.55rem', fontWeight: 800, color: s.accent, letterSpacing: '-0.03em', lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: '0.66rem', fontWeight: 700, color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Recent activity */}
+            {recent.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ fontSize: '0.66rem', fontWeight: 800, color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Activité récente</div>
+                  <button onClick={() => setStep('database')} style={{ fontSize: '0.72rem', color: c.primary, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Voir tout →</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {recent.map(([key, meta]) => (
+                    <button key={key}
+                      onClick={() => { setSelectedPatient(key); setStep('database') }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.75rem 0.9rem', background: c.surface, border: `1px solid ${c.borderSoft}`, borderRadius: 14, cursor: 'pointer', textAlign: 'left', boxShadow: '0 1px 2px 0 rgba(15,23,42,0.04)' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 999, background: `linear-gradient(135deg, ${c.primaryLight}, ${c.primary})`, color: 'white', fontWeight: 800, fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {key.split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('')}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{key}</div>
+                        <div style={{ fontSize: '0.7rem', color: c.textMuted }}>Dernière activité · {meta.date ? (meta.date.includes('-') ? meta.date.split('-').reverse().join('/') : meta.date) : '—'}</div>
+                      </div>
+                      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={c.textFaint} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Primary CTA */}
+            <button
+              onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
+              style={{ marginTop: 'auto', width: '100%', padding: '1rem', borderRadius: 16, background: `linear-gradient(135deg, ${c.primary}, ${c.primaryDark})`, color: 'white', fontWeight: 800, fontSize: '1rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 10px 25px -5px rgba(30,58,138,0.35)', letterSpacing: '-0.01em' }}>
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nouveau patient
             </button>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Database ───────────────────────────────────────────────────────────── */}
       {step === 'database' && (
