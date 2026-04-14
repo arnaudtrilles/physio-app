@@ -9,7 +9,7 @@ interface PatientHeaderProps {
   birthday?: boolean
   subtitle?: ReactNode
   onBack: () => void
-  onMenu: () => void
+  onMenu?: () => void
 }
 
 export function PatientHeader({ name, initials, avatarBg, birthday, subtitle, onBack, onMenu }: PatientHeaderProps) {
@@ -92,25 +92,27 @@ export function PatientHeader({ name, initials, avatarBg, birthday, subtitle, on
         </div>
         {subtitle && <div style={{ fontSize: typography.meta, color: colors.textMuted, marginTop: 1 }}>{subtitle}</div>}
       </div>
-      <button
-        onClick={onMenu}
-        aria-label="Options patient"
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: radius.md,
-          background: colors.surfaceMuted,
-          border: `1px solid ${colors.borderSoft}`,
-          color: colors.textMuted,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <IconMoreH size={18} />
-      </button>
+      {onMenu && (
+        <button
+          onClick={onMenu}
+          aria-label="Options patient"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: radius.md,
+            background: colors.surfaceMuted,
+            border: `1px solid ${colors.borderSoft}`,
+            color: colors.textMuted,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <IconMoreH size={18} />
+        </button>
+      )}
     </header>
   )
 }

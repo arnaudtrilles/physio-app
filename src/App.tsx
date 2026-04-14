@@ -53,6 +53,11 @@ import { DossierDocuments } from './components/DossierDocuments'
 import { BilanResumeModal } from './components/BilanResumeModal'
 import { SmartObjectifs } from './components/SmartObjectifs'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
+// ── Design system + patient command center ────────────────────────────────
+import { colors as c } from './design/tokens'
+import { PatientHeader } from './components/patient/PatientHeader'
+import { PatientHeroCard } from './components/patient/PatientHeroCard'
+import { ConsultationChooser } from './components/patient/ConsultationChooser'
 import './App.css'
 
 type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
@@ -297,6 +302,8 @@ function App() {
   const [openNoteDetailIds, setOpenNoteDetailIds] = useState<Set<number>>(new Set())
   const [showAddPatientChoice, setShowAddPatientChoice] = useState(false)
   const [deletingPatientKey, setDeletingPatientKey] = useState<string | null>(null)
+  // ── UI state for Command Center refonte ───────────────────────────────────
+  const [consultationChooserOpen, setConsultationChooserOpen] = useState(false)
   const [showQuickAddPatient, setShowQuickAddPatient] = useState(false)
   const [quickAddData, setQuickAddData] = useState({ nom: '', prenom: '', dateNaissance: '', zone: '', evn: '', pathologie: '', notes: '' })
   const [pdfPreviewMarkdown, setPdfPreviewMarkdown] = useState('')
@@ -1295,33 +1302,83 @@ STRUCTURE (n'inclure que si données présentes) :
                   const firstR = allPatientRecords[0]
                   const isPlaceholder = (r: BilanRecord) => r.status === 'incomplet' && !r.bilanData
                   const bilans = allPatientRecords.filter(r => !isPlaceholder(r))
+                  // Hero card derivations
+                  const rxForHero = dbPrescriptions.find(p => p.patientKey === selectedPatient)
+                  const noteCountForHero = getPatientNotes(selectedPatient ?? '').length
+                  const anterieuresForHero = rxForHero?.seancesAnterieures ?? 0
+                  const totalSeancesForHero = noteCountForHero + anterieuresForHero
+                  const rxListForHero = rxForHero?.prescriptions ?? (rxForHero?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rxForHero.nbSeancesPrescrites, datePrescription: rxForHero.datePrescription ?? '', prescripteur: rxForHero.prescripteur ?? '' }] : [])
+                  const totalPrescribedForHero = rxListForHero.reduce((s, r) => s + r.nbSeances, 0)
+                  const lastBilanForHero = bilans[bilans.length - 1]
+                  const notesSortedForHero = [...getPatientNotes(selectedPatient ?? '')].sort((a, b) => (a.dateSeance || '').localeCompare(b.dateSeance || ''))
+                  const lastNoteForHero = notesSortedForHero[notesSortedForHero.length - 1]
+                  const lastEvnForHero = (() => {
+                    const v = lastBilanForHero?.evn
+                    if (v == null) return null
+                    const n = Number(v)
+                    return isNaN(n) ? null : n
+                  })()
+                  const lastEvaForHero = (() => {
+                    const v = lastNoteForHero?.data?.eva
+                    if (v == null) return null
+                    const n = Number(v)
+                    return isNaN(n) ? null : n
+                  })()
+                  // Zones available for the consultation chooser (excludes closed PECs)
+                  const ZONE_LABELS_SHORT: Record<string, string> = {
+                    epaule: 'Épaule',
+                    cheville: 'Cheville',
+                    genou: 'Genou',
+                    hanche: 'Hanche',
+                    cervical: 'Rachis Cervical',
+                    lombaire: 'Rachis Lombaire',
+                    generique: 'Autres bilans',
+                    geriatrique: 'Gériatrie',
+                  }
+                  const zoneHasBilans = new Map<string, boolean>()
+                  bilans.forEach(b => {
+                    const key = b.bilanType ?? getBilanType(b.zone ?? '')
+                    zoneHasBilans.set(key, true)
+                  })
+                  getPatientIntermediaires(selectedPatient ?? '').forEach(r => {
+                    const key = r.bilanType ?? getBilanType(r.zone ?? '')
+                    if (!zoneHasBilans.has(key)) zoneHasBilans.set(key, false)
+                  })
+                  getPatientNotes(selectedPatient ?? '').forEach(n => {
+                    const key = n.bilanType ?? getBilanType(n.zone ?? '')
+                    if (!zoneHasBilans.has(key)) zoneHasBilans.set(key, false)
+                  })
+                  const zonesForPicker = Array.from(zoneHasBilans.entries())
+                    .filter(([bt]) => !isTreatmentClosed(selectedPatient ?? '', bt as BilanType))
+                    .map(([bt, hasBilans]) => ({
+                      bilanType: bt,
+                      label: ZONE_LABELS_SHORT[bt] ?? bt,
+                      accent: c.primary,
+                      hasBilans,
+                    }))
+                  const hasAnyBilanForPicker = bilans.length > 0
                   return (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-                        <div style={{ width: 50, height: 50, borderRadius: '50%', background: firstR?.avatarBg || 'var(--primary)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1.1rem' }}>
-                          {(firstR?.nom[0] || '?')}{(firstR?.prenom[0] || '?')}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: 6 }}>{selectedPatient}{isBirthday(firstR?.dateNaissance) && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="14" width="18" height="8" rx="2"/><rect x="6" y="11" width="12" height="3" rx="1"/><line x1="8.5" y1="11" x2="8.5" y2="7"/><line x1="12" y1="11" x2="12" y2="7"/><line x1="15.5" y1="11" x2="15.5" y2="7"/><path d="M7.5 5.5c1-1.5 1-1.5 2 0M11 5.5c1-1.5 1-1.5 2 0M14.5 5.5c1-1.5 1-1.5 2 0"/></svg>}</div>
-                          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{firstR?.dateNaissance ? firstR.dateNaissance.includes('-') ? firstR.dateNaissance.split('-').reverse().join('/') : firstR.dateNaissance : ''}</div>
-                          {(() => {
-                            const noteCount = getPatientNotes(selectedPatient ?? '').length
-                            const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
-                            const anterieures = rx?.seancesAnterieures ?? 0
-                            const totalSeances = noteCount + anterieures
-                            const rxList = rx?.prescriptions ?? (rx?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rx.nbSeancesPrescrites, datePrescription: rx.datePrescription ?? '', prescripteur: rx.prescripteur ?? '' }] : [])
-                            const totalPrescribed = rxList.reduce((s, r) => s + r.nbSeances, 0)
-                            const remaining = totalPrescribed - totalSeances
-                            if (totalSeances >= 6 && remaining <= 3 && remaining > 0) return (
-                              <div style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 600, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                Penser au renouvellement de prescription si poursuite
-                              </div>
-                            )
-                            return null
-                          })()}
-                        </div>
-                      </div>
+                      <PatientHeader
+                        name={selectedPatient ?? ''}
+                        initials={`${firstR?.nom[0] || '?'}${firstR?.prenom[0] || '?'}`}
+                        avatarBg={firstR?.avatarBg}
+                        birthday={isBirthday(firstR?.dateNaissance)}
+                        subtitle={firstR?.dateNaissance ? (firstR.dateNaissance.includes('-') ? firstR.dateNaissance.split('-').reverse().join('/') : firstR.dateNaissance) : undefined}
+                        onBack={() => setSelectedPatient(null)}
+                      />
+                      <PatientHeroCard
+                        totalSeances={totalSeancesForHero}
+                        totalPrescribed={totalPrescribedForHero}
+                        prescripteur={rxListForHero[rxListForHero.length - 1]?.prescripteur}
+                        prescriptionOverLimit={totalPrescribedForHero > 0 && totalSeancesForHero > totalPrescribedForHero}
+                        lastEVA={lastEvaForHero}
+                        lastEVN={lastEvnForHero}
+                        lastConsultation={lastNoteForHero?.dateSeance ?? lastBilanForHero?.dateBilan ?? null}
+                        improvementPct={null}
+                        onAddConsultation={() => setConsultationChooserOpen(true)}
+                        zonesCount={zonesForPicker.length}
+                      />
 
                       {/* ── Prescription tracking ────────────────── */}
                       {(() => {
@@ -2296,63 +2353,6 @@ STRUCTURE (n'inclure que si données présentes) :
                           )
                           })
                         })()}
-                        {/* ── Nouveau bilan initial (nouvelle zone) ─────────────────── */}
-                        <button
-                          onClick={() => {
-                            const firstRec = allPatientRecords[0]
-                            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                            setPatientMode('existing')
-                            setSelectedBodyZone(null)
-                            setBilanZoneBackStep('identity')
-                            setStep('identity')
-                          }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.7rem 0.5rem', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border-color)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                          <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Nouveau bilan initial (autre zone)
-                        </button>
-
-                        {/* ── Bilan de sortie (avec choix de zone si multi) ─────── */}
-                        {bilans.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const firstRec = allPatientRecords[0]
-                              setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                              const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
-                              if (activeTypes.length <= 1) {
-                                setSelectedBodyZone(bilans[bilans.length - 1]?.zone ?? null)
-                                setStep('bilan_sortie')
-                              } else {
-                                setLetterZonePicker({ action: 'bilan_sortie' })
-                              }
-                            }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.7rem 0.5rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #86efac', background: 'transparent', color: '#059669', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                            Bilan de sortie
-                          </button>
-                        )}
-
-                        {/* ── Courrier (avec choix de zone si multi) ─────── */}
-                        <button
-                          onClick={() => {
-                            const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
-                            if (activeTypes.length <= 1) {
-                              // Définit la zone (si le patient a des bilans) pour que l'IA filtre
-                              const soleZone = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === activeTypes[0])?.zone ?? null
-                              setSelectedBodyZone(soleZone)
-                              setStep('letter')
-                            } else {
-                              setLetterZonePicker({ action: 'letter' })
-                            }
-                          }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #93c5fd', background: 'transparent', color: '#1d4ed8', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' }}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                          Courrier
-                          {dbLetters.filter(l => l.patientKey === selectedPatient).length > 0 && (
-                            <span style={{ fontSize: '0.7rem', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: 999, fontWeight: 700 }}>
-                              {dbLetters.filter(l => l.patientKey === selectedPatient).length}
-                            </span>
-                          )}
-                        </button>
-
                         {/* ── Timeline ────────────────────── */}
                         <div style={{ marginTop: '0.5rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0.5rem', marginBottom: '0.5rem' }}>
@@ -2415,6 +2415,61 @@ STRUCTURE (n'inclure que si données présentes) :
                           </button>
                         </div>
                       </div>
+
+                      <ConsultationChooser
+                        open={consultationChooserOpen}
+                        onClose={() => setConsultationChooserOpen(false)}
+                        zones={zonesForPicker}
+                        hasAnyBilan={hasAnyBilanForPicker}
+                        onPickSeance={(bt) => {
+                          const firstRec = allPatientRecords[0]
+                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? ''
+                          setNoteSeanceZone(z)
+                          setCurrentNoteSeanceId(null)
+                          setCurrentNoteSeanceData(null)
+                          setStep('note_seance')
+                        }}
+                        onPickIntermediaire={(bt) => {
+                          const firstRec = allPatientRecords[0]
+                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                          const patKey = selectedPatient ?? ''
+                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? ''
+                          setBilanIntermediaireZone(z)
+                          setCurrentBilanIntermediaireId(null)
+                          setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
+                          setStep('bilan_intermediaire')
+                        }}
+                        onPickNouveauBilan={() => {
+                          const firstRec = allPatientRecords[0]
+                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                          setPatientMode('existing')
+                          setSelectedBodyZone(null)
+                          setBilanZoneBackStep('identity')
+                          setStep('identity')
+                        }}
+                        onPickBilanSortie={() => {
+                          const firstRec = allPatientRecords[0]
+                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                          const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
+                          if (activeTypes.length <= 1) {
+                            setSelectedBodyZone(bilans[bilans.length - 1]?.zone ?? null)
+                            setStep('bilan_sortie')
+                          } else {
+                            setLetterZonePicker({ action: 'bilan_sortie' })
+                          }
+                        }}
+                        onPickCourrier={() => {
+                          const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
+                          if (activeTypes.length <= 1) {
+                            const soleZone = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === activeTypes[0])?.zone ?? null
+                            setSelectedBodyZone(soleZone)
+                            setStep('letter')
+                          } else {
+                            setLetterZonePicker({ action: 'letter' })
+                          }
+                        }}
+                      />
                     </>
                   )
                 })()}
