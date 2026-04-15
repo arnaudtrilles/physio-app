@@ -168,6 +168,10 @@ export interface PrescriptionEntry {
   prescripteur: string
   /** Photo ou scan de l'ordonnance (base64) */
   document?: { data: string; mimeType: string; name: string }
+  /** Type de bilan/zone couvert par cette prescription. Si absent → globale (compat). */
+  bilanType?: BilanType
+  /** Libellé personnalisé (utile pour renommer "Autres bilans" en ex: "ATM"). */
+  customLabel?: string
 }
 
 export interface PatientPrescription {

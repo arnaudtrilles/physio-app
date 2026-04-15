@@ -44,41 +44,56 @@ export function PatientHeroCard({
   return (
     <div
       style={{
-        background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`,
+        background: colors.surfaceMuted,
         borderRadius: radius['2xl'],
-        padding: `${spacing.lg}px ${spacing.lg}px ${spacing.lg}px`,
+        padding: `${spacing.lg}px`,
         marginBottom: spacing.lg,
-        color: 'white',
-        boxShadow: shadow.lg,
+        color: colors.text,
+        border: `1.5px solid ${colors.primary}`,
+        boxShadow: shadow.primary,
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {/* Decorative gradient blob */}
-      <div
-        style={{
-          position: 'absolute',
-          top: -60,
-          right: -60,
-          width: 180,
-          height: 180,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(59,130,246,0.45) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-
       {/* Prescription + counters */}
       <div style={{ position: 'relative', display: 'flex', gap: spacing.md, marginBottom: spacing.md }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: typography.caption, fontWeight: typography.semibold, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: typography.caption,
+              fontWeight: typography.extrabold,
+              color: colors.primary,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              marginBottom: 4,
+            }}
+          >
             Prescription en cours
           </div>
-          <div style={{ fontSize: typography.display, fontWeight: typography.extrabold, color: 'white', letterSpacing: '-0.03em', lineHeight: 1 }}>
+          <div
+            style={{
+              fontSize: typography.display,
+              fontWeight: typography.extrabold,
+              color: colors.text,
+              letterSpacing: '-0.03em',
+              lineHeight: 1,
+            }}
+          >
             {totalSeances}
-            {totalPrescribed > 0 && <span style={{ fontSize: typography.heading, fontWeight: typography.semibold, color: 'rgba(255,255,255,0.55)' }}> / {totalPrescribed}</span>}
+            {totalPrescribed > 0 && (
+              <span
+                style={{
+                  fontSize: typography.heading,
+                  fontWeight: typography.semibold,
+                  color: colors.textFaint,
+                }}
+              >
+                {' '}
+                / {totalPrescribed}
+              </span>
+            )}
           </div>
-          <div style={{ fontSize: typography.meta, color: 'rgba(255,255,255,0.7)', marginTop: 3 }}>
+          <div style={{ fontSize: typography.meta, color: colors.textMuted, marginTop: 3 }}>
             {totalPrescribed > 0 ? 'séances effectuées' : `${totalSeances} séance${totalSeances > 1 ? 's' : ''}`}
             {prescripteur && ` · Dr ${prescripteur}`}
           </div>
@@ -87,8 +102,8 @@ export function PatientHeroCard({
         {lastPain !== undefined && lastPain !== null && (
           <div
             style={{
-              background: 'rgba(255,255,255,0.12)',
-              border: '1px solid rgba(255,255,255,0.18)',
+              background: colors.infoSoft,
+              border: `1px solid ${colors.infoBg}`,
               borderRadius: radius.lg,
               padding: '0.55rem 0.75rem',
               minWidth: 62,
@@ -99,8 +114,28 @@ export function PatientHeroCard({
               flexShrink: 0,
             }}
           >
-            <div style={{ fontSize: typography.caption, fontWeight: typography.semibold, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Douleur</div>
-            <div style={{ fontSize: typography.title, fontWeight: typography.extrabold, color: 'white', letterSpacing: '-0.02em' }}>{lastPain}<span style={{ fontSize: typography.body, color: 'rgba(255,255,255,0.55)' }}>/10</span></div>
+            <div
+              style={{
+                fontSize: typography.caption,
+                fontWeight: typography.extrabold,
+                color: colors.primary,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Douleur
+            </div>
+            <div
+              style={{
+                fontSize: typography.title,
+                fontWeight: typography.extrabold,
+                color: colors.text,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {lastPain}
+              <span style={{ fontSize: typography.body, color: colors.textFaint }}>/10</span>
+            </div>
           </div>
         )}
       </div>
@@ -109,13 +144,25 @@ export function PatientHeroCard({
       {totalPrescribed > 0 && (
         <div
           onClick={onOpenPrescription}
-          style={{ position: 'relative', height: 6, borderRadius: radius.full, background: 'rgba(255,255,255,0.18)', overflow: 'hidden', marginBottom: spacing.md, cursor: onOpenPrescription ? 'pointer' : 'default' }}
+          style={{
+            position: 'relative',
+            height: 6,
+            borderRadius: radius.full,
+            background: colors.base,
+            overflow: 'hidden',
+            marginBottom: spacing.md,
+            cursor: onOpenPrescription ? 'pointer' : 'default',
+          }}
         >
           <div
             style={{
               height: '100%',
               width: `${pct}%`,
-              background: prescriptionOverLimit ? '#f87171' : nearEnd ? '#fbbf24' : 'linear-gradient(to right, #93c5fd, #ffffff)',
+              background: prescriptionOverLimit
+                ? colors.danger
+                : nearEnd
+                ? colors.warning
+                : `linear-gradient(to right, ${colors.primaryLight}, ${colors.primary})`,
               borderRadius: radius.full,
               transition: 'width 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
             }}
@@ -125,7 +172,17 @@ export function PatientHeroCard({
 
       {/* Alerts line */}
       {nearEnd && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: spacing.md, fontSize: typography.meta, fontWeight: typography.semibold, color: '#fbbf24' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: spacing.md,
+            fontSize: typography.meta,
+            fontWeight: typography.semibold,
+            color: colors.warning,
+          }}
+        >
           <IconFile size={12} />
           Renouvellement à prévoir — il reste {remaining} séance{remaining > 1 ? 's' : ''}
         </div>
@@ -133,31 +190,42 @@ export function PatientHeroCard({
 
       {/* Last consultation + improvement */}
       {(lastConsultation || improvementPct !== null) && (
-        <div style={{ display: 'flex', gap: spacing.md, marginBottom: spacing.md, fontSize: typography.meta, color: 'rgba(255,255,255,0.72)' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: spacing.md,
+            marginBottom: spacing.md,
+            fontSize: typography.meta,
+            color: colors.textMuted,
+          }}
+        >
           {lastConsultation && <span>Dernière consultation · {formatDate(lastConsultation)}</span>}
           {improvementPct !== null && improvementPct !== undefined && (
-            <span style={{ color: improvementPct > 0 ? '#86efac' : improvementPct < 0 ? '#fca5a5' : 'rgba(255,255,255,0.72)', fontWeight: typography.bold }}>
+            <span
+              style={{
+                color: improvementPct > 0 ? colors.success : improvementPct < 0 ? colors.danger : colors.textMuted,
+                fontWeight: typography.bold,
+              }}
+            >
               {improvementPct > 0 ? '↑' : improvementPct < 0 ? '↓' : '→'} {Math.abs(improvementPct)}%
             </span>
           )}
-          {zonesCount > 0 && <span>· {zonesCount} zone{zonesCount > 1 ? 's' : ''}</span>}
+          {zonesCount > 0 && (
+            <span>
+              · {zonesCount} zone{zonesCount > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       )}
 
       {/* CTA */}
       <Button
-        variant="secondary"
+        variant="outline"
         size="lg"
         fullWidth
         onClick={onAddConsultation}
         icon={<IconPlus size={18} />}
         iconEnd={<IconSparkles size={14} color={colors.primary} />}
-        style={{
-          background: 'white',
-          color: colors.primary,
-          border: 'none',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
-        }}
       >
         Consultation du jour
       </Button>

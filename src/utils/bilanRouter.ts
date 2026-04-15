@@ -50,3 +50,16 @@ export const BILAN_ZONE_LABELS: Record<BilanType, string> = {
   generique:'Bilan Général',
   geriatrique:'Bilan Gériatrique',
 }
+
+/** Libellé de zone par défaut pour un bilanType — utilisé pour créer une séance/intermédiaire
+ *  dans une zone qui n'a encore aucun enregistrement (ex: prescription avant bilan). */
+export const DEFAULT_ZONE_FOR_BILAN: Record<BilanType, string> = {
+  epaule:     'Épaule',
+  cheville:   'Cheville',
+  genou:      'Genou',
+  hanche:     'Hanche',
+  cervical:   'Rachis Cervical',
+  lombaire:   'Rachis Lombaire',
+  generique:  'Autre',
+  geriatrique:'Gériatrie',
+}

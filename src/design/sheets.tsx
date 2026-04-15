@@ -16,7 +16,7 @@ interface BottomSheetProps {
   footer?: ReactNode
 }
 
-export function BottomSheet({ open, onClose, title, subtitle, children, maxHeight = '85vh', footer }: BottomSheetProps) {
+export function BottomSheet({ open, onClose, title, subtitle, children, maxHeight = '70vh', footer }: BottomSheetProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -30,11 +30,15 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
       onClick={onClose}
       style={{
         position: 'fixed',
-        inset: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '100dvh',
         background: 'rgba(15, 23, 42, 0.55)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
+        paddingBottom: '4.5rem',
         zIndex: 2000,
         animation: `sheet-fade-in ${motion.fast}`,
       }}
@@ -47,7 +51,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
           width: '100%',
           maxWidth: 430,
           boxShadow: shadow.xl,
-          maxHeight,
+          height: maxHeight,
           display: 'flex',
           flexDirection: 'column',
           animation: `sheet-slide-up ${motion.normal}`,
@@ -69,7 +73,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
             {subtitle && <div style={{ fontSize: typography.meta, color: colors.textMuted, marginTop: 2 }}>{subtitle}</div>}
           </div>
         )}
-        <div style={{ overflowY: 'auto', padding: '0.5rem 1.2rem 1.2rem', flex: 1 }}>{children}</div>
+        <div style={{ overflowY: 'auto', padding: '0.5rem 1.2rem 2.4rem', flex: 1 }}>{children}</div>
         {footer && <div style={{ padding: '0.75rem 1.2rem 1rem', borderTop: `1px solid ${colors.borderSoft}` }}>{footer}</div>}
       </div>
     </div>

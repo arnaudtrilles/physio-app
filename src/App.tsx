@@ -30,7 +30,7 @@ const BilanEvolutionIA = lazy(() => import('./components/BilanEvolutionIA').then
 const LetterGenerator = lazy(() => import('./components/letters/LetterGenerator').then(m => ({ default: m.LetterGenerator })))
 import { generatePDF } from './utils/pdfGenerator'
 import type { ImprovementEntry } from './utils/pdfGenerator'
-import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS } from './utils/bilanRouter'
+import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS, DEFAULT_ZONE_FOR_BILAN } from './utils/bilanRouter'
 import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
@@ -45,7 +45,6 @@ import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
 import { PDFPreview } from './components/PDFPreview'
 import { DashboardStats } from './components/DashboardStats'
-import { PatientTimeline } from './components/PatientTimeline'
 import { EvolutionChart, type EvolutionPoint } from './components/EvolutionChart'
 import { ScoreEvolutionChart } from './components/ScoreEvolutionChart'
 import { TreatmentBodyChart } from './components/TreatmentBodyChart'
@@ -278,7 +277,9 @@ function App() {
   const [bilanDocuments, setBilanDocuments] = useState<BilanDocument[]>([])
   const [showDocSourceMenu, setShowDocSourceMenu] = useState(false)
   const [rxEditPopup, setRxEditPopup] = useState<{ mode: 'add' | 'edit'; entry?: import('./types').PrescriptionEntry } | null>(null)
-  const [rxEditForm, setRxEditForm] = useState({ nbSeances: '', prescripteur: '', datePrescription: '', seancesAnterieures: '' })
+  const [rxEditForm, setRxEditForm] = useState<{ nbSeances: string; prescripteur: string; datePrescription: string; seancesAnterieures: string; bilanType: BilanType | ''; customLabel: string }>({ nbSeances: '', prescripteur: '', datePrescription: '', seancesAnterieures: '', bilanType: '', customLabel: '' })
+  const [orphanPopupOpen, setOrphanPopupOpen] = useState(false)
+  const [rxGroupPicker, setRxGroupPicker] = useState<(import('./types').PrescriptionEntry & { done: number })[] | null>(null)
   const [rxEditDoc, setRxEditDoc] = useState<{ data: string; mimeType: string; name: string } | null>(null)
   const [rxDocViewer, setRxDocViewer] = useState<{ data: string; mimeType: string; name: string } | null>(null)
   const [rxMaskingItem, setRxMaskingItem] = useState<{ dataUrl: string; name: string; mimeType: string } | null>(null)
@@ -598,8 +599,60 @@ function App() {
       .sort((a, b) => a.id - b.id)
 
   // ── Clôture de prise en charge ───────────────────────────────────────────
-  const isTreatmentClosed = (patientKey: string, bilanType: BilanType): boolean =>
-    dbClosedTreatments.some(c => c.patientKey === patientKey && c.bilanType === bilanType)
+  /** Timestamps (ms) des clôtures pour un (patient, bilanType), triés ASC. */
+  const getClosureTimes = (patientKey: string, bilanType: BilanType): number[] =>
+    dbClosedTreatments
+      .filter(c => c.patientKey === patientKey && c.bilanType === bilanType)
+      .map(c => new Date(c.closedAt).getTime())
+      .sort((a, b) => a - b)
+
+  /**
+   * Un traitement est "clôturé" (au sens de l'épisode courant) SEULEMENT si la
+   * dernière clôture n'a été suivie d'aucun nouveau record (bilan, interm, séance
+   * ou prescription). Dès qu'un nouvel enregistrement arrive après la clôture,
+   * on considère qu'un nouvel épisode est ouvert — le traitement redevient actif.
+   */
+  const isTreatmentClosed = (patientKey: string, bilanType: BilanType): boolean => {
+    const closureTimes = getClosureTimes(patientKey, bilanType)
+    if (closureTimes.length === 0) return false
+    const latest = closureTimes[closureTimes.length - 1]
+    const hasBilanAfter = db.some(r =>
+      `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patientKey
+      && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
+      && r.id > latest
+    )
+    if (hasBilanAfter) return false
+    const hasInterAfter = dbIntermediaires.some(r =>
+      r.patientKey === patientKey
+      && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
+      && r.id > latest
+    )
+    if (hasInterAfter) return false
+    const hasNoteAfter = dbNotes.some(n =>
+      n.patientKey === patientKey
+      && (n.bilanType ?? getBilanType(n.zone ?? '')) === bilanType
+      && n.id > latest
+    )
+    if (hasNoteAfter) return false
+    const rxEntry = dbPrescriptions.find(p => p.patientKey === patientKey)
+    const hasRxAfter = (rxEntry?.prescriptions ?? []).some(pr =>
+      pr.bilanType === bilanType && pr.id > latest
+    )
+    if (hasRxAfter) return false
+    return true
+  }
+
+  /** Une prescription appartient à l'épisode courant si aucune clôture n'a été
+   *  enregistrée depuis sa création (pr.id > dernière clôture). Utilisé pour
+   *  séparer prescriptions actives (épisode courant) et archivées (anciens
+   *  épisodes) — sans dépendre de isTreatmentClosed qui retourne false dès
+   *  qu'un nouvel épisode démarre. */
+  const isPrescriptionCurrent = (patientKey: string, pr: import('./types').PrescriptionEntry): boolean => {
+    if (!pr.bilanType) return true
+    const closureTimes = getClosureTimes(patientKey, pr.bilanType)
+    if (closureTimes.length === 0) return true
+    return pr.id > closureTimes[closureTimes.length - 1]
+  }
 
   const getLastClosure = (patientKey: string, bilanType: BilanType): ClosedTreatment | undefined =>
     dbClosedTreatments.filter(c => c.patientKey === patientKey && c.bilanType === bilanType).pop()
@@ -1312,10 +1365,35 @@ STRUCTURE (n'inclure que si données présentes) :
                   // Hero card derivations
                   const rxForHero = dbPrescriptions.find(p => p.patientKey === selectedPatient)
                   const noteCountForHero = getPatientNotes(selectedPatient ?? '').length
+                  const bilanCountForHero = bilans.length
+                  const intermCountForHero = getPatientIntermediaires(selectedPatient ?? '').length
                   const anterieuresForHero = rxForHero?.seancesAnterieures ?? 0
-                  const totalSeancesForHero = noteCountForHero + anterieuresForHero
-                  const rxListForHero = rxForHero?.prescriptions ?? (rxForHero?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rxForHero.nbSeancesPrescrites, datePrescription: rxForHero.datePrescription ?? '', prescripteur: rxForHero.prescripteur ?? '' }] : [])
+                  const globalPoolForHero = noteCountForHero + bilanCountForHero + intermCountForHero + anterieuresForHero
+                  const rxListForHeroRaw = rxForHero?.prescriptions ?? (rxForHero?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rxForHero.nbSeancesPrescrites, datePrescription: rxForHero.datePrescription ?? '', prescripteur: rxForHero.prescripteur ?? '' }] : [])
+                  // Ne garder que les prescriptions de l'épisode courant (après la dernière clôture)
+                  const rxListForHero = rxListForHeroRaw.filter(pr => isPrescriptionCurrent(selectedPatient ?? '', pr))
                   const totalPrescribedForHero = rxListForHero.reduce((s, r) => s + r.nbSeances, 0)
+                  // Done sessions = sum of done across all prescriptions, each scoped to its own bilanType pool
+                  const poolForHero = (bt: BilanType) => {
+                    // Ne compter que les records de l'épisode courant (après la dernière clôture)
+                    const closureTimes = getClosureTimes(selectedPatient ?? '', bt)
+                    const cutoff = closureTimes.length > 0 ? closureTimes[closureTimes.length - 1] : 0
+                    const zN = getPatientNotes(selectedPatient ?? '').filter(n => (n.bilanType ?? getBilanType(n.zone ?? '')) === bt && n.id > cutoff).length
+                    const zB = bilans.filter(b => (b.bilanType ?? getBilanType(b.zone ?? '')) === bt && b.id > cutoff).length
+                    const zI = getPatientIntermediaires(selectedPatient ?? '').filter(i => (i.bilanType ?? getBilanType(i.zone ?? '')) === bt && i.id > cutoff).length
+                    return zN + zB + zI
+                  }
+                  const consumedHeroByBt = new Map<string, number>()
+                  const totalSeancesForHero = rxListForHero.length === 0
+                    ? globalPoolForHero
+                    : rxListForHero.reduce((sum, r) => {
+                        const key = r.bilanType ?? '__global__'
+                        const pool = r.bilanType ? poolForHero(r.bilanType) : globalPoolForHero
+                        const consumed = consumedHeroByBt.get(key) ?? 0
+                        const done = Math.min(r.nbSeances, Math.max(0, pool - consumed))
+                        consumedHeroByBt.set(key, consumed + r.nbSeances)
+                        return sum + done
+                      }, 0)
                   const lastBilanForHero = bilans[bilans.length - 1]
                   const notesSortedForHero = [...getPatientNotes(selectedPatient ?? '')].sort((a, b) => (a.dateSeance || '').localeCompare(b.dateSeance || ''))
                   const lastNoteForHero = notesSortedForHero[notesSortedForHero.length - 1]
@@ -1355,11 +1433,16 @@ STRUCTURE (n'inclure que si données présentes) :
                     const key = n.bilanType ?? getBilanType(n.zone ?? '')
                     if (!zoneHasBilans.has(key)) zoneHasBilans.set(key, false)
                   })
+                  // Zones créées depuis une prescription (même sans aucun bilan/séance)
+                  ;(rxForHero?.prescriptions ?? []).forEach(pr => {
+                    if (pr.bilanType && !zoneHasBilans.has(pr.bilanType)) zoneHasBilans.set(pr.bilanType, false)
+                  })
+                  const genericCustomLabel = (rxForHero?.prescriptions ?? []).find(pr => pr.bilanType === 'generique')?.customLabel
                   const zonesForPicker = Array.from(zoneHasBilans.entries())
                     .filter(([bt]) => !isTreatmentClosed(selectedPatient ?? '', bt as BilanType))
                     .map(([bt, hasBilans]) => ({
                       bilanType: bt,
-                      label: ZONE_LABELS_SHORT[bt] ?? bt,
+                      label: bt === 'generique' && genericCustomLabel ? genericCustomLabel : (ZONE_LABELS_SHORT[bt] ?? bt),
                       accent: c.primary,
                       hasBilans,
                     }))
@@ -1391,21 +1474,64 @@ STRUCTURE (n'inclure que si données présentes) :
                       {(() => {
                         const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
                         const noteCount = getPatientNotes(selectedPatient ?? '').length
+                        const bilanCount = bilans.length
+                        const intermCount = getPatientIntermediaires(selectedPatient ?? '').length
                         const anterieures = rx?.seancesAnterieures ?? 0
-                        const totalSeances = noteCount + anterieures
-                        const rxList = rx?.prescriptions ?? (rx?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rx.nbSeancesPrescrites, datePrescription: rx.datePrescription ?? '', prescripteur: rx.prescripteur ?? '' }] : [])
+                        const totalSeances = noteCount + bilanCount + intermCount + anterieures
+                        const rxListRaw = rx?.prescriptions ?? (rx?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rx.nbSeancesPrescrites, datePrescription: rx.datePrescription ?? '', prescripteur: rx.prescripteur ?? '' }] : [])
+                        // Ne garder que les prescriptions de l'épisode courant (après la dernière clôture)
+                        const rxList = rxListRaw.filter(pr => isPrescriptionCurrent(selectedPatient ?? '', pr))
                         const totalPrescribed = rxList.reduce((s, r) => s + r.nbSeances, 0)
                         const overLimit = totalPrescribed > 0 && totalSeances > totalPrescribed
 
-                        let seancesUsed = 0
+                        // Pool of completed sessions per bilanType (for zone-scoped prescriptions)
+                        const poolFor = (bt: BilanType) => {
+                          // Ne compter que les records de l'épisode courant (après la dernière clôture)
+                          const closureTimes = getClosureTimes(selectedPatient ?? '', bt)
+                          const cutoff = closureTimes.length > 0 ? closureTimes[closureTimes.length - 1] : 0
+                          const zNotes = getPatientNotes(selectedPatient ?? '').filter(n => (n.bilanType ?? getBilanType(n.zone ?? '')) === bt && n.id > cutoff).length
+                          const zBilans = bilans.filter(b => (b.bilanType ?? getBilanType(b.zone ?? '')) === bt && b.id > cutoff).length
+                          const zInterms = getPatientIntermediaires(selectedPatient ?? '').filter(i => (i.bilanType ?? getBilanType(i.zone ?? '')) === bt && i.id > cutoff).length
+                          return zNotes + zBilans + zInterms
+                        }
+                        const consumedByBt = new Map<string, number>()
                         const rxProgress = rxList.map(r => {
-                          const start = seancesUsed
-                          const done = Math.min(r.nbSeances, Math.max(0, totalSeances - start))
-                          seancesUsed += r.nbSeances
+                          const key = r.bilanType ?? '__global__'
+                          const pool = r.bilanType ? poolFor(r.bilanType) : totalSeances
+                          const consumed = consumedByBt.get(key) ?? 0
+                          const start = consumed
+                          const done = Math.min(r.nbSeances, Math.max(0, pool - consumed))
+                          consumedByBt.set(key, consumed + r.nbSeances)
                           return { ...r, done, start }
                         })
 
-                        const saveRx = (prescriptions: import('./types').PrescriptionEntry[], seancesAnt?: number) => {
+                        // Sessions hors prescription (only relevant si aucune prescription globale)
+                        const hasGlobalRx = rxList.some(r => !r.bilanType)
+                        const coveredBts = new Set<string>(rxList.map(r => r.bilanType).filter((x): x is BilanType => !!x))
+                        const orphanSessions = hasGlobalRx
+                          ? []
+                          : (() => {
+                              const out: { kind: 'bilan' | 'note' | 'interm'; bilanType: BilanType; date: string }[] = []
+                              bilans.forEach(b => {
+                                const bt = b.bilanType ?? getBilanType(b.zone ?? '')
+                                if (!coveredBts.has(bt)) out.push({ kind: 'bilan', bilanType: bt, date: b.dateBilan ?? '' })
+                              })
+                              getPatientNotes(selectedPatient ?? '').forEach(n => {
+                                const bt = n.bilanType ?? getBilanType(n.zone ?? '')
+                                if (!coveredBts.has(bt)) out.push({ kind: 'note', bilanType: bt, date: n.dateSeance ?? '' })
+                              })
+                              getPatientIntermediaires(selectedPatient ?? '').forEach(i => {
+                                const bt = i.bilanType ?? getBilanType(i.zone ?? '')
+                                if (!coveredBts.has(bt)) out.push({ kind: 'interm', bilanType: bt, date: i.dateBilan ?? '' })
+                              })
+                              return out
+                            })()
+
+                        const saveRx = (activePrescriptions: import('./types').PrescriptionEntry[], seancesAnt?: number) => {
+                          // Préserver les prescriptions des épisodes antérieurs (avant la dernière clôture) —
+                          // elles ne sont pas visibles dans rxList mais doivent rester en base pour l'historique.
+                          const archived = rxListRaw.filter(pr => !isPrescriptionCurrent(selectedPatient ?? '', pr))
+                          const prescriptions = [...archived, ...activePrescriptions]
                           setDbPrescriptions(prev => {
                             const idx = prev.findIndex(p => p.patientKey === selectedPatient)
                             const base = idx >= 0 ? prev[idx] : { patientKey: selectedPatient ?? '', prescriptions: [] }
@@ -1417,8 +1543,17 @@ STRUCTURE (n'inclure que si données présentes) :
                         return (
                           <div style={{ marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                {totalPrescribed > 0 ? `${totalSeances} / ${totalPrescribed} séances` : `${totalSeances} séance${totalSeances > 1 ? 's' : ''}`}
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {`${totalSeances} séance${totalSeances > 1 ? 's' : ''}`}
+                                {orphanSessions.length > 0 && (
+                                  <span
+                                    onClick={() => setOrphanPopupOpen(true)}
+                                    title="Voir les séances hors prescription"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.65rem', fontWeight: 700, color: '#d97706', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 7px', cursor: 'pointer' }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    {orphanSessions.length} hors prescription
+                                  </span>
+                                )}
                                 {overLimit && (
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -1426,7 +1561,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                 )}
                               </span>
                               <button type="button" onClick={() => {
-                                setRxEditForm({ nbSeances: '', prescripteur: rxList[rxList.length - 1]?.prescripteur ?? '', datePrescription: new Date().toLocaleDateString('fr-FR'), seancesAnterieures: String(anterieures) })
+                                setRxEditForm({ nbSeances: '', prescripteur: rxList[rxList.length - 1]?.prescripteur ?? '', datePrescription: new Date().toLocaleDateString('fr-FR'), seancesAnterieures: String(anterieures), bilanType: '', customLabel: '' })
                                 setRxEditDoc(null)
                                 setRxEditPopup({ mode: 'add' })
                               }} style={{ fontSize: '0.68rem', color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -1434,42 +1569,65 @@ STRUCTURE (n'inclure que si données présentes) :
                               </button>
                             </div>
 
-                            {rxList.length > 0 && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {rxProgress.map((r, i) => {
-                                  const pct = Math.min(100, Math.round((r.done / r.nbSeances) * 100))
-                                  const isActive = r.done < r.nbSeances && r.start < totalSeances || (r.done > 0)
-                                  return (
-                                    <div key={r.id} style={{ opacity: isActive || r.done === r.nbSeances ? 1 : 0.5, cursor: 'pointer' }}
-                                      onClick={() => {
-                                        setRxEditForm({ nbSeances: String(r.nbSeances), prescripteur: r.prescripteur, datePrescription: r.datePrescription, seancesAnterieures: String(anterieures) })
-                                        setRxEditDoc(r.document ?? null)
-                                        setRxEditPopup({ mode: 'edit', entry: r })
-                                      }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                          Prescription {i + 1} — {r.done}/{r.nbSeances}
-                                          {r.prescripteur ? ` · Dr ${r.prescripteur}` : ''}
-                                        </span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-                                          {r.datePrescription}
-                                          {r.document && (
-                                            <button type="button" onClick={e => { e.stopPropagation(); setRxDocViewer(r.document!) }}
-                                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 1, display: 'flex', alignItems: 'center' }}
-                                              title="Voir l'ordonnance">
-                                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                                            </button>
-                                          )}
-                                        </span>
+                            {rxList.length > 0 && (() => {
+                              // Group by bilanType: 2 ordonnances for the same zone merge into one combined bar
+                              const groupOrder: string[] = []
+                              const groupsMap = new Map<string, typeof rxProgress>()
+                              rxProgress.forEach(r => {
+                                const key = r.bilanType ?? '__global__'
+                                if (!groupsMap.has(key)) { groupsMap.set(key, []); groupOrder.push(key) }
+                                groupsMap.get(key)!.push(r)
+                              })
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  {groupOrder.map(key => {
+                                    const entries = groupsMap.get(key)!
+                                    const combinedDone = entries.reduce((s, e) => s + e.done, 0)
+                                    const combinedTotal = entries.reduce((s, e) => s + e.nbSeances, 0)
+                                    const pct = combinedTotal > 0 ? Math.min(100, Math.round((combinedDone / combinedTotal) * 100)) : 0
+                                    const latest = entries[entries.length - 1]
+                                    const defaultZoneLabel = key === '__global__' ? 'Prescription' : (ZONE_LABELS_SHORT[key] ?? key)
+                                    const label = key === 'generique' && latest.customLabel ? latest.customLabel : defaultZoneLabel
+                                    const hasMultiple = entries.length > 1
+                                    const anyDoc = entries.find(e => e.document)
+                                    return (
+                                      <div key={key} style={{ cursor: 'pointer' }}
+                                        onClick={() => {
+                                          if (entries.length === 1) {
+                                            const r = entries[0]
+                                            setRxEditForm({ nbSeances: String(r.nbSeances), prescripteur: r.prescripteur, datePrescription: r.datePrescription, seancesAnterieures: String(anterieures), bilanType: r.bilanType ?? '', customLabel: r.customLabel ?? '' })
+                                            setRxEditDoc(r.document ?? null)
+                                            setRxEditPopup({ mode: 'edit', entry: r })
+                                          } else {
+                                            setRxGroupPicker(entries)
+                                          }
+                                        }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                            {label} — {combinedDone}/{combinedTotal}
+                                            {latest.prescripteur ? ` · Dr ${latest.prescripteur}` : ''}
+                                            {hasMultiple && <span style={{ marginLeft: 4, fontWeight: 700, color: 'var(--primary)' }}>· {entries.length} ord.</span>}
+                                          </span>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                                            {latest.datePrescription}
+                                            {anyDoc && (
+                                              <button type="button" onClick={e => { e.stopPropagation(); setRxDocViewer(anyDoc.document!) }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 1, display: 'flex', alignItems: 'center' }}
+                                                title="Voir l'ordonnance">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                              </button>
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div style={{ height: 4, background: 'var(--secondary)', borderRadius: 2, overflow: 'hidden' }}>
+                                          <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#16a34a' : pct >= 67 ? '#f59e0b' : 'var(--primary)', borderRadius: 2, transition: 'width 0.3s' }} />
+                                        </div>
                                       </div>
-                                      <div style={{ height: 4, background: 'var(--secondary)', borderRadius: 2, overflow: 'hidden' }}>
-                                        <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#16a34a' : pct >= 67 ? '#f59e0b' : 'var(--primary)', borderRadius: 2, transition: 'width 0.3s' }} />
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })()}
 
                             {/* Popup prescription */}
                             {rxEditPopup && (
@@ -1483,6 +1641,23 @@ STRUCTURE (n'inclure que si données présentes) :
                                   <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Nombre de séances</label>
                                   <input type="number" min="1" value={rxEditForm.nbSeances} onChange={e => setRxEditForm(f => ({ ...f, nbSeances: e.target.value }))}
                                     placeholder="9" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
+
+                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Traitement concerné</label>
+                                  <select value={rxEditForm.bilanType} onChange={e => setRxEditForm(f => ({ ...f, bilanType: e.target.value as BilanType | '' }))}
+                                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }}>
+                                    <option value="">Toutes zones (global)</option>
+                                    {(Object.keys(ZONE_LABELS_SHORT) as BilanType[]).map(bt => (
+                                      <option key={bt} value={bt}>{ZONE_LABELS_SHORT[bt]}</option>
+                                    ))}
+                                  </select>
+
+                                  {rxEditForm.bilanType === 'generique' && (
+                                    <>
+                                      <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Nom du traitement</label>
+                                      <input value={rxEditForm.customLabel} onChange={e => setRxEditForm(f => ({ ...f, customLabel: e.target.value }))}
+                                        placeholder="Ex : ATM, poignet, coude…" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
+                                    </>
+                                  )}
 
                                   <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Prescripteur</label>
                                   <input value={rxEditForm.prescripteur} onChange={e => setRxEditForm(f => ({ ...f, prescripteur: e.target.value }))}
@@ -1544,11 +1719,26 @@ STRUCTURE (n'inclure que si données présentes) :
                                       const nb = parseInt(rxEditForm.nbSeances, 10)
                                       if (isNaN(nb) || nb <= 0) { showToast('Nombre de séances invalide', 'error'); return }
                                       const ant = parseInt(rxEditForm.seancesAnterieures, 10) || 0
+                                      const bt = rxEditForm.bilanType || undefined
+                                      const cl = bt === 'generique' ? (rxEditForm.customLabel.trim() || undefined) : undefined
                                       if (rxEditPopup.mode === 'add') {
-                                        const newEntry = { id: Date.now(), nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, ...(rxEditDoc ? { document: rxEditDoc } : {}) }
-                                        saveRx([...rxList, newEntry], ant)
+                                        const newEntry: import('./types').PrescriptionEntry = { id: Date.now(), nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, ...(rxEditDoc ? { document: rxEditDoc } : {}), ...(bt ? { bilanType: bt } : {}), ...(cl ? { customLabel: cl } : {}) }
+                                        // Propager le customLabel à TOUTES les prescriptions générique du patient (un seul label par patient pour cette zone)
+                                        const nextList = cl
+                                          ? [...rxList.map(pr => pr.bilanType === 'generique' ? { ...pr, customLabel: cl } : pr), newEntry]
+                                          : [...rxList, newEntry]
+                                        saveRx(nextList, ant)
                                       } else if (rxEditPopup.entry) {
-                                        saveRx(rxList.map(pr => pr.id === rxEditPopup.entry!.id ? { ...pr, nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, document: rxEditDoc ?? undefined } : pr), ant)
+                                        saveRx(rxList.map(pr => {
+                                          if (pr.id === rxEditPopup.entry!.id) {
+                                            return { ...pr, nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, document: rxEditDoc ?? undefined, bilanType: bt, customLabel: cl }
+                                          }
+                                          // Synchroniser le customLabel sur les autres prescriptions générique
+                                          if (bt === 'generique' && pr.bilanType === 'generique') {
+                                            return { ...pr, customLabel: cl }
+                                          }
+                                          return pr
+                                        }), ant)
                                       }
                                       setRxEditPopup(null)
                                     }} style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-md)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
@@ -1568,6 +1758,92 @@ STRUCTURE (n'inclure que si données présentes) :
                                       Annuler
                                     </button>
                                   </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Popup séances hors prescription */}
+                            {orphanPopupOpen && (
+                              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                                onClick={() => setOrphanPopupOpen(false)}>
+                                <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', width: '100%', maxWidth: 360, boxShadow: 'var(--shadow-2xl)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)' }}>Séances hors prescription</div>
+                                  </div>
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+                                    Ces séances ne sont rattachées à aucune prescription. Ajoute une prescription pour la zone concernée.
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '40vh', overflowY: 'auto', marginBottom: 12 }}>
+                                    {orphanSessions.map((o, i) => (
+                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.55rem 0.7rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)' }}>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.04em', minWidth: 56 }}>
+                                          {o.kind === 'bilan' ? 'Bilan' : o.kind === 'interm' ? 'Interm.' : 'Séance'}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>{o.bilanType === 'generique' && rxList.find(pr => pr.bilanType === 'generique')?.customLabel ? rxList.find(pr => pr.bilanType === 'generique')!.customLabel : (ZONE_LABELS_SHORT[o.bilanType] ?? o.bilanType)}</div>
+                                          {o.date && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{o.date.includes('-') ? o.date.split('-').reverse().join('/') : o.date}</div>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={() => {
+                                      const firstBt = orphanSessions[0]?.bilanType
+                                      setOrphanPopupOpen(false)
+                                      setRxEditForm({ nbSeances: '', prescripteur: rxList[rxList.length - 1]?.prescripteur ?? '', datePrescription: new Date().toLocaleDateString('fr-FR'), seancesAnterieures: String(anterieures), bilanType: firstBt ?? '', customLabel: '' })
+                                      setRxEditDoc(null)
+                                      setRxEditPopup({ mode: 'add' })
+                                    }} style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-md)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
+                                      Ajouter une prescription
+                                    </button>
+                                    <button onClick={() => setOrphanPopupOpen(false)}
+                                      style={{ padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
+                                      Fermer
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Popup choix d'ordonnance dans un groupe */}
+                            {rxGroupPicker && (
+                              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                                onClick={() => setRxGroupPicker(null)}>
+                                <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', width: '100%', maxWidth: 340, boxShadow: 'var(--shadow-2xl)' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)', marginBottom: 4 }}>
+                                    {rxGroupPicker[0].bilanType === 'generique' && rxGroupPicker[0].customLabel ? rxGroupPicker[0].customLabel : (rxGroupPicker[0].bilanType ? (ZONE_LABELS_SHORT[rxGroupPicker[0].bilanType] ?? rxGroupPicker[0].bilanType) : 'Prescription')}
+                                  </div>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+                                    {rxGroupPicker.length} ordonnance{rxGroupPicker.length > 1 ? 's' : ''} — sélectionne celle à modifier
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                                    {rxGroupPicker.map((r, i) => (
+                                      <button key={r.id} type="button" onClick={() => {
+                                        setRxEditForm({ nbSeances: String(r.nbSeances), prescripteur: r.prescripteur, datePrescription: r.datePrescription, seancesAnterieures: String(anterieures), bilanType: r.bilanType ?? '', customLabel: r.customLabel ?? '' })
+                                        setRxEditDoc(r.document ?? null)
+                                        setRxGroupPicker(null)
+                                        setRxEditPopup({ mode: 'edit', entry: r })
+                                      }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.7rem 0.85rem', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', textAlign: 'left' }}>
+                                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.78rem', flexShrink: 0 }}>{i + 1}</div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                                            {r.done}/{r.nbSeances} séances
+                                          </div>
+                                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                            {r.datePrescription}{r.prescripteur ? ` · Dr ${r.prescripteur}` : ''}
+                                          </div>
+                                        </div>
+                                        {r.document && (
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        )}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <button onClick={() => setRxGroupPicker(null)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
+                                    Fermer
+                                  </button>
                                 </div>
                               </div>
                             )}
@@ -1642,6 +1918,14 @@ STRUCTURE (n'inclure que si données présentes) :
                             const key = n.bilanType ?? getBilanType(n.zone ?? '')
                             if (!groupMap.has(key)) groupMap.set(key, [])
                           })
+                          // Zones créées depuis une prescription (même sans bilan/séance) : section vide.
+                          // Inclut les zones clôturées avec seulement des prescriptions archivées
+                          // (pour afficher la barre verte "Prescription clôturée" sans avoir besoin d'un bilan).
+                          ;(dbPrescriptions.find(p => p.patientKey === selectedPatient)?.prescriptions ?? []).forEach(pr => {
+                            if (pr.bilanType && !groupMap.has(pr.bilanType)) {
+                              groupMap.set(pr.bilanType, [])
+                            }
+                          })
                           const groups = Array.from(groupMap.entries())
                           const showSections = groups.length > 1
                           return groups.map(([zoneType, zoneBilans]) => {
@@ -1705,22 +1989,46 @@ STRUCTURE (n'inclure que si données présentes) :
                             const zoneCollapsed = zoneClosed || isZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
                             const zoneIntermCount = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType).length
                             const zoneNotesCount = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType).length
-                            const zoneLabel = ZONE_SECTION_LABELS[zoneType] ?? zoneType
+                            const rxListForZoneAll = (dbPrescriptions.find(p => p.patientKey === selectedPatient)?.prescriptions ?? []).filter(pr => pr.bilanType === zoneType)
+                            // Séparer prescriptions de l'épisode courant vs épisodes antérieurs (archivées)
+                            const rxListForZoneCurrent = rxListForZoneAll.filter(pr => isPrescriptionCurrent(selectedPatient ?? '', pr))
+                            const rxListForZoneArchived = rxListForZoneAll.filter(pr => !isPrescriptionCurrent(selectedPatient ?? '', pr))
+                            // Le libellé "ATM"/custom vient de la prescription active en priorité, sinon archivée (fallback pour zones clôturées)
+                            const rxForZone = rxListForZoneCurrent[0] ?? rxListForZoneArchived[0]
+                            const customZoneLabel = zoneType === 'generique' ? rxForZone?.customLabel : undefined
+                            const zoneLabel = customZoneLabel ?? (ZONE_SECTION_LABELS[zoneType] ?? zoneType)
                             const closure = getLastClosure(selectedPatient ?? '', zoneType as BilanType)
+                            // Pour la barre verte (zone clôturée), on ne compte que les records de l'épisode clôturé —
+                            // soit ceux créés avant ou à la dernière clôture. Évite de mélanger avec l'épisode courant.
+                            const latestClosureTime = closure ? new Date(closure.closedAt).getTime() : Number.POSITIVE_INFINITY
+                            const zoneBilansClosed = zoneBilans.filter(b => b.id <= latestClosureTime)
+                            const zoneIntermCountClosed = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && r.id <= latestClosureTime).length
+                            const zoneNotesCountClosed = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && r.id <= latestClosureTime).length
+                            const zonePoolSize = zoneBilansClosed.length + zoneIntermCountClosed + zoneNotesCountClosed
+                            let consumedZone = 0
+                            const rxZoneProgress = rxListForZoneArchived.map(r => {
+                              const done = Math.min(r.nbSeances, Math.max(0, zonePoolSize - consumedZone))
+                              consumedZone += r.nbSeances
+                              return { ...r, done }
+                            })
+                            const zoneTotalDone = rxZoneProgress.reduce((s, r) => s + r.done, 0)
+                            const zoneTotalPrescribed = rxZoneProgress.reduce((s, r) => s + r.nbSeances, 0)
+                            const latestRxForZone = rxListForZoneArchived[rxListForZoneArchived.length - 1]
+                            const isZoneEmpty = zoneBilans.length === 0 && zoneNotesCount === 0 && zoneIntermCount === 0
                             return (
-                            <div key={zoneType} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', background: c.surface, border: `1px solid ${c.borderSoft}`, borderLeft: `3px solid ${zoneClosed ? c.textFaint : c.primary}`, borderRadius: 16, padding: '0.25rem 0.85rem 0.85rem', marginTop: '0.5rem', boxShadow: '0 1px 2px 0 rgba(15, 23, 42, 0.04)', opacity: zoneClosed ? 0.75 : 1 }}>
+                            <div key={zoneType} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingTop: '0.15rem', paddingBottom: '0.85rem', paddingLeft: '0.75rem', marginTop: '0.75rem', borderLeft: `1.5px solid ${zoneClosed ? c.borderSoft : `${c.primary}55`}`, borderBottom: `1px solid ${c.borderSoft}`, borderTopLeftRadius: 10, borderBottomLeftRadius: 10, opacity: zoneClosed ? 0.75 : 1 }}>
                               <div
                                 onClick={() => toggleZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 0.1rem 0.5rem', cursor: 'pointer', userSelect: 'none', borderBottom: zoneCollapsed ? 'none' : `1px solid ${c.borderSoft}`, marginBottom: zoneCollapsed ? 0 : '0.35rem' }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: zoneClosed ? c.surfaceMuted : `${c.primary}15`, color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
+                                <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : `${c.primary}12`, color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {zoneClosed ? (
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                                   ) : (
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1"/></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1"/></svg>
                                   )}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 800, fontSize: '1rem', color: c.text, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.92rem', color: c.text, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
                                     {zoneLabel}
                                     {zoneClosed && (
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0.15rem 0.5rem', borderRadius: 9999, background: c.successBg, color: c.success, fontSize: '0.68rem', fontWeight: 700 }}>
@@ -1739,6 +2047,21 @@ STRUCTURE (n'inclure que si données présentes) :
                                   <polyline points="6 9 12 15 18 9"/>
                                 </svg>
                               </div>
+                              {zoneClosed && zoneTotalPrescribed > 0 && (
+                                <div style={{ padding: '0.55rem 0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--radius-md)', margin: '0.2rem 0' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                      Prescription clôturée — {zoneTotalDone}/{zoneTotalPrescribed}
+                                      {latestRxForZone?.prescripteur ? ` · Dr ${latestRxForZone.prescripteur}` : ''}
+                                    </span>
+                                    <span style={{ fontSize: '0.62rem', color: '#166534' }}>{latestRxForZone?.datePrescription}</span>
+                                  </div>
+                                  <div style={{ height: 4, background: '#dcfce7', borderRadius: 2, overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${zoneTotalPrescribed > 0 ? Math.min(100, Math.round((zoneTotalDone / zoneTotalPrescribed) * 100)) : 0}%`, background: '#16a34a', borderRadius: 2 }} />
+                                  </div>
+                                </div>
+                              )}
                               {zoneClosed && closure && (
                                 <div style={{ fontSize: '0.72rem', color: '#166534', padding: '0 0.4rem', fontStyle: 'italic' }}>
                                   Clôturée le {new Date(closure.closedAt).toLocaleDateString('fr-FR')} — cette PEC est ignorée par les analyses IA des autres zones (résumée en antécédent seulement).
@@ -1751,7 +2074,7 @@ STRUCTURE (n'inclure que si données présentes) :
                               })()}
                               <EvolutionChart
                                 points={evolutionPoints}
-                                title={`Évolution EVN — ${ZONE_SECTION_LABELS[zoneType] ?? zoneType}`}
+                                title={`Évolution EVN — ${zoneLabel}`}
                                 improvementPct={(() => {
                                   if (evolutionPoints.length < 2) return null
                                   const first = evolutionPoints[0].value
@@ -1772,11 +2095,11 @@ STRUCTURE (n'inclure que si données présentes) :
 
                           const incomplet = record.status === 'incomplet'
                           return (
-                            <div key={record.id} style={{ background: 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)' }}>
+                            <div key={record.id} style={{ background: 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid #93c5fd', boxShadow: 'var(--shadow-sm)' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem', flexWrap: 'wrap' }}>
-                                    <span style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem' }}>Bilan N°{index + 1}</span>
+                                    <span style={{ fontWeight: 600, color: '#1e40af', fontSize: '0.95rem' }}>Bilan N°{index + 1}</span>
                                     {editingLabelBilanId === record.id ? (
                                       <input
                                         autoFocus
@@ -1812,7 +2135,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Analysé</span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                  <div style={{ fontSize: '0.8rem', color: '#1d4ed8' }}>
                                     {record.dateBilan}{currEvn != null ? ` · EVN : ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
                                   </div>
                                 </div>
@@ -1959,11 +2282,6 @@ STRUCTURE (n'inclure que si données présentes) :
                                 ].sort((a, b) => a.d - b.d)
                                 return (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0.5rem' }}>
-                                      <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>SUIVI CHRONOLOGIQUE</span>
-                                      <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                                    </div>
                                     {timeline.map(item => {
                                       if (item.kind === 'note') {
                                         const note = item.rec
@@ -2167,7 +2485,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       const sColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : score < 0 ? '#dc2626' : '#94a3b8'
 
                                       return (
-                                      <div key={rec.id} style={{ background: '#fff7ed', border: '1px solid #fed7aa', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)' }}>
+                                      <div key={rec.id} style={{ background: 'var(--surface)', border: '1.5px solid #fdba74', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
                                           <div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.1rem' }}>
@@ -2323,7 +2641,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                     onClick={() => {
                                       const firstRec = zoneBilans[0] ?? allPatientRecords[0]
                                       setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? ''
+                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? ''
                                       setNoteSeanceZone(z)
                                       setCurrentNoteSeanceId(null)
                                       setCurrentNoteSeanceData(null)
@@ -2332,31 +2650,48 @@ STRUCTURE (n'inclure que si données présentes) :
                                     style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #c4b5fd', background: 'transparent', color: '#6d28d9', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
                                     <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Séance
                                   </button>
+                                  {!isZoneEmpty && (
+                                    <button
+                                      onClick={() => {
+                                        const firstRec = zoneBilans[0] ?? allPatientRecords[0]
+                                        setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                                        const patKey = selectedPatient ?? ''
+                                        const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? ''
+                                        setBilanIntermediaireZone(z)
+                                        setCurrentBilanIntermediaireId(null)
+                                        setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
+                                        setStep('bilan_intermediaire')
+                                      }}
+                                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #fed7aa', background: 'transparent', color: '#c2410c', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+                                      <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan interm.
+                                    </button>
+                                  )}
+                                </div>
+                                {isZoneEmpty ? (
                                   <button
                                     onClick={() => {
-                                      const firstRec = zoneBilans[0] ?? allPatientRecords[0]
+                                      const firstRec = allPatientRecords[0]
                                       setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                      const patKey = selectedPatient ?? ''
-                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? ''
-                                      setBilanIntermediaireZone(z)
-                                      setCurrentBilanIntermediaireId(null)
-                                      setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
-                                      setStep('bilan_intermediaire')
+                                      setPatientMode('existing')
+                                      setSelectedBodyZone(DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? null)
+                                      setBilanZoneBackStep('identity')
+                                      setStep('identity')
                                     }}
-                                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #fed7aa', background: 'transparent', color: '#c2410c', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan interm.
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--primary)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
+                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Nouveau bilan {zoneLabel}
                                   </button>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    if (confirm(`Clôturer la prise en charge ${zoneLabel} ? Les futures analyses d'autres zones ne verront cette PEC que comme un antécédent résumé.`)) {
-                                      closeTreatment(selectedPatient ?? '', zoneType as BilanType, zoneBilans[0]?.zone)
-                                    }
-                                  }}
-                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #86efac', background: 'transparent', color: '#166534', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                  Clôturer la PEC {zoneLabel}
-                                </button>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Clôturer la prise en charge ${zoneLabel} ? Les futures analyses d'autres zones ne verront cette PEC que comme un antécédent résumé.`)) {
+                                        closeTreatment(selectedPatient ?? '', zoneType as BilanType, zoneBilans[0]?.zone)
+                                      }
+                                    }}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #86efac', background: 'transparent', color: '#166534', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    Clôturer la PEC {zoneLabel}
+                                  </button>
+                                )}
                               </div>
                               </>)}
                               {zoneClosed && (
@@ -2371,20 +2706,6 @@ STRUCTURE (n'inclure que si données présentes) :
                           )
                           })
                         })()}
-                        {/* ── Timeline ────────────────────── */}
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0.5rem', marginBottom: '0.5rem' }}>
-                            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>CHRONOLOGIE</span>
-                            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                          </div>
-                          <PatientTimeline
-                            bilans={bilans}
-                            intermediaires={getPatientIntermediaires(selectedPatient ?? '')}
-                            notesSeance={getPatientNotes(selectedPatient ?? '')}
-                          />
-                        </div>
-
                         {/* ── Documents ────────────────────── */}
                         <DossierDocuments
                           patientKey={selectedPatient ?? ''}
@@ -2442,7 +2763,7 @@ STRUCTURE (n'inclure que si données présentes) :
                         onPickSeance={(bt) => {
                           const firstRec = allPatientRecords[0]
                           setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? ''
+                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt as BilanType] ?? ''
                           setNoteSeanceZone(z)
                           setCurrentNoteSeanceId(null)
                           setCurrentNoteSeanceData(null)
@@ -2452,7 +2773,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           const firstRec = allPatientRecords[0]
                           setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
                           const patKey = selectedPatient ?? ''
-                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? ''
+                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt as BilanType] ?? ''
                           setBilanIntermediaireZone(z)
                           setCurrentBilanIntermediaireId(null)
                           setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
