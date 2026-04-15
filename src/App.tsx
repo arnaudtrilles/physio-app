@@ -173,6 +173,94 @@ const DEMO_DB: BilanRecord[] = [
 
 const DEFAULT_PROFILE: ProfileData = { nom: '', prenom: '', profession: 'Kinésithérapeute', photo: null }
 
+/** Glissement horizontal gauche révélant un bouton X rouge pour supprimer.
+ *  Utilisé sur les cartes d'épisode clôturé — pas de bouton visible par défaut,
+ *  le geste reste la seule affordance (mobile-first, pas de boutons partout).
+ *  Pointer events pour supporter mouse + touch + pen ; touch-action: pan-y pour
+ *  laisser le scroll vertical au navigateur tout en captant l'horizontal. */
+function SwipeToDelete({ children, onDelete, disabled = false }: {
+  children: React.ReactNode
+  onDelete: () => void
+  disabled?: boolean
+}) {
+  const REVEAL = 68
+  const [dx, setDx] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const startXRef = useRef<number | null>(null)
+  const startYRef = useRef<number | null>(null)
+  const baselineRef = useRef(0)
+  const lockedRef = useRef<'none' | 'h' | 'v'>('none')
+  const pointerIdRef = useRef<number | null>(null)
+  if (disabled) return <>{children}</>
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    pointerIdRef.current = e.pointerId
+    startXRef.current = e.clientX
+    startYRef.current = e.clientY
+    baselineRef.current = dx
+    lockedRef.current = 'none'
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (startXRef.current === null || startYRef.current === null) return
+    if (pointerIdRef.current !== null && e.pointerId !== pointerIdRef.current) return
+    const rawX = e.clientX - startXRef.current
+    const rawY = e.clientY - startYRef.current
+    if (lockedRef.current === 'none') {
+      if (Math.abs(rawX) < 6 && Math.abs(rawY) < 6) return
+      lockedRef.current = Math.abs(rawX) > Math.abs(rawY) ? 'h' : 'v'
+      if (lockedRef.current === 'h') {
+        setDragging(true)
+        try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch { /* noop */ }
+      }
+    }
+    if (lockedRef.current !== 'h') return
+    const next = Math.max(-REVEAL, Math.min(0, baselineRef.current + rawX))
+    setDx(next)
+  }
+  const finishGesture = () => {
+    startXRef.current = null
+    startYRef.current = null
+    pointerIdRef.current = null
+    if (lockedRef.current === 'h') {
+      setDx(dx < -REVEAL / 2 ? -REVEAL : 0)
+    }
+    lockedRef.current = 'none'
+    setDragging(false)
+  }
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 10 }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDelete() }}
+        aria-label="Supprimer"
+        style={{
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL,
+          background: '#dc2626', color: 'white', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finishGesture}
+        onPointerCancel={finishGesture}
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dragging ? 'none' : 'transform 0.2s',
+          position: 'relative',
+          background: 'var(--surface)',
+          touchAction: 'pan-y',
+          cursor: dx < 0 ? 'grabbing' : 'auto',
+        }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [step, setStep] = useState<Step>('dashboard')
   const { toasts, showToast, removeToast } = useToast()
@@ -190,10 +278,12 @@ function App() {
   const [dbClosedTreatments, setDbClosedTreatments, closedLoaded] = useIndexedDB<ClosedTreatment[]>('physio_closed_treatments', [])
   // Accordéon : zones repliées par patient (clé = `${patientKey}::${bilanType}`)
   const [collapsedZones, setCollapsedZones] = useState<Set<string>>(new Set())
+  // Épisodes clôturés dépliés (clé = `${patientKey}::${bilanType}::${closureId}`) — état UI volatile.
+  const [expandedClosedEpisodes, setExpandedClosedEpisodes] = useState<Set<string>>(new Set())
   // Zone courante pour le rapport d'évolution IA (quand plusieurs PEC parallèles)
   const [evolutionZoneType, setEvolutionZoneType] = useState<BilanType | null>(null)
-  // Modal de choix de zone pour courrier/bilan de sortie
-  const [letterZonePicker, setLetterZonePicker] = useState<{ action: 'letter' | 'bilan_sortie' } | null>(null)
+  // Modal de choix de zone pour les 4 actions du ConsultationChooser (séance, bilan intermédiaire, bilan de sortie, courrier).
+  const [letterZonePicker, setLetterZonePicker] = useState<{ action: 'letter' | 'bilan_sortie' | 'seance' | 'intermediaire' } | null>(null)
   const isOnline = useOnlineStatus()
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
   const [_apiKeyStored, _setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
@@ -654,6 +744,63 @@ function App() {
     return pr.id > closureTimes[closureTimes.length - 1]
   }
 
+  /** Épisode de prise en charge pour un (patient, bilanType).
+   *  Un épisode correspond à une "vie" d'une PEC : début à la création, fin à
+   *  la clôture (ou +∞ si toujours actif). Les records (bilans, interms, notes,
+   *  prescriptions) appartiennent à l'épisode dont l'intervalle contient leur id.
+   *  startExclusive : id > startExclusive — endInclusive : id <= endInclusive.
+   *  Le dernier épisode est actif ssi une clôture n'a PAS été suivie par d'autres
+   *  clôtures (id dans [lastClosure, +∞)). */
+  type TreatmentEpisode = {
+    idx: number
+    startExclusive: number
+    endInclusive: number
+    isActive: boolean
+    closure?: ClosedTreatment
+  }
+  const getTreatmentEpisodes = (patientKey: string, bilanType: BilanType): TreatmentEpisode[] => {
+    const closures = dbClosedTreatments
+      .filter(c => c.patientKey === patientKey && c.bilanType === bilanType)
+      .slice()
+      .sort((a, b) => new Date(a.closedAt).getTime() - new Date(b.closedAt).getTime())
+    const eps: TreatmentEpisode[] = []
+    let prev = Number.NEGATIVE_INFINITY
+    closures.forEach((c, i) => {
+      const end = new Date(c.closedAt).getTime()
+      eps.push({ idx: i, startExclusive: prev, endInclusive: end, isActive: false, closure: c })
+      prev = end
+    })
+    // Épisode actif final : uniquement s'il y a au moins un record après la dernière clôture
+    // (ou aucune clôture du tout). Sinon on ne crée pas de carte "active" vide.
+    const hasRecordAfter = (cutoff: number): boolean => {
+      const hitBilan = db.some(r =>
+        `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patientKey
+        && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
+        && r.id > cutoff
+      )
+      if (hitBilan) return true
+      const hitInter = dbIntermediaires.some(r =>
+        r.patientKey === patientKey
+        && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
+        && r.id > cutoff
+      )
+      if (hitInter) return true
+      const hitNote = dbNotes.some(n =>
+        n.patientKey === patientKey
+        && (n.bilanType ?? getBilanType(n.zone ?? '')) === bilanType
+        && n.id > cutoff
+      )
+      if (hitNote) return true
+      const rx = dbPrescriptions.find(p => p.patientKey === patientKey)
+      return (rx?.prescriptions ?? []).some(pr => pr.bilanType === bilanType && pr.id > cutoff)
+    }
+    const cutoff = closures.length > 0 ? new Date(closures[closures.length - 1].closedAt).getTime() : Number.NEGATIVE_INFINITY
+    if (closures.length === 0 || hasRecordAfter(cutoff)) {
+      eps.push({ idx: eps.length, startExclusive: cutoff, endInclusive: Number.POSITIVE_INFINITY, isActive: true })
+    }
+    return eps
+  }
+
   const getLastClosure = (patientKey: string, bilanType: BilanType): ClosedTreatment | undefined =>
     dbClosedTreatments.filter(c => c.patientKey === patientKey && c.bilanType === bilanType).pop()
 
@@ -668,8 +815,35 @@ function App() {
     }])
   }
 
-  const reopenTreatment = (patientKey: string, bilanType: BilanType) => {
-    setDbClosedTreatments(prev => prev.filter(c => !(c.patientKey === patientKey && c.bilanType === bilanType)))
+  /** Suppression définitive d'un épisode clôturé : retire tous les bilans, interms, notes,
+   *  prescriptions de l'épisode + la clôture elle-même. Utilisé quand l'utilisateur a ajouté
+   *  une PEC par erreur (ex. patient "anonyme") et veut s'en débarrasser complètement. */
+  const deleteClosedEpisode = (patientKey: string, bilanType: BilanType, ep: TreatmentEpisode) => {
+    if (!ep.closure) return
+    const inWin = (id: number) => id > ep.startExclusive && id <= ep.endInclusive
+    const matchZone = (bt: BilanType | undefined, zone: string | undefined) =>
+      (bt ?? getBilanType(zone ?? '')) === bilanType
+    setDb(prev => prev.filter(r => !(
+      `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patientKey
+      && matchZone(r.bilanType, r.zone)
+      && inWin(r.id)
+    )))
+    setDbIntermediaires(prev => prev.filter(r => !(
+      r.patientKey === patientKey && matchZone(r.bilanType, r.zone) && inWin(r.id)
+    )))
+    setDbNotes(prev => prev.filter(n => !(
+      n.patientKey === patientKey && matchZone(n.bilanType, n.zone) && inWin(n.id)
+    )))
+    setDbPrescriptions(prev => prev.map(p => {
+      if (p.patientKey !== patientKey) return p
+      return { ...p, prescriptions: (p.prescriptions ?? []).filter(pr => !(pr.bilanType === bilanType && inWin(pr.id))) }
+    }))
+    setDbClosedTreatments(prev => prev.filter(c => c.id !== ep.closure!.id))
+    setExpandedClosedEpisodes(prev => {
+      const next = new Set(prev)
+      next.delete(`${patientKey}::${bilanType}::${ep.closure!.id}`)
+      return next
+    })
   }
 
   const toggleZoneCollapsed = (patientKey: string, bilanType: BilanType) => {
@@ -1928,7 +2102,18 @@ STRUCTURE (n'inclure que si données présentes) :
                           })
                           const groups = Array.from(groupMap.entries())
                           const showSections = groups.length > 1
-                          return groups.map(([zoneType, zoneBilans]) => {
+                          // Expansion en (zoneType × épisode) — chaque épisode rend sa propre carte.
+                          // Une PEC clôturée puis reprise (nouvelle ordo) donne 2 cartes distinctes :
+                          // une verte "PEC terminée" (ancien épisode) + une active (nouvel épisode).
+                          type ZoneEp = { zoneType: BilanType; zoneBilansAll: BilanRecord[]; episode: TreatmentEpisode; totalEpisodes: number }
+                          const zoneEps: ZoneEp[] = groups.flatMap(([zoneType, zoneBilansAll]) => {
+                            const eps = getTreatmentEpisodes(selectedPatient ?? '', zoneType as BilanType)
+                            if (eps.length === 0) return [{ zoneType: zoneType as BilanType, zoneBilansAll, episode: { idx: 0, startExclusive: Number.NEGATIVE_INFINITY, endInclusive: Number.POSITIVE_INFINITY, isActive: true } as TreatmentEpisode, totalEpisodes: 1 }]
+                            return eps.map(ep => ({ zoneType: zoneType as BilanType, zoneBilansAll, episode: ep, totalEpisodes: eps.length }))
+                          })
+                          return zoneEps.map(({ zoneType, zoneBilansAll, episode, totalEpisodes }) => {
+                            const inEp = (id: number) => id > episode.startExclusive && id <= episode.endInclusive
+                            const zoneBilans = zoneBilansAll.filter(b => inEp(b.id))
                             // ── Graphique d'évolution EVN/EVA pour cette zone ──
                             const evolutionPoints: EvolutionPoint[] = (() => {
                               const pts: EvolutionPoint[] = []
@@ -1955,9 +2140,9 @@ STRUCTURE (n'inclure que si données présentes) :
                                   label: `Bilan initial · ${b.dateBilan}`,
                                 })
                               }
-                              // 2) Intermédiaires de cette zone
+                              // 2) Intermédiaires de cette zone (épisode courant)
                               const zoneInters = getPatientIntermediaires(selectedPatient ?? '')
-                                .filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)
+                                .filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id))
                               for (const r of zoneInters) {
                                 const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}
                                 const evnObj = (tc.evn as Record<string, unknown>) ?? {}
@@ -1970,9 +2155,9 @@ STRUCTURE (n'inclure que si données présentes) :
                                   label: `Bilan intermédiaire · ${r.dateBilan}`,
                                 })
                               }
-                              // 3) Notes de séance de cette zone
+                              // 3) Notes de séance de cette zone (épisode courant)
                               const zoneNotes = dbNotes
-                                .filter(n => n.patientKey === selectedPatient && (n.bilanType ?? getBilanType(n.zone ?? '')) === zoneType)
+                                .filter(n => n.patientKey === selectedPatient && (n.bilanType ?? getBilanType(n.zone ?? '')) === zoneType && inEp(n.id))
                               for (const n of zoneNotes) {
                                 const v = parseFloat(String(n.data.eva ?? ''))
                                 if (isNaN(v)) continue
@@ -1985,40 +2170,59 @@ STRUCTURE (n'inclure que si données présentes) :
                               }
                               return pts
                             })()
-                            const zoneClosed = isTreatmentClosed(selectedPatient ?? '', zoneType as BilanType)
-                            const zoneCollapsed = zoneClosed || isZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
-                            const zoneIntermCount = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType).length
-                            const zoneNotesCount = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType).length
-                            const rxListForZoneAll = (dbPrescriptions.find(p => p.patientKey === selectedPatient)?.prescriptions ?? []).filter(pr => pr.bilanType === zoneType)
-                            // Séparer prescriptions de l'épisode courant vs épisodes antérieurs (archivées)
-                            const rxListForZoneCurrent = rxListForZoneAll.filter(pr => isPrescriptionCurrent(selectedPatient ?? '', pr))
-                            const rxListForZoneArchived = rxListForZoneAll.filter(pr => !isPrescriptionCurrent(selectedPatient ?? '', pr))
-                            // Le libellé "ATM"/custom vient de la prescription active en priorité, sinon archivée (fallback pour zones clôturées)
-                            const rxForZone = rxListForZoneCurrent[0] ?? rxListForZoneArchived[0]
+                            const zoneClosed = !episode.isActive
+                            // Épisodes clôturés : repliés par défaut, mais dépliables via tap sur le header.
+                            // Épisodes actifs : dépliés par défaut, repliables via tap.
+                            const closedEpKey = episode.closure ? `${selectedPatient ?? ''}::${zoneType}::${episode.closure.id}` : ''
+                            const zoneCollapsed = zoneClosed
+                              ? !expandedClosedEpisodes.has(closedEpKey)
+                              : isZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
+                            const toggleThisEpisode = () => {
+                              if (zoneClosed) {
+                                setExpandedClosedEpisodes(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(closedEpKey)) next.delete(closedEpKey); else next.add(closedEpKey)
+                                  return next
+                                })
+                              } else {
+                                toggleZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
+                              }
+                            }
+                            const zoneIntermCount = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id)).length
+                            const zoneNotesCount = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id)).length
+                            // Prescriptions de CET épisode uniquement (id dans la fenêtre)
+                            const rxListForZone = (dbPrescriptions.find(p => p.patientKey === selectedPatient)?.prescriptions ?? []).filter(pr => pr.bilanType === zoneType && inEp(pr.id))
+                            // Le libellé "ATM"/custom vient d'une prescription de l'épisode
+                            const rxForZone = rxListForZone[0]
                             const customZoneLabel = zoneType === 'generique' ? rxForZone?.customLabel : undefined
                             const zoneLabel = customZoneLabel ?? (ZONE_SECTION_LABELS[zoneType] ?? zoneType)
-                            const closure = getLastClosure(selectedPatient ?? '', zoneType as BilanType)
-                            // Pour la barre verte (zone clôturée), on ne compte que les records de l'épisode clôturé —
-                            // soit ceux créés avant ou à la dernière clôture. Évite de mélanger avec l'épisode courant.
-                            const latestClosureTime = closure ? new Date(closure.closedAt).getTime() : Number.POSITIVE_INFINITY
-                            const zoneBilansClosed = zoneBilans.filter(b => b.id <= latestClosureTime)
-                            const zoneIntermCountClosed = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && r.id <= latestClosureTime).length
-                            const zoneNotesCountClosed = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && r.id <= latestClosureTime).length
-                            const zonePoolSize = zoneBilansClosed.length + zoneIntermCountClosed + zoneNotesCountClosed
+                            const closure = episode.closure
+                            // Pool de l'épisode = tous les records de l'épisode (pas seulement ≤ closure, puisqu'ils sont déjà filtrés)
+                            const zonePoolSize = zoneBilans.length + zoneIntermCount + zoneNotesCount
                             let consumedZone = 0
-                            const rxZoneProgress = rxListForZoneArchived.map(r => {
+                            const rxZoneProgress = rxListForZone.map(r => {
                               const done = Math.min(r.nbSeances, Math.max(0, zonePoolSize - consumedZone))
                               consumedZone += r.nbSeances
                               return { ...r, done }
                             })
                             const zoneTotalDone = rxZoneProgress.reduce((s, r) => s + r.done, 0)
                             const zoneTotalPrescribed = rxZoneProgress.reduce((s, r) => s + r.nbSeances, 0)
-                            const latestRxForZone = rxListForZoneArchived[rxListForZoneArchived.length - 1]
+                            const latestRxForZone = rxListForZone[rxListForZone.length - 1]
                             const isZoneEmpty = zoneBilans.length === 0 && zoneNotesCount === 0 && zoneIntermCount === 0
+                            // Suffixe d'épisode quand plusieurs épisodes coexistent pour une même zone
+                            const episodeSuffix = totalEpisodes > 1 ? ` · Épisode ${episode.idx + 1}` : ''
                             return (
-                            <div key={zoneType} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingTop: '0.15rem', paddingBottom: '0.85rem', paddingLeft: '0.75rem', marginTop: '0.75rem', borderLeft: `1.5px solid ${zoneClosed ? c.borderSoft : `${c.primary}55`}`, borderBottom: `1px solid ${c.borderSoft}`, borderTopLeftRadius: 10, borderBottomLeftRadius: 10, opacity: zoneClosed ? 0.75 : 1 }}>
+                            <div key={`${zoneType}-ep${episode.idx}`} style={{ marginTop: '0.75rem' }}>
+                            <SwipeToDelete
+                              disabled={!zoneClosed}
+                              onDelete={() => {
+                                if (confirm(`Supprimer définitivement cet épisode clôturé de ${zoneLabel} ? Tous les bilans, séances, interm. et ordonnances de cet épisode seront perdus.`)) {
+                                  deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
+                                }
+                              }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingTop: '0.15rem', paddingBottom: '0.85rem', paddingLeft: '0.75rem', borderLeft: `1.5px solid ${zoneClosed ? c.borderSoft : `${c.primary}55`}`, borderBottom: `1px solid ${c.borderSoft}`, borderTopLeftRadius: 10, borderBottomLeftRadius: 10, background: 'var(--surface)' }}>
                               <div
-                                onClick={() => toggleZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)}
+                                onClick={toggleThisEpisode}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
                                 <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : `${c.primary}12`, color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {zoneClosed ? (
@@ -2029,7 +2233,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontWeight: 700, fontSize: '0.92rem', color: c.text, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {zoneLabel}
+                                    {zoneLabel}{episodeSuffix && <span style={{ fontWeight: 500, color: c.textMuted, fontSize: '0.78rem' }}>{episodeSuffix}</span>}
                                     {zoneClosed && (
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0.15rem 0.5rem', borderRadius: 9999, background: c.successBg, color: c.success, fontSize: '0.68rem', fontWeight: 700 }}>
                                         PEC terminée
@@ -2085,7 +2289,7 @@ STRUCTURE (n'inclure que si données présentes) :
                               />
                               <ScoreEvolutionChart
                                 bilans={zoneBilans}
-                                intermediaires={dbIntermediaires.filter(r => r.patientKey === selectedPatient && (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)}
+                                intermediaires={dbIntermediaires.filter(r => r.patientKey === selectedPatient && (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id))}
                               />
                               {zoneBilans.map((record, index) => {
                           const prevEvn = index > 0 ? zoneBilans[index - 1].evn : null
@@ -2262,9 +2466,9 @@ STRUCTURE (n'inclure que si données présentes) :
                           )
                         })}
                               {(() => {
-                                // ── Timeline chronologique (bilans intermédiaires + notes de séance de cette zone) ──
-                                const zoneInters = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)
-                                const zoneNotes = dbNotes.filter(n => n.patientKey === selectedPatient && (n.bilanType ?? getBilanType(n.zone ?? '')) === zoneType).sort((a, b) => {
+                                // ── Timeline chronologique (bilans intermédiaires + notes de séance de cet épisode) ──
+                                const zoneInters = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id))
+                                const zoneNotes = dbNotes.filter(n => n.patientKey === selectedPatient && (n.bilanType ?? getBilanType(n.zone ?? '')) === zoneType && inEp(n.id)).sort((a, b) => {
                                   const ta = parseFrDate(a.dateSeance), tb = parseFrDate(b.dateSeance)
                                   if (ta !== tb) return ta - tb
                                   return a.id - b.id
@@ -2694,14 +2898,8 @@ STRUCTURE (n'inclure que si données présentes) :
                                 )}
                               </div>
                               </>)}
-                              {zoneClosed && (
-                                <button
-                                  onClick={() => reopenTreatment(selectedPatient ?? '', zoneType as BilanType)}
-                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid #86efac', background: 'white', color: '#166534', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                                  Rouvrir la PEC
-                                </button>
-                              )}
+                            </div>
+                            </SwipeToDelete>
                             </div>
                           )
                           })
@@ -2760,24 +2958,36 @@ STRUCTURE (n'inclure que si données présentes) :
                         onClose={() => setConsultationChooserOpen(false)}
                         zones={zonesForPicker}
                         hasAnyBilan={hasAnyBilanForPicker}
-                        onPickSeance={(bt) => {
-                          const firstRec = allPatientRecords[0]
-                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt as BilanType] ?? ''
-                          setNoteSeanceZone(z)
-                          setCurrentNoteSeanceId(null)
-                          setCurrentNoteSeanceData(null)
-                          setStep('note_seance')
+                        onPickSeance={() => {
+                          const activeZones = zonesForPicker
+                          if (activeZones.length <= 1) {
+                            const bt = (activeZones[0]?.bilanType ?? getBilanType(bilans[0]?.zone ?? '')) as BilanType
+                            const firstRec = allPatientRecords[0]
+                            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                            const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt] ?? ''
+                            setNoteSeanceZone(z)
+                            setCurrentNoteSeanceId(null)
+                            setCurrentNoteSeanceData(null)
+                            setStep('note_seance')
+                          } else {
+                            setLetterZonePicker({ action: 'seance' })
+                          }
                         }}
-                        onPickIntermediaire={(bt) => {
-                          const firstRec = allPatientRecords[0]
-                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                          const patKey = selectedPatient ?? ''
-                          const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt as BilanType] ?? ''
-                          setBilanIntermediaireZone(z)
-                          setCurrentBilanIntermediaireId(null)
-                          setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
-                          setStep('bilan_intermediaire')
+                        onPickIntermediaire={() => {
+                          const activeWithBilans = zonesForPicker.filter(z => z.hasBilans)
+                          if (activeWithBilans.length <= 1) {
+                            const bt = (activeWithBilans[0]?.bilanType ?? getBilanType(bilans[0]?.zone ?? '')) as BilanType
+                            const firstRec = allPatientRecords[0]
+                            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+                            const patKey = selectedPatient ?? ''
+                            const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt] ?? ''
+                            setBilanIntermediaireZone(z)
+                            setCurrentBilanIntermediaireId(null)
+                            setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
+                            setStep('bilan_intermediaire')
+                          } else {
+                            setLetterZonePicker({ action: 'intermediaire' })
+                          }
                         }}
                         onPickNouveauBilan={() => {
                           const firstRec = allPatientRecords[0]
@@ -3474,14 +3684,51 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         />
       )}
 
-      {/* ── Zone selector for letter / bilan de sortie ─────────────────────── */}
+      {/* ── Zone selector pour les 4 actions du ConsultationChooser ──────────── */}
       {letterZonePicker && selectedPatient && (() => {
         const patKey = selectedPatient
+        const action = letterZonePicker.action
         const allTypes = getPatientBilanTypes(patKey)
+        const typesWithBilans = new Set(getPatientBilans(patKey).map(b => b.bilanType ?? getBilanType(b.zone ?? '')))
+        // Zones pertinentes selon l'action
+        const typesForAction: BilanType[] = (() => {
+          if (action === 'seance') return allTypes.filter(t => !isTreatmentClosed(patKey, t))
+          if (action === 'intermediaire') return allTypes.filter(t => !isTreatmentClosed(patKey, t) && typesWithBilans.has(t))
+          if (action === 'bilan_sortie') return allTypes.filter(t => !isTreatmentClosed(patKey, t) && typesWithBilans.has(t))
+          return allTypes // 'letter' : rétrospectif autorisé sur les PEC clôturées
+        })()
         const zoneLabelForType = (t: BilanType): string => BILAN_ZONE_LABELS[t]
         const firstZoneForType = (t: BilanType): string => {
           const firstRec = [...getPatientBilans(patKey), ...getPatientIntermediaires(patKey), ...getPatientNotes(patKey)].find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === t)
-          return firstRec?.zone ?? ''
+          return firstRec?.zone ?? DEFAULT_ZONE_FOR_BILAN[t] ?? ''
+        }
+        const titleForAction: Record<typeof action, string> = {
+          seance: 'Séance — quelle PEC ?',
+          intermediaire: 'Bilan intermédiaire — quelle PEC ?',
+          bilan_sortie: 'Bilan de sortie — quelle PEC ?',
+          letter: 'Courrier — quelle PEC ?',
+        }
+        const runAction = (t: BilanType) => {
+          const zone = firstZoneForType(t)
+          setLetterZonePicker(null)
+          if (action === 'seance') {
+            const firstRec = getPatientBilans(patKey)[0] ?? getPatientNotes(patKey)[0] ?? getPatientIntermediaires(patKey)[0]
+            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+            setNoteSeanceZone(zone)
+            setCurrentNoteSeanceId(null)
+            setCurrentNoteSeanceData(null)
+            setStep('note_seance')
+          } else if (action === 'intermediaire') {
+            const firstRec = getPatientBilans(patKey)[0] ?? getPatientNotes(patKey)[0] ?? getPatientIntermediaires(patKey)[0]
+            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
+            setBilanIntermediaireZone(zone)
+            setCurrentBilanIntermediaireId(null)
+            setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, zone))
+            setStep('bilan_intermediaire')
+          } else {
+            setSelectedBodyZone(zone)
+            setStep(action)
+          }
         }
         return (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 3000 }}
@@ -3490,24 +3737,18 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                  style={{ background: 'var(--surface)', padding: '1.5rem 1.25rem 2rem', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, boxShadow: 'var(--shadow-2xl)' }}>
               <div style={{ width: 40, height: 4, background: 'var(--border-color)', borderRadius: 2, margin: '0 auto 1rem' }} />
               <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--primary-dark)', marginBottom: 4 }}>
-                {letterZonePicker.action === 'letter' ? 'Courrier — quelle PEC ?' : 'Bilan de sortie — quelle PEC ?'}
+                {titleForAction[action]}
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
                 Ce patient a plusieurs prises en charge. Choisis celle à inclure.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {allTypes.map(t => {
+                {typesForAction.map(t => {
                   const closed = isTreatmentClosed(patKey, t)
                   return (
                     <button
                       key={t}
-                      onClick={() => {
-                        const zone = firstZoneForType(t)
-                        setSelectedBodyZone(zone)
-                        const action = letterZonePicker.action
-                        setLetterZonePicker(null)
-                        setStep(action)
-                      }}
+                      onClick={() => runAction(t)}
                       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.85rem 1rem', borderRadius: 12, border: `1.5px solid ${closed ? '#86efac' : 'var(--border-color)'}`, background: closed ? '#f0fdf4' : 'white', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'left' }}>
                       <div style={{ width: 4, height: 22, background: closed ? '#16a34a' : 'var(--primary)', borderRadius: 2 }} />
                       <span style={{ flex: 1 }}>{zoneLabelForType(t)}</span>

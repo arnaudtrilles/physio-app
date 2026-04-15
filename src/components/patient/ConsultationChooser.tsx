@@ -14,8 +14,8 @@ interface ConsultationChooserProps {
   onClose: () => void
   zones: Zone[]
   hasAnyBilan: boolean
-  onPickSeance: (bilanType: string) => void
-  onPickIntermediaire: (bilanType: string) => void
+  onPickSeance: () => void
+  onPickIntermediaire: () => void
   onPickNouveauBilan: () => void
   onPickBilanSortie: () => void
   onPickCourrier: () => void
@@ -32,50 +32,44 @@ export function ConsultationChooser({
   onPickBilanSortie,
   onPickCourrier,
 }: ConsultationChooserProps) {
+  const zonesWithBilans = zones.filter(z => z.hasBilans)
+  const multiZonesHint = (count: number, fallback: string) =>
+    count > 1 ? `${count} PEC actives — choisir la zone` : fallback
+
   return (
     <BottomSheet open={open} onClose={onClose} title="Consultation du jour" subtitle="Que souhaitez-vous faire ?">
       <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
-        {/* Section: Nouvelle séance (une par zone active) */}
+        {/* Section: Séance de suivi */}
         {zones.length > 0 && (
           <div>
             <SectionLabel>Séance de suivi</SectionLabel>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {zones.map(z => (
-                <ChoiceRow
-                  key={`seance-${z.bilanType}`}
-                  icon={<IconActivity size={18} />}
-                  accent={colors.seance}
-                  title={`+ Séance ${z.label}`}
-                  description="Noter le suivi d'une séance"
-                  onClick={() => {
-                    onPickSeance(z.bilanType)
-                    onClose()
-                  }}
-                />
-              ))}
-            </div>
+            <ChoiceRow
+              icon={<IconActivity size={18} />}
+              accent={colors.seance}
+              title="+ Séance"
+              description={multiZonesHint(zones.length, "Noter le suivi d'une séance")}
+              onClick={() => {
+                onPickSeance()
+                onClose()
+              }}
+            />
           </div>
         )}
 
         {/* Section: Bilan intermédiaire */}
-        {zones.filter(z => z.hasBilans).length > 0 && (
+        {zonesWithBilans.length > 0 && (
           <div>
             <SectionLabel>Bilan intermédiaire</SectionLabel>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {zones.filter(z => z.hasBilans).map(z => (
-                <ChoiceRow
-                  key={`interm-${z.bilanType}`}
-                  icon={<IconFileText size={18} />}
-                  accent={colors.interm}
-                  title={`Bilan interm. ${z.label}`}
-                  description="Ré-évaluation à mi-parcours"
-                  onClick={() => {
-                    onPickIntermediaire(z.bilanType)
-                    onClose()
-                  }}
-                />
-              ))}
-            </div>
+            <ChoiceRow
+              icon={<IconFileText size={18} />}
+              accent={colors.interm}
+              title="Bilan intermédiaire"
+              description={multiZonesHint(zonesWithBilans.length, 'Ré-évaluation à mi-parcours')}
+              onClick={() => {
+                onPickIntermediaire()
+                onClose()
+              }}
+            />
           </div>
         )}
 
@@ -103,7 +97,7 @@ export function ConsultationChooser({
                 icon={<IconFlag size={18} />}
                 accent={colors.success}
                 title="Bilan de sortie"
-                description="Récapitulatif final"
+                description={multiZonesHint(zonesWithBilans.length, 'Récapitulatif final')}
                 onClick={() => {
                   onPickBilanSortie()
                   onClose()
@@ -113,7 +107,7 @@ export function ConsultationChooser({
                 icon={<IconMail size={18} />}
                 accent={colors.info}
                 title="Courrier médecin"
-                description="Compte-rendu pour le prescripteur"
+                description={multiZonesHint(zonesWithBilans.length, 'Compte-rendu pour le prescripteur')}
                 onClick={() => {
                   onPickCourrier()
                   onClose()
