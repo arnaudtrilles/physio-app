@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, lazy, Suspense, Component } from 'react'
 import type { ReactNode, ErrorInfo } from 'react'
-import { useSpeechRecognition } from './hooks/useSpeechRecognition'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
@@ -43,7 +42,7 @@ const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ d
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
-import { DictableTextarea } from './components/VoiceMic'
+import { DictableInput, DictableTextarea } from './components/VoiceMic'
 import { PDFPreview } from './components/PDFPreview'
 import { DashboardStats } from './components/DashboardStats'
 import { EvolutionChart, type EvolutionPoint } from './components/EvolutionChart'
@@ -431,18 +430,9 @@ function App() {
   const photoInputRef         = useRef<HTMLInputElement>(null)
   const importDataRef    = useRef<HTMLInputElement>(null)
 
-  const { activeField, toggleListening } = useSpeechRecognition()
-
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const updateField = useCallback((field: keyof typeof formData, value: string) =>
     setFormData(prev => ({ ...prev, [field]: value })), [])
-
-  const handleVoice = useCallback((field: keyof typeof formData) => {
-    const baseText = formData[field]
-    toggleListening(field, (transcript) => {
-      setFormData(prev => ({ ...prev, [field]: baseText ? `${baseText} ${transcript}` : transcript }))
-    })
-  }, [formData, toggleListening])
 
   const goToPatientRecord = useCallback(() => {
     const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
@@ -1335,30 +1325,6 @@ STRUCTURE (n'inclure que si données présentes) :
   // testApiKey function removed — Vertex AI, no client key needed
 
   // ── Input with mic helper ─────────────────────────────────────────────────────
-  const renderInputWithMic = (label: string, field: keyof typeof formData, placeholder: string, isTextArea = false) => (
-    <div className="form-group">
-      <label>{label}</label>
-      <div className="input-with-mic">
-        {isTextArea ? (
-          <textarea placeholder={placeholder} className="input-luxe" rows={2}
-            value={formData[field]} onChange={(e) => updateField(field, e.target.value)} />
-        ) : (
-          <input type="text" placeholder={placeholder} className="input-luxe"
-            value={formData[field]} onChange={(e) => updateField(field, e.target.value)} />
-        )}
-        <button className={`mic-btn-inline ${activeField === field ? 'recording' : ''}`}
-          onClick={() => handleVoice(field)} aria-label="Dictée vocale">
-          {activeField !== field && (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="2" width="6" height="11" rx="3"/>
-              <path d="M5 10a7 7 0 0 0 14 0"/>
-              <line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
-            </svg>
-          )}
-        </button>
-      </div>
-    </div>
-  )
 
   // ── Step progress ─────────────────────────────────────────────────────────────
   const STEP_ORDER: Step[] = ['identity', 'general_info', 'bilan_zone', 'analyse_ia']
@@ -4152,8 +4118,14 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             )}
             {patientMode === 'new' && (
               <>
-                {renderInputWithMic("Nom", "nom", "Ex: Dupont")}
-                {renderInputWithMic("Prénom", "prenom", "Ex: Jean")}
+                <div className="form-group">
+                  <label>Nom</label>
+                  <input type="text" placeholder="Ex: Dupont" className="input-luxe" value={formData.nom} onChange={e => updateField('nom', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Prénom</label>
+                  <input type="text" placeholder="Ex: Jean" className="input-luxe" value={formData.prenom} onChange={e => updateField('prenom', e.target.value)} />
+                </div>
                 <div className="form-group">
                   <label>Date de naissance</label>
                   <input type="date" className="input-luxe" value={formData.dateNaissance} onChange={(e) => updateField('dateNaissance', e.target.value)} />
@@ -4198,11 +4170,26 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area">
-            {renderInputWithMic("Activité professionnelle", "profession", "Ex: Employé de bureau")}
-            {renderInputWithMic("Activité physique / sportive", "sport", "Ex: Course à pied…")}
-            {renderInputWithMic("Antécédents familiaux", "famille", "Diabète, hypertension…", true)}
-            {renderInputWithMic("Antécédents chirurgicaux", "chirurgie", "Opérations passées…", true)}
-            {renderInputWithMic("Notes complémentaires", "notes", "Précisions…", true)}
+            <div className="form-group">
+              <label>Activité professionnelle</label>
+              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+            </div>
+            <div className="form-group">
+              <label>Activité physique / sportive</label>
+              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+            </div>
+            <div className="form-group">
+              <label>Antécédents familiaux</label>
+              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+            </div>
+            <div className="form-group">
+              <label>Antécédents chirurgicaux</label>
+              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+            </div>
+            <div className="form-group">
+              <label>Notes complémentaires</label>
+              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+            </div>
           </div>
           <div className="fixed-bottom">
             <button
