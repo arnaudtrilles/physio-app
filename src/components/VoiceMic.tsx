@@ -272,8 +272,8 @@ function useAutoResize(ref: React.RefObject<HTMLTextAreaElement | null>, value: 
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
+    el.style.height = '0'
+    el.style.height = `${Math.max(el.scrollHeight, 38)}px`
   }, [ref, value])
 }
 
@@ -333,7 +333,7 @@ export function DictableInput({ inputStyle: is, value, onChange, placeholder, ..
         onChange={e => onChange({ target: { value: e.target.value } } as React.ChangeEvent<HTMLInputElement>)}
         placeholder={placeholder}
         rows={1}
-        style={{ ...is, paddingRight: 36, resize: 'none', overflow: 'hidden', lineHeight: '1.5', minHeight: 44 }}
+        style={{ ...is, paddingRight: 36, resize: 'none', overflow: 'hidden', boxSizing: 'border-box' }}
       />
       <MicButton onClick={start} style={{ position: 'absolute', right: 4, top: 8 }} />
     </div>
@@ -387,7 +387,7 @@ export function DictableTextarea({ textareaStyle: ts, value, onChange, placehold
 
   return (
     <div style={{ position: 'relative' }}>
-      <textarea {...rest} ref={taRef} value={value} onChange={onChange} placeholder={placeholder} style={{ ...ts, paddingRight: 36, resize: 'none', overflow: 'hidden' }} />
+      <textarea {...rest} ref={taRef} value={value} onChange={onChange} placeholder={placeholder} style={{ ...ts, paddingRight: 36, resize: 'none', overflow: 'hidden', boxSizing: 'border-box' }} />
       <MicButton onClick={start} style={{ position: 'absolute', right: 4, top: 8 }} />
     </div>
   )
