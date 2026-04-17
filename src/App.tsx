@@ -391,6 +391,10 @@ function App() {
   const [deletingNoteSeanceId, setDeletingNoteSeanceId] = useState<number | null>(null)
   const [openAnalyseNoteIds, setOpenAnalyseNoteIds] = useState<Set<number>>(new Set())
   const [openNoteDetailIds, setOpenNoteDetailIds] = useState<Set<number>>(new Set())
+  // Timeline compacte : une seule ligne dépliée à la fois (clé = `bilan-${id}` | `note-${id}` | `interm-${id}`).
+  // Ouvrir une autre ligne replie la courante — évite le scroll infini quand le patient a beaucoup d'éléments.
+  const [openTimelineKey, setOpenTimelineKey] = useState<string | null>(null)
+  const toggleTimeline = (key: string) => setOpenTimelineKey(k => k === key ? null : key)
   const [showAddPatientChoice, setShowAddPatientChoice] = useState(false)
   const [deletingPatientKey, setDeletingPatientKey] = useState<string | null>(null)
   // ── UI state for Command Center refonte ───────────────────────────────────
@@ -2298,16 +2302,23 @@ STRUCTURE (n'inclure que si données présentes) :
                           const dColor  = delta === null ? '' : delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8'
 
                           const incomplet = record.status === 'incomplet'
+                          const bilanKey = `bilan-${record.id}`
+                          const bilanOpen = openTimelineKey === bilanKey
                           return (
-                            <div key={record.id} style={{ background: 'var(--surface)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid #93c5fd', boxShadow: 'var(--shadow-sm)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem', flexWrap: 'wrap' }}>
-                                    <span style={{ fontWeight: 600, color: '#1e40af', fontSize: '0.95rem' }}>Bilan N°{index + 1}</span>
+                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? '#93c5fd' : '#dbeafe'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
+                              <div
+                                role="button"
+                                onClick={() => toggleTimeline(bilanKey)}
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0.55rem 0.9rem', cursor: 'pointer' }}
+                              >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                    <span style={{ fontWeight: 700, color: '#1e40af', fontSize: '0.88rem' }}>Bilan n°{index + 1}</span>
                                     {editingLabelBilanId === record.id ? (
                                       <input
                                         autoFocus
                                         value={labelDraft}
+                                        onClick={e => e.stopPropagation()}
                                         onChange={e => setLabelDraft(e.target.value)}
                                         onBlur={() => {
                                           const trimmed = labelDraft.trim()
@@ -2319,47 +2330,47 @@ STRUCTURE (n'inclure que si données présentes) :
                                           if (e.key === 'Escape') { setEditingLabelBilanId(null) }
                                         }}
                                         placeholder="Ex : tendinopathie coiffe des rotateurs"
-                                        style={{ flex: 1, minWidth: 140, fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white' }}
+                                        style={{ flex: 1, minWidth: 120, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white' }}
                                       />
                                     ) : (
                                       <span
-                                        onClick={() => { setEditingLabelBilanId(record.id); setLabelDraft(record.customLabel ?? '') }}
+                                        onClick={e => { e.stopPropagation(); setEditingLabelBilanId(record.id); setLabelDraft(record.customLabel ?? '') }}
                                         title={record.customLabel ? 'Cliquer pour modifier' : 'Cliquer pour ajouter un titre'}
-                                        style={{ fontSize: '0.85rem', fontWeight: 500, color: record.customLabel ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: record.customLabel ? 'normal' : 'italic', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                        style={{ fontSize: '0.78rem', fontWeight: 500, color: record.customLabel ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: record.customLabel ? 'normal' : 'italic', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
                                       >
                                         {record.customLabel ? `: ${record.customLabel}` : (
                                           <>
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                            ajouter un titre
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                            titre
                                           </>
                                         )}
                                       </span>
                                     )}
-                                    {!incomplet && record.analyseIA && (
-                                      <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Analysé</span>
-                                    )}
                                   </div>
-                                  <div style={{ fontSize: '0.8rem', color: '#1d4ed8' }}>
-                                    {record.dateBilan}{currEvn != null ? ` · EVN : ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
+                                  <div style={{ fontSize: '0.72rem', color: '#3b82f6', marginTop: 1 }}>
+                                    {record.dateBilan}{currEvn != null ? ` · EVN ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
                                   </div>
                                 </div>
-                                {incomplet ? (
-                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#991b1b', flexShrink: 0, paddingTop: 2 }}>Incomplet</span>
-                                ) : delta !== null ? (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: '0.82rem', color: dColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
-                                    {delta > 0 ? (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                                    ) : delta < 0 ? (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                    ) : (
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                    )}
-                                    {Math.abs(delta)}%
-                                  </span>
-                                ) : null}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                  {incomplet ? (
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#991b1b' }}>Incomplet</span>
+                                  ) : delta !== null ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.76rem', color: dColor, letterSpacing: '-0.01em' }}>
+                                      {delta > 0 ? (
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                      ) : delta < 0 ? (
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                      ) : (
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                      )}
+                                      {Math.abs(delta)}%
+                                    </span>
+                                  ) : null}
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                                </div>
                               </div>
-                              {incomplet ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: '0.75rem' }}>
+                              {bilanOpen && (incomplet ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
                                   <button
                                     style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                                     onClick={() => {
@@ -2385,7 +2396,12 @@ STRUCTURE (n'inclure que si données présentes) :
                                   </div>
                                 </div>
                               ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: '0.75rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
+                                  {record.analyseIA && (
+                                    <div style={{ marginBottom: 2 }}>
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Analysé</span>
+                                    </div>
+                                  )}
                                   {/* Rangée 1 : Bilan PDF + Analyse */}
                                   <div style={{ display: 'flex', gap: 6 }}>
                                     <button
@@ -2461,7 +2477,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                     </button>
                                   </div>
                                 </div>
-                              )}
+                              ))}
                             </div>
                           )
                         })}
@@ -2491,19 +2507,32 @@ STRUCTURE (n'inclure que si données présentes) :
                                         const note = item.rec
                                         const ZONE_LABELS: Record<string, string> = { epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche', cervical: 'Cervical', lombaire: 'Lombaire', generique: 'Général', geriatrique: 'Gériatrie' }
                                         const zt = note.bilanType ?? getBilanType(note.zone ?? '')
+                                        const noteKey = `note-${note.id}`
+                                        const noteOpen = openTimelineKey === noteKey
                                         return (
-                                          <div key={`note-${note.id}`} style={{ background: 'var(--surface)', borderRadius: 12, border: '1.5px solid #ddd6fe', padding: '0.75rem', boxShadow: '0 1px 3px rgba(109,40,217,0.06)' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                                              <div>
-                                                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#5b21b6' }}>Séance n°{note.numSeance}</span>
+                                          <div key={`note-${note.id}`} style={{ background: 'var(--surface)', borderRadius: 12, border: `1.5px solid ${noteOpen ? '#ddd6fe' : '#ede9fe'}`, boxShadow: noteOpen ? '0 1px 3px rgba(109,40,217,0.06)' : 'none', overflow: 'hidden' }}>
+                                            <div
+                                              role="button"
+                                              onClick={() => toggleTimeline(noteKey)}
+                                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '0.55rem 0.75rem', cursor: 'pointer' }}
+                                            >
+                                              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#5b21b6' }}>Séance n°{note.numSeance}</span>
+                                                <span style={{ fontSize: '0.72rem', color: '#6d28d9' }}>{note.dateSeance}</span>
                                               </div>
-                                              <div style={{ fontSize: '0.78rem', color: '#6d28d9' }}>{note.dateSeance}</div>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                                {note.data.eva != null && note.data.eva !== '' && <span style={{ fontSize: '0.66rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', background: '#ede9fe', color: '#6d28d9' }}>EVA {note.data.eva}</span>}
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: noteOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                                              </div>
                                             </div>
+                                            {noteOpen && (
+                                            <div style={{ padding: '0 0.75rem 0.75rem' }}>
+                                            {(note.data.evolution || note.data.tolerance) && (
                                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-                                              {note.data.eva && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: '#ede9fe', color: '#6d28d9' }}>EVA {note.data.eva}/10</span>}
                                               {note.data.evolution && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.evolution === 'Amélioré' ? '#dcfce7' : note.data.evolution === 'Aggravé' ? '#fef2f2' : '#f3f4f6', color: note.data.evolution === 'Amélioré' ? '#16a34a' : note.data.evolution === 'Aggravé' ? '#dc2626' : '#6b7280' }}>{note.data.evolution}</span>}
                                               {note.data.tolerance && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.tolerance === 'Bien toléré' ? '#dcfce7' : '#fffbeb', color: note.data.tolerance === 'Bien toléré' ? '#16a34a' : '#d97706' }}>{note.data.tolerance}</span>}
                                             </div>
+                                            )}
                                             {(() => {
                                               const hasDetail = note.data.interventions.length > 0 || note.data.detailDosage || note.data.noteSubjective || note.data.toleranceDetail || note.data.prochaineEtape.length > 0 || note.data.notePlan
                                               if (!hasDetail) return null
@@ -2669,6 +2698,8 @@ STRUCTURE (n'inclure que si données présentes) :
                                                 </button>
                                               </div>
                                             </div>
+                                            </div>
+                                            )}
                                           </div>
                                         )
                                       }
@@ -2688,30 +2719,40 @@ STRUCTURE (n'inclure que si données présentes) :
                                         ? improvDelta(baseEvn, evnActNum) : null
                                       const sColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : score < 0 ? '#dc2626' : '#94a3b8'
 
+                                      const intermKey = `interm-${rec.id}`
+                                      const intermOpen = openTimelineKey === intermKey
                                       return (
-                                      <div key={rec.id} style={{ background: 'var(--surface)', border: '1.5px solid #fdba74', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
-                                          <div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.1rem' }}>
-                                              <span style={{ fontWeight: 600, color: '#92400e', fontSize: '0.92rem' }}>Intermédiaire N°{idx + 1}</span>
-                                              {rec.status === 'incomplet' && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#991b1b' }}>Incomplet</span>}
+                                      <div key={rec.id} style={{ background: 'var(--surface)', border: `1.5px solid ${intermOpen ? '#fdba74' : '#fed7aa'}`, borderRadius: 'var(--radius-lg)', boxShadow: intermOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
+                                        <div
+                                          role="button"
+                                          onClick={() => toggleTimeline(intermKey)}
+                                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0.55rem 0.9rem', cursor: 'pointer' }}
+                                        >
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                              <span style={{ fontWeight: 700, color: '#92400e', fontSize: '0.85rem' }}>Intermédiaire n°{idx + 1}</span>
+                                              {rec.status === 'incomplet' && <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#991b1b' }}>Incomplet</span>}
                                             </div>
-                                            <div style={{ fontSize: '0.78rem', color: '#c2410c' }}>{rec.dateBilan}</div>
+                                            <div style={{ fontSize: '0.72rem', color: '#c2410c', marginTop: 1 }}>{rec.dateBilan}</div>
                                           </div>
-                                          {score !== null && (
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: '0.8rem', color: sColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
-                                              {score > 0 ? (
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                                              ) : score < 0 ? (
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                              ) : (
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                              )}
-                                              {Math.abs(score)}%
-                                            </span>
-                                          )}
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                            {score !== null && (
+                                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.76rem', color: sColor, letterSpacing: '-0.01em' }}>
+                                                {score > 0 ? (
+                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                                ) : score < 0 ? (
+                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                                ) : (
+                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                                )}
+                                                {Math.abs(score)}%
+                                              </span>
+                                            )}
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fdba74" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: intermOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                                          </div>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {intermOpen && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
                                           {rec.status === 'incomplet' ? (
                                             <>
                                               <button
@@ -2818,6 +2859,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                             </>
                                           )}
                                         </div>
+                                        )}
                                       </div>
                                       )
                                       })()

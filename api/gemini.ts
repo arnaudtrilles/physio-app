@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 
 // Node.js Serverless — 60s timeout on Hobby plan (Edge was limited to 30s)
 export const config = { maxDuration: 60 }
@@ -43,8 +45,54 @@ async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: n
   }
 }
 
+/**
+ * Dev-only : `vercel dev` ne propage PAS les variables ajoutées manuellement
+ * dans `.env.local` (il ne relaie que celles déclarées sur Vercel cloud). Pour
+ * contourner, on lit directement le fichier `.env.local` au premier appel et
+ * on récupère la clé de service account si elle y est. En production, ce
+ * fichier n'existe pas et cette branche est court-circuitée.
+ */
+let localEnvFallbackCache: string | null | undefined = undefined
+function loadServiceAccountFromLocalEnv(): string | null {
+  if (localEnvFallbackCache !== undefined) return localEnvFallbackCache
+  try {
+    const envPath = path.join(process.cwd(), '.env.local')
+    if (!fs.existsSync(envPath)) return (localEnvFallbackCache = null)
+    const content = fs.readFileSync(envPath, 'utf8')
+    // Cherche GCP_SERVICE_ACCOUNT_KEY_B64=<base64> (sans quotes)
+    const b64Match = content.match(/^GCP_SERVICE_ACCOUNT_KEY_B64=([A-Za-z0-9+/=]+)$/m)
+    if (b64Match) {
+      const decoded = Buffer.from(b64Match[1], 'base64').toString('utf8')
+      JSON.parse(decoded) // validate
+      return (localEnvFallbackCache = decoded)
+    }
+    // Fallback : GCP_SERVICE_ACCOUNT_KEY='<raw json>'
+    const rawMatch = content.match(/^GCP_SERVICE_ACCOUNT_KEY='([^']+)'$/m)
+    if (rawMatch) {
+      JSON.parse(rawMatch[1])
+      return (localEnvFallbackCache = rawMatch[1])
+    }
+    return (localEnvFallbackCache = null)
+  } catch (e) {
+    console.error('[gemini] .env.local local fallback read failed:', (e as Error).message)
+    return (localEnvFallbackCache = null)
+  }
+}
+
 async function fetchNewToken(): Promise<string> {
-  const raw = process.env.GCP_SERVICE_ACCOUNT_KEY
+  let raw = process.env.GCP_SERVICE_ACCOUNT_KEY
+  if (!raw && process.env.GCP_SERVICE_ACCOUNT_KEY_B64) {
+    try {
+      raw = Buffer.from(process.env.GCP_SERVICE_ACCOUNT_KEY_B64, 'base64').toString('utf8')
+    } catch (e) {
+      throw new Error('GCP_SERVICE_ACCOUNT_KEY_B64 decode failed: ' + (e as Error).message)
+    }
+  }
+  // Dev local : si rien dans process.env, lit .env.local direct
+  if (!raw) {
+    const fromFile = loadServiceAccountFromLocalEnv()
+    if (fromFile) raw = fromFile
+  }
   if (!raw) throw new Error('GCP_SERVICE_ACCOUNT_KEY not configured')
 
   let sa: { client_email: string; private_key: string }

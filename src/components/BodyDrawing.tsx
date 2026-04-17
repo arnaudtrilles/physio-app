@@ -8,7 +8,7 @@ export const BODY_CHART_W = 1100
 export const BODY_CHART_H = 920
 
 const COLORS = ['#dc2626', '#2563eb', '#16a34a', '#7c3aed', '#111827']
-type Tool = 'pen' | 'eraser'
+type Tool = 'pen' | 'eraser' | 'pan'
 
 interface BodyDrawingProps {
   value: string
@@ -106,6 +106,7 @@ export function BodyDrawing({ value, onChange }: BodyDrawingProps) {
   }
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (tool === 'pan') return // laisse le conteneur scroller nativement
     if (e.pointerType === 'mouse' && e.button !== 0) return
     const canvas = canvasRef.current
     if (!canvas) return
@@ -190,47 +191,61 @@ export function BodyDrawing({ value, onChange }: BodyDrawingProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Toolbar */}
+      {/* Toolbar — 2 rangées compactes, hauteurs uniformes */}
       <div style={{
-        display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
-        padding: '8px 10px', background: 'var(--secondary)',
+        display: 'flex', flexDirection: 'column', gap: 6,
+        padding: 6, background: 'var(--secondary)',
         borderRadius: 10, border: '1px solid var(--border-color)',
       }}>
-        <button type="button" onClick={() => setTool('pen')} style={toolBtn(tool === 'pen')}>
-          <PenIcon /> Stylo
-        </button>
-        <button type="button" onClick={() => setTool('eraser')} style={toolBtn(tool === 'eraser')}>
-          <EraserIcon /> Gomme
-        </button>
-        <Divider />
-        {COLORS.map(c => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => { setColor(c); setTool('pen') }}
-            aria-label={`Couleur ${c}`}
-            style={{
-              width: 24, height: 24, borderRadius: '50%', background: c,
-              border: color === c && tool === 'pen' ? '3px solid var(--primary-dark)' : '1px solid rgba(0,0,0,0.15)',
-              cursor: 'pointer', padding: 0,
-            }}
-          />
-        ))}
-        <Divider />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          Épaisseur
-          <input type="range" min={2} max={14} value={thickness}
+        {/* Rangée 1 : outils (flex:1) + couleurs */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 0 }}>
+            <button type="button" onClick={() => setTool('pen')} style={toolBtn(tool === 'pen')} aria-label="Stylo">
+              <PenIcon />
+            </button>
+            <button type="button" onClick={() => setTool('eraser')} style={toolBtn(tool === 'eraser')} aria-label="Gomme">
+              <EraserIcon />
+            </button>
+            <button type="button" onClick={() => setTool('pan')} style={toolBtn(tool === 'pan')} aria-label="Déplacer">
+              <HandIcon />
+            </button>
+          </div>
+          <Divider />
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+            {COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => { setColor(c); setTool('pen') }}
+                aria-label={`Couleur ${c}`}
+                style={{
+                  width: 22, height: 22, borderRadius: '50%', background: c,
+                  border: color === c && tool === 'pen' ? '3px solid var(--primary-dark)' : '1px solid rgba(0,0,0,0.15)',
+                  cursor: 'pointer', padding: 0, flexShrink: 0,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        {/* Rangée 2 : épaisseur · zoom · annuler/effacer */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <input
+            type="range" min={2} max={14} value={thickness}
             onChange={e => setThickness(Number(e.target.value))}
-            style={{ width: 70 }} />
-        </label>
-        <Divider />
-        <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} style={smallBtn}>−</button>
-        <span style={{ fontSize: '0.75rem', minWidth: 42, textAlign: 'center', fontWeight: 600, color: 'var(--text-main)' }}>{Math.round(zoom * 100)}%</span>
-        <button type="button" onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} style={smallBtn}>+</button>
-        <button type="button" onClick={() => setZoom(1)} style={smallBtn} aria-label="Zoom 100%">⟲</button>
-        <Divider />
-        <button type="button" onClick={undo} style={smallBtn}>Annuler</button>
-        <button type="button" onClick={clearAll} style={{ ...smallBtn, color: '#dc2626', borderColor: '#fecaca' }}>Effacer tout</button>
+            aria-label="Épaisseur"
+            style={{ width: 72, flexShrink: 0 }}
+          />
+          <Divider />
+          <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} style={iconBtn} aria-label="Zoom −">−</button>
+          <span style={{ fontSize: '0.72rem', minWidth: 38, textAlign: 'center', fontWeight: 600, color: 'var(--text-main)' }}>{Math.round(zoom * 100)}%</span>
+          <button type="button" onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} style={iconBtn} aria-label="Zoom +">+</button>
+          <button type="button" onClick={() => setZoom(1)} style={iconBtn} aria-label="Zoom 100%">⟲</button>
+          <div style={{ flex: 1 }} />
+          <button type="button" onClick={undo} style={iconBtn} aria-label="Annuler">↶</button>
+          <button type="button" onClick={clearAll} style={{ ...iconBtn, color: '#dc2626', borderColor: '#fecaca' }} aria-label="Effacer tout">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>
       </div>
 
       {/* Légende symboles EBP */}
@@ -287,8 +302,8 @@ export function BodyDrawing({ value, onChange }: BodyDrawingProps) {
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
-              touchAction: 'none',
-              cursor: tool === 'eraser' ? 'cell' : 'crosshair',
+              touchAction: tool === 'pan' ? 'pan-x pan-y' : 'none',
+              cursor: tool === 'pan' ? 'grab' : tool === 'eraser' ? 'cell' : 'crosshair',
             }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -327,11 +342,25 @@ function EraserIcon() {
   )
 }
 
+function HandIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+      <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+      <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </svg>
+  )
+}
+
 const toolBtn = (active: boolean): React.CSSProperties => ({
+  flex: 1,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 5,
-  padding: '6px 10px',
+  justifyContent: 'center',
+  height: 32,
+  minWidth: 0,
+  padding: 0,
   fontSize: '0.78rem',
   fontWeight: 600,
   background: active ? 'var(--primary)' : 'var(--surface)',
@@ -341,15 +370,21 @@ const toolBtn = (active: boolean): React.CSSProperties => ({
   cursor: 'pointer',
 })
 
-const smallBtn: React.CSSProperties = {
-  padding: '6px 8px',
-  fontSize: '0.75rem',
+const iconBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  height: 30,
+  minWidth: 30,
+  padding: '0 6px',
+  fontSize: '0.85rem',
   fontWeight: 600,
   background: 'var(--surface)',
   color: 'var(--text-main)',
   border: '1px solid var(--border-color)',
-  borderRadius: 8,
+  borderRadius: 7,
   cursor: 'pointer',
+  flexShrink: 0,
 }
 
 /**
