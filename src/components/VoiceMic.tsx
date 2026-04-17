@@ -333,7 +333,7 @@ export function DictableInput({ inputStyle: is, value, onChange, placeholder, ..
         onChange={e => onChange({ target: { value: e.target.value } } as React.ChangeEvent<HTMLInputElement>)}
         placeholder={placeholder}
         rows={1}
-        style={{ ...is, paddingRight: 36, resize: 'none', overflow: 'hidden', lineHeight: '1.4' }}
+        style={{ ...is, paddingRight: 36, resize: 'none', overflow: 'hidden', lineHeight: '1.5', minHeight: 44 }}
       />
       <MicButton onClick={start} style={{ position: 'absolute', right: 4, top: 8 }} />
     </div>
