@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { Chrono } from './Chrono'
@@ -107,9 +108,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   const _d = (init.douleur as Record<string, unknown>) ?? {}
   const [douleurLoc, setDouleurLoc] = useState((_d.localisation as string) ?? '')
   const [douleurLocSecondaire, setDouleurLocSecondaire] = useState((_d.localisationSecondaire as string) ?? '')
-  const [evnRepos, setEvnRepos] = useState((_d.evnRepos as string) ?? '')
-  const [evnMvt, setEvnMvt] = useState((_d.evnMvt as string) ?? '')
-  const [echelle, setEchelle] = useState((_d.echelle as string) ?? 'EN')
+  const [evaMoyenne, setEvaMoyenne] = useState((_d.evaMoyenne as string) ?? (_d.evnRepos as string) ?? '')
   const [derouillage, setDerouillage] = useState((_d.derouillageMatinal as string) ?? '')
   const [derouillageDuree, setDerouillageDuree] = useState((_d.derouillageTemps as string) ?? '')
   const [retentissement, setRetentissement] = useState((_d.retentissement as string) ?? '')
@@ -200,7 +199,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
       redFlags: rf,
       douleur: {
         localisation: douleurLoc, localisationSecondaire: douleurLocSecondaire,
-        evnRepos, evnMvt, echelle,
+        evaMoyenne,
         derouillageMatinal: derouillage, derouillageTemps: derouillageDuree,
         retentissement,
       },
@@ -243,9 +242,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
       if (Object.keys(rfd).length > 0)  setRf(p => ({ ...p, ...rfd as Record<string, string> }))
       if (d.localisation !== undefined)           setDouleurLoc(d.localisation as string)
       if (d.localisationSecondaire !== undefined) setDouleurLocSecondaire(d.localisationSecondaire as string)
-      if (d.evnRepos !== undefined)           setEvnRepos(d.evnRepos as string)
-      if (d.evnMvt !== undefined)             setEvnMvt(d.evnMvt as string)
-      if (d.echelle !== undefined)            setEchelle(d.echelle as string)
+      if (d.evaMoyenne !== undefined)          setEvaMoyenne(d.evaMoyenne as string)
       if (d.derouillageMatinal !== undefined) setDerouillage(d.derouillageMatinal as string)
       if (d.derouillageTemps !== undefined)   setDerouillageDuree(d.derouillageTemps as string)
       if (d.retentissement !== undefined)     setRetentissement(d.retentissement as string)
@@ -324,10 +321,10 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                   <ChoixMulti options={['Aucune', 'Auxiliaire de vie', 'Famille', 'Infirmier(e)', 'Kinésithérapeute', 'Aide-soignant(e)']} values={aidesHum} onChange={setAidesHum} />
 
                   <label style={lblStyle}>Accompagnant présent à la séance</label>
-                  <input value={accompagnant} onChange={e => setAccompagnant(e.target.value)} placeholder="Conjoint, enfant, aidant…" style={inputStyle} />
+                  <DictableInput value={accompagnant} onChange={e => setAccompagnant(e.target.value)} placeholder="Conjoint, enfant, aidant…" inputStyle={inputStyle} />
 
                   <label style={lblStyle}>Ancienne profession (utile pour personnaliser la PEC)</label>
-                  <input value={profession} onChange={e => setProfession(e.target.value)} placeholder="Ex : agriculteur, enseignante, ouvrier…" style={inputStyle} />
+                  <DictableInput value={profession} onChange={e => setProfession(e.target.value)} placeholder="Ex : agriculteur, enseignante, ouvrier…" inputStyle={inputStyle} />
                 </>
               )}
 
@@ -345,11 +342,11 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                         </div>
                         <div>
                           <label style={lblStyle}>Circonstances</label>
-                          <input value={chutesCirc} onChange={e => setChutesCirc(e.target.value)} placeholder="Salle de bain, la nuit, sur le tapis…" style={{ ...inputStyle, marginBottom: 0 }} />
+                          <DictableInput value={chutesCirc} onChange={e => setChutesCirc(e.target.value)} placeholder="Salle de bain, la nuit, sur le tapis…" inputStyle={{ ...inputStyle, marginBottom: 0 }} />
                         </div>
                       </div>
                       <label style={lblStyle}>Conséquences (fracture, hospitalisation, hématome…)</label>
-                      <textarea value={chuteAvecCons} onChange={e => setChuteAvecCons(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={chuteAvecCons} onChange={e => setChuteAvecCons(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
 
@@ -373,28 +370,22 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
               {sec.id === 'douleur' && (
                 <>
                   <label style={lblStyle}>Localisation principale</label>
-                  <input value={douleurLoc} onChange={e => setDouleurLoc(e.target.value)} placeholder="Ex : Hanche droite, rachis lombaire…" style={inputStyle} />
+                  <DictableInput value={douleurLoc} onChange={e => setDouleurLoc(e.target.value)} placeholder="Ex : Hanche droite, rachis lombaire…" inputStyle={inputStyle} />
 
                   <label style={lblStyle}>Localisations secondaires</label>
-                  <textarea value={douleurLocSecondaire} onChange={e => setDouleurLocSecondaire(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Autres zones douloureuses (genou gauche, épaule droite, nuque…)" />
-
-                  <label style={lblStyle}>Échelle utilisée</label>
-                  <ChoixGroup options={['EN', 'EVA', 'Algoplus', 'EVS', 'Doloplus-2']} value={echelle} onChange={setEchelle} />
+                  <DictableTextarea value={douleurLocSecondaire} onChange={e => setDouleurLocSecondaire(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Autres zones douloureuses (genou gauche, épaule droite, nuque…)" />
 
                   <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>EVA (0-10)</div>
-                    <EVASlider label="EVA au repos" value={evnRepos} onChange={setEvnRepos} compact />
-                    <div style={{ height: 8 }} />
-                    <EVASlider label="EVA au mouvement" value={evnMvt} onChange={setEvnMvt} compact />
+                    <EVASlider label="EVA moyenne (0-10)" value={evaMoyenne} onChange={setEvaMoyenne} compact />
                   </div>
 
                   <OuiNon label="Dérouillage matinal" value={derouillage} onChange={setDerouillage} />
                   {derouillage === 'oui' && (
-                    <input value={derouillageDuree} onChange={e => setDerouillageDuree(e.target.value)} placeholder="Durée (ex: 30 min)" style={{ ...inputStyle, marginTop: 6 }} />
+                    <DictableInput value={derouillageDuree} onChange={e => setDerouillageDuree(e.target.value)} placeholder="Durée (ex: 30 min)" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                   )}
 
                   <label style={lblStyle}>Retentissement de la douleur sur l'autonomie</label>
-                  <textarea value={retentissement} onChange={e => setRetentissement(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Limite la marche, empêche le sommeil, gêne la toilette…" />
+                  <DictableTextarea value={retentissement} onChange={e => setRetentissement(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Limite la marche, empêche le sommeil, gêne la toilette…" />
                 </>
               )}
 
@@ -460,7 +451,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                   <p style={sectionTitleStyle}>Morphostatique</p>
                   <ChoixMulti options={['Hypercyphose dorsale', 'Flexum genoux', 'Flexum hanches', 'Camptocormie', 'Inégalité de longueur', 'Antéprojection tête']} values={morfho} onChange={setMorfho} />
                   <label style={lblStyle}>Notes posturales</label>
-                  <textarea value={postureNotes} onChange={e => setPostureNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                  <DictableTextarea value={postureNotes} onChange={e => setPostureNotes(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
 
                   <p style={{ ...sectionTitleStyle, marginTop: 14 }}>Mobilité — focus fonctionnel</p>
                   <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.1rem 0.75rem', marginBottom: 12 }}>
@@ -474,7 +465,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                   <label style={lblStyle}>Force musculaire globale (impression clinique)</label>
                   <ChoixGroup options={['Conservée', 'Diminution modérée', 'Faiblesse marquée', 'Sarcopénie']} value={forceGlobale} onChange={setForceGlobale} />
                   <label style={lblStyle}>Trophicité musculaire / amyotrophie</label>
-                  <input value={trophicite} onChange={e => setTrophicite(e.target.value)} placeholder="Localisation amyotrophie, œdèmes…" style={inputStyle} />
+                  <DictableInput value={trophicite} onChange={e => setTrophicite(e.target.value)} placeholder="Localisation amyotrophie, œdèmes…" inputStyle={inputStyle} />
                 </>
               )}
 
@@ -626,7 +617,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                   {!coreMode && (
                     <>
                       <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
-                      <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="MMSE, Barthel, Norton, autres…" />
+                      <DictableTextarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="MMSE, Barthel, Norton, autres…" />
                     </>
                   )}
                 </>

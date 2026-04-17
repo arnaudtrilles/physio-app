@@ -5,9 +5,10 @@ interface SmartObjectifsProps {
   objectifs: SmartObjectif[]
   patientKey: string
   onUpdate: (objectifs: SmartObjectif[]) => void
+  maxObjectifs?: number
 }
 
-export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientKey, onUpdate }: SmartObjectifsProps) {
+export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientKey, onUpdate, maxObjectifs }: SmartObjectifsProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [titre, setTitre] = useState('')
   const [cible, setCible] = useState('')
@@ -57,8 +58,10 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
   const statusLabel = (s: SmartObjectif['status']) =>
     s === 'atteint' ? 'Atteint' : s === 'non_atteint' ? 'Non atteint' : 'En cours'
 
+  const canAdd = maxObjectifs == null || enCours.length < maxObjectifs
+
   if (patientObjectifs.length === 0 && !showAdd) {
-    return (
+    return canAdd ? (
       <div>
         <button
           onClick={() => setShowAdd(true)}
@@ -66,7 +69,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
           <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Ajouter un objectif SMART
         </button>
       </div>
-    )
+    ) : null
   }
 
   return (
@@ -180,12 +183,12 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
             </button>
           </div>
         </div>
-      ) : (
+      ) : canAdd ? (
         <button onClick={() => setShowAdd(true)}
           style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1.5px dashed #fde68a', background: 'transparent', color: '#d97706', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
           + Ajouter un objectif
         </button>
-      )}
+      ) : null}
     </div>
   )
 })

@@ -43,6 +43,7 @@ const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ d
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
+import { DictableTextarea } from './components/VoiceMic'
 import { PDFPreview } from './components/PDFPreview'
 import { DashboardStats } from './components/DashboardStats'
 import { EvolutionChart, type EvolutionPoint } from './components/EvolutionChart'
@@ -263,6 +264,8 @@ function SwipeToDelete({ children, onDelete, disabled = false }: {
 
 function App() {
   const [step, setStep] = useState<Step>('dashboard')
+  const [initialLetterType, setInitialLetterType] = useState<string | null>(null)
+  const [bilanSortieForLetter, setBilanSortieForLetter] = useState<Record<string, unknown> | null>(null)
   const { toasts, showToast, removeToast } = useToast()
   // ── Persistent state (IndexedDB — no size limit) ───────────────────────────
   const [db, setDb, dbLoaded] = useIndexedDB<BilanRecord[]>('physio_db', DEMO_DB)
@@ -817,6 +820,11 @@ function App() {
       zone,
       closedAt: new Date().toISOString(),
     }])
+  }
+
+  const reopenTreatment = (_patientKey: string, _bilanType: BilanType, ep: TreatmentEpisode) => {
+    if (!ep.closure) return
+    setDbClosedTreatments(prev => prev.filter(c => c.id !== ep.closure!.id))
   }
 
   /** Suppression définitive d'un épisode clôturé : retire tous les bilans, interms, notes,
@@ -1636,20 +1644,46 @@ STRUCTURE (n'inclure que si données présentes) :
                         onBack={() => setSelectedPatient(null)}
                       />
                       <PatientHeroCard
-                        totalSeances={totalSeancesForHero}
-                        totalPrescribed={totalPrescribedForHero}
-                        prescripteur={rxListForHero[rxListForHero.length - 1]?.prescripteur}
-                        prescriptionOverLimit={totalPrescribedForHero > 0 && totalSeancesForHero > totalPrescribedForHero}
-                        lastEVA={lastEvaForHero}
-                        lastEVN={lastEvnForHero}
+                        activeZones={(() => {
+                          const zoneMap = new Map<string, number>()
+                          const allNotes = getPatientNotes(selectedPatient ?? '')
+                          const allInterms = getPatientIntermediaires(selectedPatient ?? '')
+                          for (const b of bilans) {
+                            const bt = b.bilanType ?? getBilanType(b.zone ?? '')
+                            if (isTreatmentClosed(selectedPatient ?? '', bt as BilanType)) continue
+                            zoneMap.set(bt, (zoneMap.get(bt) ?? 0) + 1)
+                          }
+                          for (const n of allNotes) {
+                            const bt = n.bilanType ?? getBilanType(n.zone ?? '')
+                            if (isTreatmentClosed(selectedPatient ?? '', bt as BilanType)) continue
+                            zoneMap.set(bt, (zoneMap.get(bt) ?? 0) + 1)
+                          }
+                          for (const i of allInterms) {
+                            const bt = i.bilanType ?? getBilanType(i.zone ?? '')
+                            if (isTreatmentClosed(selectedPatient ?? '', bt as BilanType)) continue
+                            zoneMap.set(bt, (zoneMap.get(bt) ?? 0) + 1)
+                          }
+                          return Array.from(zoneMap.entries()).map(([bt, count]) => ({
+                            label: bt === 'generique' && genericCustomLabel ? genericCustomLabel : (ZONE_LABELS_SHORT[bt] ?? bt),
+                            count,
+                          }))
+                        })()}
                         lastConsultation={lastNoteForHero?.dateSeance ?? lastBilanForHero?.dateBilan ?? null}
-                        improvementPct={null}
+                        lastConsultationZone={(() => {
+                          const lastNote = lastNoteForHero
+                          const lastBilan = lastBilanForHero
+                          const noteDate = lastNote?.dateSeance ?? ''
+                          const bilanDate = lastBilan?.dateBilan ?? ''
+                          const lastRecord = noteDate >= bilanDate ? lastNote : lastBilan
+                          if (!lastRecord) return null
+                          const bt = ('bilanType' in lastRecord ? lastRecord.bilanType : undefined) ?? getBilanType(lastRecord.zone ?? '')
+                          return bt === 'generique' && genericCustomLabel ? genericCustomLabel : (ZONE_LABELS_SHORT[bt] ?? bt)
+                        })()}
                         onAddConsultation={() => setConsultationChooserOpen(true)}
-                        zonesCount={zonesForPicker.length}
                       />
 
-                      {/* ── Prescription tracking ────────────────── */}
-                      {(() => {
+                      {/* ── Prescription tracking (hidden for v1 launch) ── */}
+                      {false && (() => {
                         const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
                         const noteCount = getPatientNotes(selectedPatient ?? '').length
                         const bilanCount = bilans.length
@@ -2064,7 +2098,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           <span style={{ fontSize: '0.65rem', color: '#d97706', fontWeight: 700, letterSpacing: '0.05em' }}>OBJECTIFS SMART</span>
                           <div style={{ flex: 1, height: 1, background: '#fde68a' }} />
                         </div>
-                        <SmartObjectifs objectifs={dbObjectifs} patientKey={selectedPatient ?? ''} onUpdate={setDbObjectifs} />
+                        <SmartObjectifs objectifs={dbObjectifs} patientKey={selectedPatient ?? ''} onUpdate={setDbObjectifs} maxObjectifs={zonesForPicker.length} />
                       </div>
 
                       {/* Amélioration globale supprimée — pourcentage intégré dans le graphique */}
@@ -2115,6 +2149,7 @@ STRUCTURE (n'inclure que si données présentes) :
                             if (eps.length === 0) return [{ zoneType: zoneType as BilanType, zoneBilansAll, episode: { idx: 0, startExclusive: Number.NEGATIVE_INFINITY, endInclusive: Number.POSITIVE_INFINITY, isActive: true } as TreatmentEpisode, totalEpisodes: 1 }]
                             return eps.map(ep => ({ zoneType: zoneType as BilanType, zoneBilansAll, episode: ep, totalEpisodes: eps.length }))
                           })
+                          zoneEps.sort((a, b) => (a.episode.isActive === b.episode.isActive ? 0 : a.episode.isActive ? -1 : 1))
                           return zoneEps.map(({ zoneType, zoneBilansAll, episode, totalEpisodes }) => {
                             const inEp = (id: number) => id > episode.startExclusive && id <= episode.endInclusive
                             const zoneBilans = zoneBilansAll.filter(b => inEp(b.id))
@@ -2242,6 +2277,20 @@ STRUCTURE (n'inclure que si données présentes) :
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0.15rem 0.5rem', borderRadius: 9999, background: c.successBg, color: c.success, fontSize: '0.68rem', fontWeight: 700 }}>
                                         PEC terminée
                                       </span>
+                                    )}
+                                    {zoneClosed && (
+                                      <button
+                                        type="button"
+                                        onClick={e => {
+                                          e.stopPropagation()
+                                          if (confirm(`Reprendre la prise en charge ${zoneLabel} ? L'épisode sera rouvert avec tout son historique.`)) {
+                                            reopenTreatment(selectedPatient ?? '', zoneType as BilanType, episode)
+                                          }
+                                        }}
+                                        style={{ padding: '0.15rem 0.55rem', borderRadius: 9999, background: c.infoSoft, border: `1px solid ${c.infoBg}`, color: c.primaryLight, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer' }}
+                                      >
+                                        Reprendre
+                                      </button>
                                     )}
                                   </div>
                                   <div style={{ fontSize: '0.72rem', color: c.textMuted, marginTop: 2, display: 'flex', gap: 12 }}>
@@ -2877,9 +2926,9 @@ STRUCTURE (n'inclure que si données présentes) :
                                       setEvolutionZoneType(zoneType as BilanType)
                                       setStep('evolution_ia')
                                     }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}>
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #0f766e, #0d9488)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                                    Rapport d'évolution IA — {zoneLabel}
+                                    Rapport d'évolution — {zoneLabel}
                                   </button>
                                 )}
                                 <div style={{ display: 'flex', gap: 8 }}>
@@ -2965,11 +3014,26 @@ STRUCTURE (n'inclure que si données présentes) :
                           onDelete={(docId) => {
                             setDbPatientDocs(prev => prev.filter(d => d.id !== docId))
                           }}
-                          onAddRaw={(dataUrl, name, mimeType) => {
+                          onAddRaw={async (dataUrl, name, mimeType) => {
                             if (mimeType.startsWith('image/')) {
                               setPatientDocMaskingQueue(prev => [...prev, { dataUrl, name, mimeType }])
+                            } else if (mimeType === 'application/pdf') {
+                              try {
+                                const pages = await pdfToImages(dataUrl)
+                                const baseName = name.replace(/\.pdf$/i, '')
+                                for (let i = 0; i < pages.length; i++) {
+                                  setPatientDocMaskingQueue(prev => [...prev, {
+                                    dataUrl: pages[i],
+                                    name: pages.length === 1 ? `${baseName}.png` : `${baseName} (p${i + 1}).png`,
+                                    mimeType: 'image/png',
+                                  }])
+                                }
+                              } catch {
+                                const base64 = dataUrl.split(',')[1] ?? dataUrl
+                                const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                                setDbPatientDocs(prev => [...prev, { id, patientKey: selectedPatient ?? '', name, mimeType, data: base64, addedAt: new Date().toISOString() }])
+                              }
                             } else {
-                              // PDF/other: add directly without masking
                               const base64 = dataUrl.split(',')[1] ?? dataUrl
                               const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
                               setDbPatientDocs(prev => [...prev, { id, patientKey: selectedPatient ?? '', name, mimeType, data: base64, addedAt: new Date().toISOString() }])
@@ -4045,9 +4109,9 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               {/* Notes complémentaires */}
               <div className="form-group" style={{ margin: 0 }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Notes complémentaires <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optionnel)</span></label>
-                <textarea className="input-luxe" rows={3} placeholder="Contexte, antécédents, où en est le traitement..."
+                <DictableTextarea className="input-luxe" rows={3} placeholder="Contexte, antécédents, où en est le traitement..."
                   value={quickAddData.notes} onChange={(e) => setQuickAddData(prev => ({ ...prev, notes: e.target.value }))}
-                  style={{ resize: 'vertical' }} />
+                  textareaStyle={{ resize: 'vertical' }} />
               </div>
             </div>
 
@@ -4235,12 +4299,12 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 8px' }}>
                 Observations libres, contexte supplémentaire… Ces notes seront incluses dans l'analyse et le PDF.
               </p>
-              <textarea
+              <DictableTextarea
                 value={bilanNotes}
                 onChange={e => setBilanNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Patient stressé, travail physique intensifié ce mois-ci, essai de 3 séances de kiné il y a 6 mois sans succès…"
-                style={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box' }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -4831,8 +4895,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             onAudit={(entry) => {
               setDbLetterAudit(prev => [...prev, entry])
             }}
-            onBack={() => setStep('database')}
+            onBack={() => { setStep('database'); setInitialLetterType(null); setBilanSortieForLetter(null) }}
             showToast={showToast}
+            initialType={initialLetterType as import('./types').LetterType | null}
+            bilanSortieData={bilanSortieForLetter}
           />
         </Suspense>
         </ErrorBoundary>
@@ -4891,66 +4957,80 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 notes={notes.map(n => ({ numSeance: n.numSeance, dateSeance: n.dateSeance, data: n.data as unknown as { eva: string; evolution: string; tolerance: string; interventions: string[]; detailDosage?: string; prochaineEtape?: string[]; noteSubjective?: string; observance?: string } }))}
                 smartObjectifs={dbObjectifs.filter(o => o.patientKey === selectedPatient).map(o => ({ titre: o.titre, status: o.status }))}
                 lastIntermediaire={(() => { const inters = getPatientIntermediaires(selectedPatient ?? '').filter(r => matchBt(r.bilanType, r.zone)); return inters.length > 0 ? inters[inters.length - 1].data ?? {} : undefined })()}
-                onGenerateLetter={() => { setStep('letter') }}
+                onGenerateLetter={(type) => {
+                  const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
+                  const sortieData = handle?.getData() ?? null
+                  setBilanSortieForLetter(sortieData as Record<string, unknown> | null)
+                  setInitialLetterType(type === 'fin_anticipee' ? 'fin_pec_anticipee' : 'fin_pec')
+                  setStep('letter')
+                }}
                 onGenerateSynthese={async () => {
-                  if (!apiKey) { showToast('Clé API requise', 'error'); return }
                   const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
                   if (!handle) return
-                  showToast('Génération de la synthèse...', 'success')
-                  try {
-                    const patKey = selectedPatient ?? ''
-                    const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
-                    const allInters = getPatientIntermediaires(patKey).filter(r => matchBt(r.bilanType, r.zone))
-                    const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
-                    const closedLines = sortieBt ? getClosedAntecedents(patKey, sortieBt) : []
-                    const historiqueStr = [
-                      ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10 — Zone: ${b.zone ?? '?'}`),
-                      ...allInters.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${(tc.evn as Record<string, unknown>)?.pireActuel ?? '?'}/10` }),
-                      ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`),
-                      ...(closedLines.length > 0 ? ['', 'Antécédents d\'autres PEC (clôturées, contexte) :', ...closedLines.map(l => `- ${l}`)] : [])
-                    ].join('\n')
-                    const raw = await callGeminiSecure({
-                      apiKey,
-                      systemPrompt: 'Tu es un kinésithérapeute expert. Génère une synthèse clinique de fin de prise en charge. Sois professionnel, concis et structuré. Réponds UNIQUEMENT en JSON valide.',
-                      userPrompt: `HISTORIQUE COMPLET DU PATIENT :\n${historiqueStr}\n\nGénère en JSON :\n{"resumePEC":"résumé complet de la prise en charge (techniques, progression, nombre de séances)","resultatsObtenus":"résultats cliniques obtenus (EVN, scores, gains fonctionnels)","facteursLimitants":"facteurs limitants rencontrés pendant la PEC (si aucun, mettre 'Aucun facteur limitant identifié')"}`,
-                      maxOutputTokens: 2048, jsonMode: true, preferredModel: 'gemini-2.5-flash',
-                      patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
-                      category: 'bilan_analyse', onAudit: recordAIAudit,
-                    })
-                    const parsed = JSON.parse(raw)
-                    const current = handle.getData()
-                    handle.setData({ ...current, resumePEC: stripMd(parsed.resumePEC ?? ''), resultatsObtenus: stripMd(parsed.resultatsObtenus ?? ''), facteursLimitants: stripMd(parsed.facteursLimitants ?? '') })
-                    showToast('Synthèse générée', 'success')
-                  } catch { showToast('Erreur lors de la génération', 'error') }
+                  showToast('Création de la synthèse…', 'success')
+                  const maxRetries = 2
+                  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                    try {
+                      const patKey = selectedPatient ?? ''
+                      const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
+                      const allInters = getPatientIntermediaires(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                      const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                      const closedLines = sortieBt ? getClosedAntecedents(patKey, sortieBt) : []
+                      const historiqueStr = [
+                        ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10 — Zone: ${b.zone ?? '?'}`),
+                        ...allInters.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${(tc.evn as Record<string, unknown>)?.pireActuel ?? '?'}/10` }),
+                        ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`),
+                        ...(closedLines.length > 0 ? ['', 'Antécédents d\'autres PEC (clôturées, contexte) :', ...closedLines.map(l => `- ${l}`)] : [])
+                      ].join('\n')
+                      const raw = await callGeminiSecure({
+                        apiKey,
+                        systemPrompt: 'Tu es un kinésithérapeute expert. Génère une synthèse clinique de fin de prise en charge. Sois professionnel, concis et structuré. Réponds UNIQUEMENT en JSON valide.',
+                        userPrompt: `HISTORIQUE COMPLET DU PATIENT :\n${historiqueStr}\n\nGénère en JSON :\n{"resumePEC":"résumé complet de la prise en charge (techniques, progression, nombre de séances)","resultatsObtenus":"résultats cliniques obtenus (EVN, scores, gains fonctionnels)","facteursLimitants":"facteurs limitants rencontrés pendant la PEC (si aucun, mettre 'Aucun facteur limitant identifié')"}`,
+                        maxOutputTokens: 4096, jsonMode: true, preferredModel: 'gemini-2.5-flash',
+                        patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
+                        category: 'bilan_analyse', onAudit: recordAIAudit,
+                      })
+                      const parsed = JSON.parse(raw)
+                      const current = handle.getData()
+                      handle.setData({ ...current, resumePEC: stripMd(parsed.resumePEC ?? ''), resultatsObtenus: stripMd(parsed.resultatsObtenus ?? ''), facteursLimitants: stripMd(parsed.facteursLimitants ?? '') })
+                      showToast('Synthèse créée', 'success')
+                      return
+                    } catch (err) {
+                      console.warn(`[BilanSortie] Synthèse attempt ${attempt + 1} failed:`, err)
+                      if (attempt < maxRetries) {
+                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
+                      } else {
+                        showToast('Erreur — réessayez dans quelques secondes', 'error')
+                      }
+                    }
+                  }
                 }}
                 onGenerateRecommandations={async () => {
-                  if (!apiKey) { showToast('Clé API requise', 'error'); return }
                   const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
                   if (!handle) return
-                  showToast('Génération des recommandations...', 'success')
-                  try {
-                    const patKey = selectedPatient ?? ''
-                    const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
-                    const lastNote = allNotes[allNotes.length - 1]
-                    const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
-                    const firstBilanData = allBilans[0]?.bilanData
-                    const contrat = ((firstBilanData?.contratKine ?? firstBilanData?.contrat) as Record<string, unknown>) ?? {}
-                    // Collecter TOUS les exercices réellement prescrits
-                    const fichesExo: string[] = []
-                    for (const b of allBilans) { if (b.ficheExercice?.markdown) fichesExo.push(b.ficheExercice.markdown) }
-                    for (const n of allNotes) { if ((n as unknown as { ficheExercice?: { markdown?: string } }).ficheExercice?.markdown) fichesExo.push((n as unknown as { ficheExercice: { markdown: string } }).ficheExercice.markdown) }
-                    // Collecter les dosages des séances
-                    const dosages = allNotes.filter(n => n.data.detailDosage).map(n => `Séance ${n.numSeance}: ${n.data.detailDosage}`)
-                    // Collecter les interventions
-                    const interventions = Array.from(new Set(allNotes.flatMap(n => n.data.interventions)))
-                    const raw = await callGeminiSecure({
-                      apiKey,
-                      systemPrompt: `Tu es un kinésithérapeute expert. Génère des recommandations de fin de prise en charge.
+                  showToast('Création des recommandations…', 'success')
+                  const maxRetries = 2
+                  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                    try {
+                      const patKey = selectedPatient ?? ''
+                      const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                      const lastNote = allNotes[allNotes.length - 1]
+                      const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
+                      const firstBilanData = allBilans[0]?.bilanData
+                      const contrat = ((firstBilanData?.contratKine ?? firstBilanData?.contrat) as Record<string, unknown>) ?? {}
+                      const fichesExo: string[] = []
+                      for (const b of allBilans) { if (b.ficheExercice?.markdown) fichesExo.push(b.ficheExercice.markdown) }
+                      for (const n of allNotes) { if ((n as unknown as { ficheExercice?: { markdown?: string } }).ficheExercice?.markdown) fichesExo.push((n as unknown as { ficheExercice: { markdown: string } }).ficheExercice.markdown) }
+                      const dosages = allNotes.filter(n => n.data.detailDosage).map(n => `Séance ${n.numSeance}: ${n.data.detailDosage}`)
+                      const interventions = Array.from(new Set(allNotes.flatMap(n => n.data.interventions)))
+                      const raw = await callGeminiSecure({
+                        apiKey,
+                        systemPrompt: `Tu es un kinésithérapeute expert. Génère des recommandations de fin de prise en charge.
 
 RÈGLE ABSOLUE : Tu ne dois JAMAIS inventer d'exercices ou d'activités que le patient n'a pas fait pendant sa prise en charge. Base-toi UNIQUEMENT sur les exercices effectivement prescrits et les interventions réalisées listés ci-dessous. Si tu n'as pas assez d'informations sur les exercices, écris simplement "Poursuivre les exercices mis en place durant le traitement avec les dosages habituels."
 
 Réponds UNIQUEMENT en JSON valide.`,
-                      userPrompt: `Zone: ${selectedBodyZone ?? 'non précisée'}
+                        userPrompt: `Zone: ${selectedBodyZone ?? 'non précisée'}
 Dernière EVA: ${lastNote?.data.eva ?? '?'}/10
 Dernière évolution: ${lastNote?.data.evolution ?? '?'}
 Interventions réalisées: ${interventions.join(', ') || 'non renseignées'}
@@ -4965,15 +5045,24 @@ ${dosages.length > 0 ? dosages.join('\n') : 'Non renseignés'}
 
 Génère en JSON :
 {"autoExercices":"UNIQUEMENT les exercices déjà prescrits ci-dessus avec leurs dosages (répétitions, séries, fréquence). Ne rien inventer.","precautions":"précautions basées sur l'évolution clinique constatée","infoMedecin":"éléments factuels pour le médecin prescripteur (EVN initial/final, nombre de séances, résultats)"}`,
-                      maxOutputTokens: 2048, jsonMode: true, preferredModel: 'gemini-2.5-flash',
-                      patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
-                      category: 'bilan_analyse', onAudit: recordAIAudit,
-                    })
-                    const parsed = JSON.parse(raw)
-                    const current = handle.getData()
-                    handle.setData({ ...current, autoExercices: stripMd(parsed.autoExercices ?? ''), precautions: stripMd(parsed.precautions ?? ''), infoMedecin: stripMd(parsed.infoMedecin ?? '') })
-                    showToast('Recommandations générées', 'success')
-                  } catch { showToast('Erreur lors de la génération', 'error') }
+                        maxOutputTokens: 4096, jsonMode: true, preferredModel: 'gemini-2.5-flash',
+                        patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
+                        category: 'bilan_analyse', onAudit: recordAIAudit,
+                      })
+                      const parsed = JSON.parse(raw)
+                      const current = handle.getData()
+                      handle.setData({ ...current, autoExercices: stripMd(parsed.autoExercices ?? ''), precautions: stripMd(parsed.precautions ?? ''), infoMedecin: stripMd(parsed.infoMedecin ?? '') })
+                      showToast('Recommandations créées', 'success')
+                      return
+                    } catch (err) {
+                      console.warn(`[BilanSortie] Recommandations attempt ${attempt + 1} failed:`, err)
+                      if (attempt < maxRetries) {
+                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
+                      } else {
+                        showToast('Erreur — réessayez dans quelques secondes', 'error')
+                      }
+                    }
+                  }
                 }}
               />
             </Suspense>

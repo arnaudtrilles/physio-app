@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import {
@@ -158,26 +159,26 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
               {sec.id === 'examClinique' && (
                 <>
                   <label style={lblStyle}>Zone concernée (précision)</label>
-                  <input value={zoneConcernee} onChange={e => setZoneConcernee(e.target.value)} placeholder="Ex : Sacro-iliaque droite, ATM gauche, poignet droit…" style={inputStyle} />
+                  <DictableInput value={zoneConcernee} onChange={e => setZoneConcernee(e.target.value)} placeholder="Ex : Sacro-iliaque droite, ATM gauche, poignet droit…" inputStyle={inputStyle} />
 
                   <p style={sectionTitleStyle}>Observation</p>
-                  <textarea value={observation} onChange={e => setObservation(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Morphostatique, posture, déformations, œdème, rougeur, asymétries…" />
+                  <DictableTextarea value={observation} onChange={e => setObservation(e.target.value)} rows={3} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Morphostatique, posture, déformations, œdème, rougeur, asymétries…" />
 
                   <p style={sectionTitleStyle}>Palpation</p>
-                  <textarea value={palpation} onChange={e => setPalpation(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Points douloureux, tonus, trophicité, chaleur locale…" />
+                  <DictableTextarea value={palpation} onChange={e => setPalpation(e.target.value)} rows={3} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Points douloureux, tonus, trophicité, chaleur locale…" />
 
                   <p style={sectionTitleStyle}>Mobilité</p>
-                  <textarea value={mobiliteNotes} onChange={e => setMobiliteNotes(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Mobilités actives / passives, amplitudes, end-feel…" />
+                  <DictableTextarea value={mobiliteNotes} onChange={e => setMobiliteNotes(e.target.value)} rows={3} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Mobilités actives / passives, amplitudes, end-feel…" />
 
                   <p style={sectionTitleStyle}>Force / déficit moteur</p>
-                  <textarea value={forceNotes} onChange={e => setForceNotes(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Testing musculaire MRC, déficits par groupes…" />
+                  <DictableTextarea value={forceNotes} onChange={e => setForceNotes(e.target.value)} rows={3} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Testing musculaire MRC, déficits par groupes…" />
                 </>
               )}
 
               {sec.id === 'testsSpec' && (
                 <>
                   <label style={lblStyle}>Tests cliniques effectués et résultats</label>
-                  <textarea value={testsNotes} onChange={e => setTestsNotes(e.target.value)} rows={5} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Listez les tests réalisés et leurs résultats (positif / négatif / reproduction des symptômes…)" />
+                  <DictableTextarea value={testsNotes} onChange={e => setTestsNotes(e.target.value)} rows={5} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Listez les tests réalisés et leurs résultats (positif / négatif / reproduction des symptômes…)" />
                 </>
               )}
 
@@ -201,7 +202,7 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
                   {!coreMode && (
                     <>
                       <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
-                      <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Nom du score et résultat…" />
+                      <DictableTextarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Nom du score et résultat…" />
                     </>
                   )}
                 </>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DictableTextarea } from '../VoiceMic'
 
 // ─── MRC scale description ─────────────────────────────────────────────────
 const MRC_DESCRIPTIONS = [
@@ -115,8 +116,8 @@ export function OuiNon({ label, value, onChange, detail, onDetailChange }: { lab
         </div>
       </div>
       {value === 'oui' && onDetailChange && (
-        <textarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
-          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
+        <DictableTextarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
+          textareaStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
       )}
     </div>
   )

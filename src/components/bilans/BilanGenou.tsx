@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
@@ -294,11 +295,11 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                 <>
                   <p style={sectionTitleStyle}>Morphostatique</p>
                   <label style={lblStyle}>Attitude des membres inférieurs</label>
-                  <input value={morpho.mi} onChange={e => setMorphoField('mi', e.target.value)} placeholder="Valgus / varus, recurvatum…" style={inputStyle} />
+                  <DictableInput value={morpho.mi} onChange={e => setMorphoField('mi', e.target.value)} placeholder="Valgus / varus, recurvatum…" inputStyle={inputStyle} />
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Attitude du rachis</label>
-                      <input value={morpho.rachis} onChange={e => setMorphoField('rachis', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={morpho.rachis} onChange={e => setMorphoField('rachis', e.target.value)} placeholder="—" inputStyle={inputStyle} />
                       <OuiNon label="Corrigeable ?" value={morpho.corrigeable} onChange={v => setMorphoField('corrigeable', v)} />
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                         <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Modification de la posture</label>
@@ -313,12 +314,12 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                   <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Observation</p>
                   <OuiNon label="Épanchement / amyotrophie VMO" value={observation.amyotrophie} onChange={v => setObs('amyotrophie', v)} />
                   {observation.amyotrophie === 'oui' && (
-                    <input value={observation.amyotrophieLoc} onChange={e => setObs('amyotrophieLoc', e.target.value)} placeholder="Localisation…" style={{ ...inputStyle, marginTop: 6 }} />
+                    <DictableInput value={observation.amyotrophieLoc} onChange={e => setObs('amyotrophieLoc', e.target.value)} placeholder="Localisation…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                   )}
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Autre observation</label>
-                      <input value={observation.autre} onChange={e => setObs('autre', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={observation.autre} onChange={e => setObs('autre', e.target.value)} placeholder="—" inputStyle={inputStyle} />
                     </>
                   )}
 
@@ -334,9 +335,9 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                       <MobiliteRachisTable rows={MOB_LOMB_KEYS} state={mobLombaire} onChange={updMobL} />
 
                       <label style={lblStyle}>Mobilité chevilles</label>
-                      <input value={mobAutres.chevilles} onChange={e => setMobA('chevilles', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={mobAutres.chevilles} onChange={e => setMobA('chevilles', e.target.value)} placeholder="—" inputStyle={inputStyle} />
                       <label style={lblStyle}>Autres zones</label>
-                      <textarea value={mobAutres.autresZones} onChange={e => setMobA('autresZones', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={mobAutres.autresZones} onChange={e => setMobA('autresZones', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
 
@@ -348,7 +349,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                       <StatusSymptomes label="Course" status={fonctionnel.course} symptomes={fonctionnel.courseSympt} onChangeStatus={v => setFonc('course', v)} onChangeSympt={v => setFonc('courseSympt', v)} />
                       <StatusSymptomes label="Sauts" status={fonctionnel.sauts} symptomes={fonctionnel.sautsSympt} onChangeStatus={v => setFonc('sauts', v)} onChangeSympt={v => setFonc('sautsSympt', v)} />
                       <label style={lblStyle}>Autres</label>
-                      <textarea value={fonctionnel.autres} onChange={e => setFonc('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={fonctionnel.autres} onChange={e => setFonc('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>
@@ -388,13 +389,13 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                         </tbody>
                       </table>
                       <label style={{ ...lblStyle, marginTop: 10 }}>Autres tests de force</label>
-                      <textarea value={autresForce} onChange={e => setAutresForce(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={autresForce} onChange={e => setAutresForce(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
 
                       <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Examen des mouvements répétés</p>
                       <label style={lblStyle}>Marqueurs avant procédure</label>
-                      <input value={mvtRepMarqueurs} onChange={e => setMvtRepMarqueurs(e.target.value)} placeholder="Douleur, ROM…" style={inputStyle} />
+                      <DictableInput value={mvtRepMarqueurs} onChange={e => setMvtRepMarqueurs(e.target.value)} placeholder="Douleur, ROM…" inputStyle={inputStyle} />
                       <label style={lblStyle}>Résultats</label>
-                      <textarea value={mvtRepResultats} onChange={e => setMvtRepResultats(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={mvtRepResultats} onChange={e => setMvtRepResultats(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>
@@ -425,7 +426,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Autres tests ligamentaires</label>
-                      <textarea value={ligTests.autres} onChange={e => setLT('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={ligTests.autres} onChange={e => setLT('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>
@@ -449,23 +450,23 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                   ).map(([k, lbl, ph]) => (
                     <div key={k} style={{ marginBottom: 8 }}>
                       <label style={lblStyle}>{lbl}{k === 'babinski' && <TestInfoButton testKey="babinski" />}</label>
-                      <input value={neuro[k] ?? (k === 'force' ? (neuro.deficitMoteur ?? '') : '')} onChange={e => setN(k, e.target.value)} placeholder={ph} style={inputStyle} />
+                      <DictableInput value={neuro[k] ?? (k === 'force' ? (neuro.deficitMoteur ?? '') : '')} onChange={e => setN(k, e.target.value)} placeholder={ph} inputStyle={inputStyle} />
                     </div>
                   ))}
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Réversibilité</label>
-                      <input value={neuro.reversibilite ?? ''} onChange={e => setN('reversibilite', e.target.value)} placeholder="Oui / Non — précisions…" style={inputStyle} />
+                      <DictableInput value={neuro.reversibilite ?? ''} onChange={e => setN('reversibilite', e.target.value)} placeholder="Oui / Non — précisions…" inputStyle={inputStyle} />
                       <label style={lblStyle}>Comportement</label>
-                      <input value={neuro.comportement ?? ''} onChange={e => setN('comportement', e.target.value)} placeholder="Utile / Inutile — type…" style={inputStyle} />
+                      <DictableInput value={neuro.comportement ?? ''} onChange={e => setN('comportement', e.target.value)} placeholder="Utile / Inutile — type…" inputStyle={inputStyle} />
                       <label style={lblStyle}>Palpation Nerf(s)</label>
-                      <input value={neuro.palpationNerfs ?? ''} onChange={e => setN('palpationNerfs', e.target.value)} placeholder="Douleur, lequel…" style={inputStyle} />
+                      <DictableInput value={neuro.palpationNerfs ?? ''} onChange={e => setN('palpationNerfs', e.target.value)} placeholder="Douleur, lequel…" inputStyle={inputStyle} />
                       <p style={{ ...sectionTitleStyle, margin: '12px 0 6px' }}>Nerf / Racine</p>
                       <OuiNon label="Sous pression" value={neuro.nerfSousPression ?? ''} onChange={v => setN('nerfSousPression', v)} />
                       <OuiNon label="Malade" value={neuro.nerfMalade ?? ''} onChange={v => setN('nerfMalade', v)} />
 
                       <label style={{ ...lblStyle, marginTop: 10 }}>Schéma des troubles sensitifs</label>
-                      <textarea value={neuro.troublesSensitifsNotes} onChange={e => setN('troublesSensitifsNotes', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={neuro.troublesSensitifsNotes} onChange={e => setN('troublesSensitifsNotes', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
 
@@ -515,7 +516,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Autres tests</label>
-                      <textarea value={tests.autres ?? ''} onChange={e => setT('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={tests.autres ?? ''} onChange={e => setT('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>
@@ -541,7 +542,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
                   {!coreMode && (
                     <>
                       <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
-                      <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>

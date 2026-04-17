@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { DictableInput, DictableTextarea } from './VoiceMic'
 import { SectionHeader } from './bilans/shared'
 
 export interface NoteSeanceHandle {
@@ -125,8 +126,8 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, { initialData?: NoteSeanc
                     </div>
 
                     <label style={lblStyle}>Note libre (optionnel)</label>
-                    <input value={noteSubjective} onChange={e => setNoteSubjective(e.target.value)}
-                      style={inputStyle} placeholder="Ex : douleur au réveil diminuée, gêne persistante en fin de journée…" />
+                    <DictableInput value={noteSubjective} onChange={e => setNoteSubjective(e.target.value)}
+                      inputStyle={inputStyle} placeholder="Ex : douleur au réveil diminuée, gêne persistante en fin de journée…" />
                   </>
                 )}
 
@@ -144,8 +145,8 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, { initialData?: NoteSeanc
                     </div>
 
                     <label style={lblStyle}>Détail charge / dosage (optionnel)</label>
-                    <input value={detailDosage} onChange={e => setDetailDosage(e.target.value)}
-                      style={inputStyle} placeholder="Ex : presse 3x12 à 40kg, squat 3x10 PDC…" />
+                    <DictableInput value={detailDosage} onChange={e => setDetailDosage(e.target.value)}
+                      inputStyle={inputStyle} placeholder="Ex : presse 3x12 à 40kg, squat 3x10 PDC…" />
                   </>
                 )}
 
@@ -163,9 +164,9 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, { initialData?: NoteSeanc
                     </div>
 
                     {tolerance !== '' && tolerance !== 'Bien toléré' && (
-                      <textarea value={toleranceDetail} onChange={e => setToleranceDetail(e.target.value)}
+                      <DictableTextarea value={toleranceDetail} onChange={e => setToleranceDetail(e.target.value)}
                         placeholder="Préciser la réaction…" rows={2}
-                        style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', marginBottom: 10, boxSizing: 'border-box' }} />
+                        textareaStyle={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', marginBottom: 10, boxSizing: 'border-box' }} />
                     )}
                   </>
                 )}
@@ -184,8 +185,8 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, { initialData?: NoteSeanc
                     </div>
 
                     <label style={lblStyle}>Note libre</label>
-                    <input value={notePlan} onChange={e => setNotePlan(e.target.value)}
-                      style={inputStyle} placeholder="Ex : tester charge supérieure, revoir posture de travail…" />
+                    <DictableInput value={notePlan} onChange={e => setNotePlan(e.target.value)}
+                      inputStyle={inputStyle} placeholder="Ex : tester charge supérieure, revoir posture de travail…" />
                   </>
                 )}
 

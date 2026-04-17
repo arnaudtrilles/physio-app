@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { jsPDF } from 'jspdf'
+import { DictableTextarea } from './VoiceMic'
 import type { FicheExercice, AnalyseIA, AICallAuditEntry } from '../types'
 import { buildFicheExercicePrompt, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
@@ -481,12 +482,12 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
                 Décrivez ce que vous avez travaillé ou ce que vous souhaitez prescrire. Laissez vide pour un programme automatique basé sur le diagnostic.
               </p>
-              <textarea
+              <DictableTextarea
                 value={notesSeance}
                 onChange={e => setNotesSeance(e.target.value)}
                 rows={5}
                 placeholder="Ex : Travail mobilisation active épaule, patient a bien toléré les exercices pendulaires. Prescrire renforcement coiffe des rotateurs léger + étirements capsulaires. Patient sportif — football 3x/semaine…"
-                style={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
               />
             </div>
           </div>

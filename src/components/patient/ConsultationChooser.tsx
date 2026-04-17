@@ -46,7 +46,7 @@ export function ConsultationChooser({
             <ChoiceRow
               icon={<IconActivity size={18} />}
               accent={colors.seance}
-              title="+ Séance"
+              title="Nouvelle séance"
               description={multiZonesHint(zones.length, "Noter le suivi d'une séance")}
               onClick={() => {
                 onPickSeance()

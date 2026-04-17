@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { OuiNon, ScoreRow, EVASlider } from './shared'
 import { SmartObjectifsInline } from '../SmartObjectifsInline'
 import { BodyDrawing } from '../BodyDrawing'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 
 // ─── Common styles ─────────────────────────────────────────────────────────
 export const inputStyle: React.CSSProperties = {
@@ -122,7 +123,7 @@ export function DouleurSection({ state, onChange, options, coreMode }: {
       {textFields.map(([k, lbl, ph]) => (
         <div key={k} style={{ marginBottom: 8 }}>
           <label style={lblStyle}>{lbl}</label>
-          <input value={state[k]} onChange={e => onChange({ [k]: e.target.value } as Partial<DouleurState>)} placeholder={ph} style={inputStyle} />
+          <DictableInput value={state[k]} onChange={e => onChange({ [k]: e.target.value } as Partial<DouleurState>)} placeholder={ph} inputStyle={inputStyle} />
         </div>
       ))}
       <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--secondary)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
@@ -164,7 +165,7 @@ export function DouleurSection({ state, onChange, options, coreMode }: {
           <OuiNon label="Dérouillage matinal" value={state.derouillageMatinal} onChange={v => onChange({ derouillageMatinal: v })} />
           {state.derouillageMatinal === 'oui' && (
             <>
-              <input value={state.derouillageTemps} onChange={e => onChange({ derouillageTemps: e.target.value })} placeholder="Durée du dérouillage…" style={{ ...inputStyle, marginTop: 6 }} />
+              <DictableInput value={state.derouillageTemps} onChange={e => onChange({ derouillageTemps: e.target.value })} placeholder="Durée du dérouillage…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 8px' }}>
                 {['Toujours', 'Parfois'].map(v => {
                   const key = v.toLowerCase()
@@ -179,11 +180,11 @@ export function DouleurSection({ state, onChange, options, coreMode }: {
       )}
       <div style={{ marginTop: 8, marginBottom: 8 }}>
         <label style={lblStyle}>Mouvements / situations qui EMPIRENT</label>
-        <textarea value={state.mouvementsEmpirent} onChange={e => onChange({ mouvementsEmpirent: e.target.value })} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Décrire…" />
+        <DictableTextarea value={state.mouvementsEmpirent} onChange={e => onChange({ mouvementsEmpirent: e.target.value })} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Décrire…" />
       </div>
       <div style={{ marginBottom: 8 }}>
         <label style={lblStyle}>Mouvements / situations qui SOULAGENT</label>
-        <textarea value={state.mouvementsSoulagent} onChange={e => onChange({ mouvementsSoulagent: e.target.value })} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Repos, chaleur…" />
+        <DictableTextarea value={state.mouvementsSoulagent} onChange={e => onChange({ mouvementsSoulagent: e.target.value })} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="Repos, chaleur…" />
       </div>
     </>
   )
@@ -306,7 +307,7 @@ export function RedFlagsSection({ state, onChange, variant, coreMode }: {
       {textRows.map(([k, lbl, ph]) => (
         <div key={k} style={{ marginBottom: 8 }}>
           <label style={lblStyle}>{lbl}</label>
-          <input value={state[k]} onChange={e => set(k, e.target.value)} placeholder={ph} style={inputStyle} />
+          <DictableInput value={state[k]} onChange={e => set(k, e.target.value)} placeholder={ph} inputStyle={inputStyle} />
         </div>
       ))}
       {commonBools.map(([k, lbl]) => (
@@ -354,7 +355,7 @@ export function RedFlagsSection({ state, onChange, variant, coreMode }: {
                   )
                 })}
               </div>
-              <input value={state.fonctionVesicaleSymptomes} onChange={e => set('fonctionVesicaleSymptomes', e.target.value)} placeholder="Symptômes (rétention, incontinence, anesthésie en selle…)" style={inputStyle} />
+              <DictableInput value={state.fonctionVesicaleSymptomes} onChange={e => set('fonctionVesicaleSymptomes', e.target.value)} placeholder="Symptômes (rétention, incontinence, anesthésie en selle…)" inputStyle={inputStyle} />
             </>
           )}
         </>
@@ -410,7 +411,7 @@ export function YellowFlagsSection({ state, onChange, coreMode }: {
           <OuiNon key={k} label={lbl} value={state[k]} onChange={v => set(k, v)} />
         ))}
         {state.peurEvitement === 'oui' && (
-          <input value={state.peurEvitementMouvements} onChange={e => set('peurEvitementMouvements', e.target.value)} placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+          <DictableInput value={state.peurEvitementMouvements} onChange={e => set('peurEvitementMouvements', e.target.value)} placeholder="Quel(s) mouvement(s) évité(s)…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
         )}
       </>
     )
@@ -419,15 +420,15 @@ export function YellowFlagsSection({ state, onChange, coreMode }: {
     <>
       <div style={{ marginBottom: 8 }}>
         <label style={lblStyle}>Croyances — Origine de la douleur</label>
-        <input value={state.croyancesOrigine} onChange={e => set('croyancesOrigine', e.target.value)} placeholder="Ce que pense le patient…" style={inputStyle} />
+        <DictableInput value={state.croyancesOrigine} onChange={e => set('croyancesOrigine', e.target.value)} placeholder="Ce que pense le patient…" inputStyle={inputStyle} />
       </div>
       <div style={{ marginBottom: 8 }}>
         <label style={lblStyle}>Croyances — TTT qui serait adapté</label>
-        <input value={state.croyancesTtt} onChange={e => set('croyancesTtt', e.target.value)} placeholder="Selon le patient…" style={inputStyle} />
+        <DictableInput value={state.croyancesTtt} onChange={e => set('croyancesTtt', e.target.value)} placeholder="Selon le patient…" inputStyle={inputStyle} />
       </div>
       <div style={{ marginBottom: 8 }}>
         <label style={lblStyle}>Attentes</label>
-        <textarea value={state.attentes} onChange={e => set('attentes', e.target.value)} placeholder="Objectifs du patient…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+        <DictableTextarea value={state.attentes} onChange={e => set('attentes', e.target.value)} placeholder="Objectifs du patient…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Auto-efficacité</label>
@@ -446,11 +447,11 @@ export function YellowFlagsSection({ state, onChange, coreMode }: {
         <OuiNon key={k} label={lbl} value={state[k]} onChange={v => set(k, v)} />
       ))}
       {state.peurEvitement === 'oui' && (
-        <input value={state.peurEvitementMouvements} onChange={e => set('peurEvitementMouvements', e.target.value)} placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+        <DictableInput value={state.peurEvitementMouvements} onChange={e => set('peurEvitementMouvements', e.target.value)} placeholder="Quel(s) mouvement(s) évité(s)…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
       )}
       <div style={{ marginTop: 8, marginBottom: 8 }}>
         <label style={lblStyle}>Stratégie(s) de Coping</label>
-        <textarea value={state.strategieCoping} onChange={e => set('strategieCoping', e.target.value)} placeholder="Repos, chaleur, médicaments…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+        <DictableTextarea value={state.strategieCoping} onChange={e => set('strategieCoping', e.target.value)} placeholder="Repos, chaleur, médicaments…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         <label style={{ ...lblStyle, width: '100%', marginBottom: 2 }}>Flexibilité psychologique</label>
@@ -566,8 +567,8 @@ export function ContratKineSection({ state, onChange }: {
       <SmartObjectifsInline objectifs={state.objectifs} onChange={obj => onChange({ objectifs: obj })} />
       <OuiNon label="S'engage à faire l'auto-rééducation" value={state.autoReeducation} onChange={v => onChange({ autoReeducation: v })} />
       {state.autoReeducation === 'oui' && (
-        <input value={state.frequenceDuree} onChange={e => onChange({ frequenceDuree: e.target.value })}
-          placeholder="Fréquence / Durée… Ex: 3x/semaine, 20 min" style={{ ...inputStyle, marginTop: 6 }} />
+        <DictableInput value={state.frequenceDuree} onChange={e => onChange({ frequenceDuree: e.target.value })}
+          placeholder="Fréquence / Durée… Ex: 3x/semaine, 20 min" inputStyle={{ ...inputStyle, marginTop: 6 }} />
       )}
     </>
   )
@@ -578,9 +579,9 @@ export function ConseilsSection({ value, onChange }: { value: string; onChange: 
   return (
     <>
       <label style={lblStyle}>Conseils & recommandations au patient</label>
-      <textarea value={value} onChange={e => onChange(e.target.value)}
+      <DictableTextarea value={value} onChange={e => onChange(e.target.value)}
         placeholder="Hygiène de vie, gestion de la charge, exercices à privilégier, signes d'alerte…"
-        rows={6} style={{ ...inputStyle, resize: 'vertical', minHeight: 140 }} />
+        rows={6} textareaStyle={{ ...inputStyle, resize: 'vertical', minHeight: 140 }} />
     </>
   )
 }
@@ -630,10 +631,10 @@ export function PSFSCards({ items, onChange }: { items: PsfsItem[]; onChange: (i
               onChange={e => update(i, { score: e.target.value })}
               className="psfs-slider"
               style={{ width: '100%', ['--psfs-accent' as string]: accent }} />
-            <textarea value={item.notes} onChange={e => update(i, { notes: e.target.value })}
+            <DictableTextarea value={item.notes} onChange={e => update(i, { notes: e.target.value })}
               placeholder="Notes (contexte, évolution, conditions…)"
               rows={1}
-              style={{ width: '100%', marginTop: 8, padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'transparent', border: 'none', borderTop: '1px solid var(--border-color)', borderRadius: 0, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
+              textareaStyle={{ width: '100%', marginTop: 8, padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'transparent', border: 'none', borderTop: '1px solid var(--border-color)', borderRadius: 0, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }} />
           </div>
         )
       })}
@@ -773,7 +774,7 @@ export function StatusSymptomes({ label, status, symptomes, onChangeStatus, onCh
           <button key={o} className={`choix-btn${status === o ? ' active' : ''}`} onClick={() => onChangeStatus(status === o ? '' : o)}>{o}</button>
         ))}
       </div>
-      <input value={symptomes} onChange={e => onChangeSympt(e.target.value)} placeholder="Symptômes / observations…" style={{ ...inputStyle, marginBottom: 0 }} />
+      <DictableInput value={symptomes} onChange={e => onChangeSympt(e.target.value)} placeholder="Symptômes / observations…" inputStyle={{ ...inputStyle, marginBottom: 0 }} />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { DictableTextarea } from './VoiceMic'
 import type { AnalyseIA, BilanDocument, AICallAuditEntry } from '../types'
 import { buildClinicalPrompt, parseAnalyseIA, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
@@ -456,12 +457,12 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                 <p style={{ fontSize: '0.75rem', color: '#78350f', margin: '0 0 8px', lineHeight: 1.5 }}>
                   Indiquez ce que vous souhaitez corriger. Les probabilités seront recalculées et l'analyse ajustée en conséquence.
                 </p>
-                <textarea
+                <DictableTextarea
                   value={correction}
                   onChange={e => setCorrection(e.target.value)}
                   rows={3}
                   placeholder="Ex : La fracture est exclue — pas de douleur à la palpation osseuse et radio négative. Plutôt une tendinopathie d'insertion. Le patient a aussi une instabilité en valgus dynamique que je n'avais pas notée."
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'white', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
+                  textareaStyle={{ width: '100%', padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'white', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
                 />
                 <button
                   onClick={runRefinement}
@@ -494,12 +495,12 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
                 Notez votre diagnostic supposé, vos hypothèses, ou toute observation clinique avant l'analyse. Optionnel — laissez vide pour une analyse uniquement basée sur les données du bilan.
               </p>
-              <textarea
+              <DictableTextarea
                 value={preAnalyseNotes}
                 onChange={e => setPreAnalyseNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Je suspecte une tendinopathie de la coiffe des rotateurs. Patient avec douleur nocturne sélective, arc douloureux 60-120°. Pas de signes d'atteinte capsulaire. Vérifier si impingement sous-acromial."
-                style={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
               />
             </div>
           </div>

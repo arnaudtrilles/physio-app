@@ -6,6 +6,7 @@ import { generateLetterPDF } from '../../utils/pdfGenerator'
 import { pseudonymizeForm, rehydrateText } from '../../utils/pseudonymize'
 import { scanFormForPII, type PIIMatch } from '../../utils/piiScanner'
 import { LetterTypeIcon } from './LetterIcons'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 
 interface LetterGeneratorProps {
   profile: ProfileData
@@ -20,6 +21,8 @@ interface LetterGeneratorProps {
   onAudit: (entry: LetterAuditEntry) => void
   onBack: () => void
   showToast: (msg: string, kind?: 'success' | 'error' | 'info') => void
+  initialType?: LetterType | null
+  bilanSortieData?: Record<string, unknown> | null
 }
 
 type Phase = 'select' | 'form' | 'preview'
@@ -64,16 +67,30 @@ const sectionTitleStyle: React.CSSProperties = {
 }
 
 export function LetterGenerator(props: LetterGeneratorProps) {
-  const { profile, apiKey, patientKey, bilans, intermediaires, notes, existingLetters, onSave, onDelete, onAudit, onBack, showToast } = props
+  const { profile, apiKey, patientKey, bilans, intermediaires, notes, existingLetters, onSave, onDelete, onAudit, onBack, showToast, initialType, bilanSortieData } = props
 
   // Mémoïse le pré-remplissage pour ne pas le recalculer à chaque render
   const richPrefill = useMemo(
-    () => buildPatientPrefill(patientKey, bilans, intermediaires, notes),
-    [patientKey, bilans, intermediaires, notes],
+    () => {
+      const base = buildPatientPrefill(patientKey, bilans, intermediaires, notes)
+      if (bilanSortieData) {
+        const sd = bilanSortieData
+        if (sd.resumePEC) base.resumePec = String(sd.resumePEC)
+        if (sd.resultatsObtenus) base.resultats = String(sd.resultatsObtenus)
+        if (sd.autoExercices) base.recommandations = String(sd.autoExercices)
+        if (sd.precautions) base.suite = String(sd.precautions)
+        if (sd.infoMedecin) base.etatActuel = String(sd.infoMedecin)
+        if (sd.dateFin) base.dateFinPec = String(sd.dateFin)
+        if (sd.motif) base.raisonArret = String(sd.motif) + (sd.motifDetails ? ` — ${sd.motifDetails}` : '')
+        if (sd.facteursLimitants) base.difficultes = String(sd.facteursLimitants)
+      }
+      return base
+    },
+    [patientKey, bilans, intermediaires, notes, bilanSortieData],
   )
 
-  const [phase, setPhase] = useState<Phase>('select')
-  const [type, setType] = useState<LetterType | null>(null)
+  const [phase, setPhase] = useState<Phase>(() => initialType ? 'form' : 'select')
+  const [type, setType] = useState<LetterType | null>(initialType ?? null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [createdAt, setCreatedAt] = useState<string>('')
   const [form, setForm] = useState<LetterFormData>(richPrefill)
@@ -691,7 +708,7 @@ function LetterForm({ type, form, update }: LetterFormProps) {
       </select>
 
       <label style={labelStyle}>Nom du destinataire</label>
-      <input type="text" {...field('nomDestinataire')} placeholder="Ex : Dr DUPONT" style={inputStyle} />
+      <DictableInput {...field('nomDestinataire')} placeholder="Ex : Dr DUPONT" inputStyle={inputStyle} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: 8, marginTop: 10 }}>
         <div>
@@ -704,25 +721,25 @@ function LetterForm({ type, form, update }: LetterFormProps) {
         </div>
         <div>
           <label style={labelStyle}>Prénom</label>
-          <input type="text" {...field('prenomPatient')} style={inputStyle} />
+          <DictableInput {...field('prenomPatient')} inputStyle={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>Nom</label>
-          <input type="text" {...field('nomPatient')} style={inputStyle} />
+          <DictableInput {...field('nomPatient')} inputStyle={inputStyle} />
         </div>
       </div>
 
       <label style={labelStyle}>Indication de PEC</label>
-      <input type="text" {...field('indication')} style={inputStyle} />
+      <DictableInput {...field('indication')} inputStyle={inputStyle} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <div>
           <label style={labelStyle}>Début PEC</label>
-          <input type="text" {...field('dateDebutPec')} placeholder="jj/mm/aaaa" style={inputStyle} />
+          <DictableInput {...field('dateDebutPec')} placeholder="jj/mm/aaaa" inputStyle={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>Fréquence</label>
-          <input type="text" {...field('frequence')} placeholder="2x/semaine" style={inputStyle} />
+          <DictableInput {...field('frequence')} placeholder="2x/semaine" inputStyle={inputStyle} />
         </div>
       </div>
 
@@ -734,11 +751,11 @@ function LetterForm({ type, form, update }: LetterFormProps) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
               <label style={labelStyle}>Date de fin PEC</label>
-              <input type="text" {...field('dateFinPec')} placeholder="jj/mm/aaaa" style={inputStyle} />
+              <DictableInput {...field('dateFinPec')} placeholder="jj/mm/aaaa" inputStyle={inputStyle} />
             </div>
             <div>
               <label style={labelStyle}>Nombre de séances</label>
-              <input type="text" {...field('nbSeances')} style={inputStyle} />
+              <DictableInput {...field('nbSeances')} inputStyle={inputStyle} />
             </div>
           </div>
         </>
@@ -747,43 +764,43 @@ function LetterForm({ type, form, update }: LetterFormProps) {
       {type !== 'demande_imagerie' && type !== 'demande_avis' && (
         <>
           <label style={labelStyle}>Résumé du bilan initial</label>
-          <textarea {...field('resumeBilanInitial')} placeholder="Principales observations, tests positifs, déficits…" style={textareaStyle} />
+          <DictableTextarea {...field('resumeBilanInitial')} placeholder="Principales observations, tests positifs, déficits…" textareaStyle={textareaStyle} />
         </>
       )}
 
       {(type === 'fin_pec' || type === 'fin_pec_anticipee' || type === 'suivi') && (
         <>
           <label style={labelStyle}>Traitement effectué</label>
-          <textarea {...field('traitement')} placeholder="Techniques, exercices, modalités…" style={textareaStyle} />
+          <DictableTextarea {...field('traitement')} placeholder="Techniques, exercices, modalités…" textareaStyle={textareaStyle} />
         </>
       )}
 
       {type === 'fin_pec' && (
         <>
           <label style={labelStyle}>Résultats / état actuel</label>
-          <textarea {...field('resultats')} placeholder="Amélioration EVN, gains articulaires, scores…" style={textareaStyle} />
+          <DictableTextarea {...field('resultats')} placeholder="Amélioration EVN, gains articulaires, scores…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Recommandations au patient</label>
-          <textarea {...field('recommandations')} placeholder="Auto-rééducation, reprise sport…" style={textareaStyle} />
+          <DictableTextarea {...field('recommandations')} placeholder="Auto-rééducation, reprise sport…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Suite proposée</label>
-          <input type="text" {...field('suite')} placeholder="Aucune / suivi espacé / à revoir si besoin" style={inputStyle} />
+          <DictableInput {...field('suite')} placeholder="Aucune / suivi espacé / à revoir si besoin" inputStyle={inputStyle} />
         </>
       )}
 
       {type === 'fin_pec_anticipee' && (
         <>
           <label style={labelStyle}>Raison de l'arrêt anticipé</label>
-          <textarea {...field('raisonArret')} placeholder="Objectifs atteints avant terme, patient autonome, etc." style={textareaStyle} />
+          <DictableTextarea {...field('raisonArret')} placeholder="Objectifs atteints avant terme, patient autonome, etc." textareaStyle={textareaStyle} />
           <label style={labelStyle}>État actuel du patient</label>
-          <textarea {...field('etatActuel')} style={textareaStyle} />
+          <DictableTextarea {...field('etatActuel')} textareaStyle={textareaStyle} />
           <label style={labelStyle}>Recommandations</label>
-          <textarea {...field('recommandations')} style={textareaStyle} />
+          <DictableTextarea {...field('recommandations')} textareaStyle={textareaStyle} />
         </>
       )}
 
       {type === 'demande_avis' && (
         <>
           <label style={labelStyle}>Résumé de la PEC kiné</label>
-          <textarea {...field('resumePec')} placeholder="Ce qui a été fait, résultats obtenus, limites rencontrées…" style={textareaStyle} />
+          <DictableTextarea {...field('resumePec')} placeholder="Ce qui a été fait, résultats obtenus, limites rencontrées…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Type de professionnel suggéré</label>
           <select {...field('typePro')} style={inputStyle}>
             <option value="">— Sélectionner —</option>
@@ -796,14 +813,14 @@ function LetterForm({ type, form, update }: LetterFormProps) {
             <option value="Autre spécialiste">Autre spécialiste</option>
           </select>
           <label style={labelStyle}>Raison de l'orientation</label>
-          <textarea {...field('raisonOrientation')} placeholder="Composante psychologique, douleur chronique non contrôlée…" style={textareaStyle} />
+          <DictableTextarea {...field('raisonOrientation')} placeholder="Composante psychologique, douleur chronique non contrôlée…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Accord du patient</label>
           <select {...field('accordPatient')} style={inputStyle}>
             <option value="oui">Oui, discuté et accepté</option>
             <option value="non">Non, à discuter</option>
           </select>
           <label style={labelStyle}>Professionnel recommandé (optionnel)</label>
-          <input type="text" {...field('nomProRecommande')} placeholder="Dr ... / structure" style={inputStyle} />
+          <DictableInput {...field('nomProRecommande')} placeholder="Dr ... / structure" inputStyle={inputStyle} />
         </>
       )}
 
@@ -819,11 +836,11 @@ function LetterForm({ type, form, update }: LetterFormProps) {
             <option value="Autre">Autre</option>
           </select>
           <label style={labelStyle}>Zone anatomique</label>
-          <input type="text" {...field('zoneAnatomique')} style={inputStyle} />
+          <DictableInput {...field('zoneAnatomique')} inputStyle={inputStyle} />
           <label style={labelStyle}>Justification clinique</label>
-          <textarea {...field('justification')} placeholder="Récidives multiples, absence d'imagerie préalable, guider la rééducation…" style={textareaStyle} />
+          <DictableTextarea {...field('justification')} placeholder="Récidives multiples, absence d'imagerie préalable, guider la rééducation…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Antécédents pertinents</label>
-          <textarea {...field('antecedents')} style={textareaStyle} />
+          <DictableTextarea {...field('antecedents')} textareaStyle={textareaStyle} />
         </>
       )}
 
@@ -836,11 +853,11 @@ function LetterForm({ type, form, update }: LetterFormProps) {
             <option value="Prescription spécifique">Prescription spécifique</option>
           </select>
           <label style={labelStyle}>Justification</label>
-          <textarea {...field('justification')} placeholder="Pourquoi cette demande, ce qu'il reste à traiter…" style={textareaStyle} />
+          <DictableTextarea {...field('justification')} placeholder="Pourquoi cette demande, ce qu'il reste à traiter…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Si double prescription — Indication 1</label>
-          <textarea {...field('indication1')} style={textareaStyle} />
+          <DictableTextarea {...field('indication1')} textareaStyle={textareaStyle} />
           <label style={labelStyle}>Si double prescription — Indication 2</label>
-          <textarea {...field('indication2')} style={textareaStyle} />
+          <DictableTextarea {...field('indication2')} textareaStyle={textareaStyle} />
         </>
       )}
 
@@ -852,30 +869,30 @@ function LetterForm({ type, form, update }: LetterFormProps) {
             <option value="confrère">Confrère kinésithérapeute</option>
           </select>
           <label style={labelStyle}>Date du bilan intermédiaire</label>
-          <input type="text" {...field('dateBilanInterm')} placeholder="jj/mm/aaaa" style={inputStyle} />
+          <DictableInput {...field('dateBilanInterm')} placeholder="jj/mm/aaaa" inputStyle={inputStyle} />
           <label style={labelStyle}>Évolution constatée</label>
-          <textarea {...field('evolution')} style={textareaStyle} />
+          <DictableTextarea {...field('evolution')} textareaStyle={textareaStyle} />
           <label style={labelStyle}>Points positifs</label>
-          <textarea {...field('pointsPositifs')} style={textareaStyle} />
+          <DictableTextarea {...field('pointsPositifs')} textareaStyle={textareaStyle} />
           <label style={labelStyle}>Difficultés / points en cours</label>
-          <textarea {...field('difficultes')} style={textareaStyle} />
+          <DictableTextarea {...field('difficultes')} textareaStyle={textareaStyle} />
           <label style={labelStyle}>Suite prévue</label>
-          <textarea {...field('suite')} style={textareaStyle} />
+          <DictableTextarea {...field('suite')} textareaStyle={textareaStyle} />
         </>
       )}
 
       {type === 'echec_pec' && (
         <>
           <label style={labelStyle}>Modalités de traitement essayées</label>
-          <textarea {...field('traitementsEssayes')} placeholder="Techniques essayées, exercices, modalités…" style={textareaStyle} />
+          <DictableTextarea {...field('traitementsEssayes')} placeholder="Techniques essayées, exercices, modalités…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Constat actuel</label>
-          <textarea {...field('constat')} placeholder="Pas d'amélioration / dégradation / stagnation…" style={textareaStyle} />
+          <DictableTextarea {...field('constat')} placeholder="Pas d'amélioration / dégradation / stagnation…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Scores fonctionnels (optionnel)</label>
-          <textarea {...field('scoresFonctionnels')} placeholder="Ex : EIFEL 18/24, DN4 5/10…" style={textareaStyle} />
+          <DictableTextarea {...field('scoresFonctionnels')} placeholder="Ex : EIFEL 18/24, DN4 5/10…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Orientation proposée</label>
-          <textarea {...field('orientation')} placeholder="Médecin de la douleur, RFR, hospitalisation, autre…" style={textareaStyle} />
+          <DictableTextarea {...field('orientation')} placeholder="Médecin de la douleur, RFR, hospitalisation, autre…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Avis / recommandations</label>
-          <textarea {...field('avisPersonnel')} style={textareaStyle} />
+          <DictableTextarea {...field('avisPersonnel')} textareaStyle={textareaStyle} />
         </>
       )}
     </div>

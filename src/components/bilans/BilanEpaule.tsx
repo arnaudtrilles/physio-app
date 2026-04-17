@@ -1,6 +1,7 @@
 import { useState, useImperativeHandle, forwardRef, memo } from 'react'
 import type { BilanHandle } from '../../types'
 import { SmartObjectifsInline } from '../SmartObjectifsInline'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { inputStyle, boolToStr, DouleurSection, mergeDouleur, type DouleurState } from './bilanSections'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
@@ -410,7 +411,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                   ) as [string, string, string, (v: string) => void, string][]).map(([k, lbl, val, setter, ph]) => (
                     <div key={k} style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                      <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
+                      <DictableInput value={val} onChange={e => setter(e.target.value)} placeholder={ph} inputStyle={inputStyle} />
                     </div>
                   ))}
                   {([
@@ -451,23 +452,23 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                         <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
                       ))}
                       {yf.peurEvitement === 'oui' && (
-                        <input value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
-                          placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+                        <DictableInput value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
+                          placeholder="Quel(s) mouvement(s) évité(s)…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                       )}
                     </>
                   ) : (
                     <>
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Croyances — Origine de la douleur</label>
-                        <input value={croyancesOrigine} onChange={e => setCroyancesOrigine(e.target.value)} placeholder="Ce que pense le patient…" style={inputStyle} />
+                        <DictableInput value={croyancesOrigine} onChange={e => setCroyancesOrigine(e.target.value)} placeholder="Ce que pense le patient…" inputStyle={inputStyle} />
                       </div>
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Croyances — TTT qui serait adapté</label>
-                        <input value={croyancesTtt} onChange={e => setCroyancesTtt(e.target.value)} placeholder="Selon le patient…" style={inputStyle} />
+                        <DictableInput value={croyancesTtt} onChange={e => setCroyancesTtt(e.target.value)} placeholder="Selon le patient…" inputStyle={inputStyle} />
                       </div>
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Attentes</label>
-                        <textarea value={attentes} onChange={e => setAttentes(e.target.value)} placeholder="Objectifs du patient…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                        <DictableTextarea value={attentes} onChange={e => setAttentes(e.target.value)} placeholder="Objectifs du patient…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Auto-efficacité</label>
@@ -485,12 +486,12 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                         <OuiNon key={k} label={lbl} value={yf[k]} onChange={v => setYf(p => ({ ...p, [k]: v }))} />
                       ))}
                       {yf.peurEvitement === 'oui' && (
-                        <input value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
-                          placeholder="Quel(s) mouvement(s) évité(s)…" style={{ ...inputStyle, marginTop: 6 }} />
+                        <DictableInput value={peurEvitementMouvements} onChange={e => setPeurEvitementMouvements(e.target.value)}
+                          placeholder="Quel(s) mouvement(s) évité(s)…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                       )}
                       <div style={{ marginTop: 8, marginBottom: 8 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Stratégie(s) de Coping</label>
-                        <textarea value={strategieCoping} onChange={e => setStrategieCoping(e.target.value)} placeholder="Repos, chaleur, médicaments…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                        <DictableTextarea value={strategieCoping} onChange={e => setStrategieCoping(e.target.value)} placeholder="Repos, chaleur, médicaments…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', width: '100%', marginBottom: 2 }}>Flexibilité psychologique</label>
@@ -587,12 +588,12 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                           className="psfs-slider"
                           style={{ width: '100%', ['--psfs-accent' as string]: accent }}
                         />
-                        <textarea
+                        <DictableTextarea
                           value={scores[kNotes] ?? ''}
                           onChange={e => updateScore(kNotes, e.target.value)}
                           placeholder="Notes (contexte, évolution, conditions…)"
                           rows={1}
-                          style={{ width: '100%', marginTop: 8, padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'transparent', border: 'none', borderTop: '1px solid var(--border-color)', borderRadius: 0, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }}
+                          textareaStyle={{ width: '100%', marginTop: 8, padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'transparent', border: 'none', borderTop: '1px solid var(--border-color)', borderRadius: 0, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }}
                         />
                       </div>
                     )
@@ -600,7 +601,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                   {!coreMode && (
                     <div style={{ marginTop: 8 }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autre(s) Score(s)</label>
-                      <textarea value={scores.autres} onChange={e => updateScore('autres', e.target.value)} placeholder="Nom et score…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      <DictableTextarea value={scores.autres} onChange={e => updateScore('autres', e.target.value)} placeholder="Nom et score…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                     </div>
                   )}
                 </>
@@ -611,8 +612,8 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                   <SmartObjectifsInline objectifs={objectifsSMART} onChange={setObjectifsSMART} />
                   <OuiNon label="S'engage à faire l'auto-rééducation" value={autoReeducation} onChange={setAutoReeducation} />
                   {autoReeducation === 'oui' && (
-                    <input value={frequenceDuree} onChange={e => setFrequenceDuree(e.target.value)}
-                      placeholder="Fréquence / Durée… Ex: 3x/semaine, 20 min" style={{ ...inputStyle, marginTop: 6 }} />
+                    <DictableInput value={frequenceDuree} onChange={e => setFrequenceDuree(e.target.value)}
+                      placeholder="Fréquence / Durée… Ex: 3x/semaine, 20 min" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                   )}
                 </>
               )}
@@ -629,7 +630,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                       ] as [string, string, (v: string) => void, string][]).map(([lbl, val, setter, ph]) => (
                         <div key={lbl} style={{ marginBottom: 8 }}>
                           <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                          <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
+                          <DictableInput value={val} onChange={e => setter(e.target.value)} placeholder={ph} inputStyle={inputStyle} />
                         </div>
                       ))}
                     </>
@@ -651,7 +652,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                       ] as [string, string, (v: string) => void][]).map(([lbl, val, setter]) => (
                         <div key={lbl} style={{ marginBottom: 8 }}>
                           <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                          <input value={val} onChange={e => setter(e.target.value)} placeholder="Observation…" style={inputStyle} />
+                          <DictableInput value={val} onChange={e => setter(e.target.value)} placeholder="Observation…" inputStyle={inputStyle} />
                         </div>
                       ))}
                     </>
@@ -694,11 +695,11 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                     <>
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis cervical</label>
-                        <input value={mobiliteRachisCervical} onChange={e => setMobiliteRachisCervical(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
+                        <DictableInput value={mobiliteRachisCervical} onChange={e => setMobiliteRachisCervical(e.target.value)} placeholder="Amplitudes / limitations…" inputStyle={inputStyle} />
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mobilité du rachis thoracique</label>
-                        <input value={mobiliteRachisThoracique} onChange={e => setMobiliteRachisThoracique(e.target.value)} placeholder="Amplitudes / limitations…" style={inputStyle} />
+                        <DictableInput value={mobiliteRachisThoracique} onChange={e => setMobiliteRachisThoracique(e.target.value)} placeholder="Amplitudes / limitations…" inputStyle={inputStyle} />
                         <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres zones</label>
-                        <textarea value={mobiliteAutresZones} onChange={e => setMobiliteAutresZones(e.target.value)} placeholder="Coude, poignet…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                        <DictableTextarea value={mobiliteAutresZones} onChange={e => setMobiliteAutresZones(e.target.value)} placeholder="Coude, poignet…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                       </div>
 
                       <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Modifications des symptômes</p>
@@ -717,7 +718,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                       ] as [string, string][]).map(([k, lbl]) => (
                         <div key={k} style={{ marginBottom: 8 }}>
                           <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
-                          <input value={modifSymp[k] ?? ''} onChange={e => updateModifSymp(k, e.target.value)} placeholder="Résultat / observation…" style={inputStyle} />
+                          <DictableInput value={modifSymp[k] ?? ''} onChange={e => updateModifSymp(k, e.target.value)} placeholder="Résultat / observation…" inputStyle={inputStyle} />
                         </div>
                       ))}
                     </>
@@ -750,22 +751,22 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                   {!coreMode && (
                     <div style={{ marginTop: 10 }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests de force</label>
-                      <textarea value={autresTestsForce} onChange={e => setAutresTestsForce(e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      <DictableTextarea value={autresTestsForce} onChange={e => setAutresTestsForce(e.target.value)} placeholder="Préciser…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                     </div>
                   )}
 
                   {/* Mouvements améliorant la symptomatologie — gardé en noyau (identification de préférence directionnelle). */}
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Examen des mouvements améliorant la symptomatologie</p>
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Marqueurs avant procédure</label>
-                  <input value={marqueursAvant} onChange={e => setMarqueursAvant(e.target.value)} placeholder="EVN, amplitude, douleur…" style={inputStyle} />
+                  <DictableInput value={marqueursAvant} onChange={e => setMarqueursAvant(e.target.value)} placeholder="EVN, amplitude, douleur…" inputStyle={inputStyle} />
 
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mouvement testé</label>
-                  <input value={mvtAmelMouvement} onChange={e => setMvtAmelMouvement(e.target.value)} placeholder="Ex : rétraction scapulaire, RE2, flexion, abduction…" style={inputStyle} />
+                  <DictableInput value={mvtAmelMouvement} onChange={e => setMvtAmelMouvement(e.target.value)} placeholder="Ex : rétraction scapulaire, RE2, flexion, abduction…" inputStyle={inputStyle} />
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 8, marginBottom: 8 }}>
                     <div>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Nb répétitions</label>
-                      <input value={mvtAmelNbRep} onChange={e => setMvtAmelNbRep(e.target.value)} placeholder="Ex : 10" style={{ ...inputStyle, marginBottom: 0 }} />
+                      <DictableInput value={mvtAmelNbRep} onChange={e => setMvtAmelNbRep(e.target.value)} placeholder="Ex : 10" inputStyle={{ ...inputStyle, marginBottom: 0 }} />
                     </div>
                     <div>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Type de contraction</label>
@@ -779,7 +780,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                   </div>
 
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Résultats après procédure</label>
-                  <textarea value={resultatsMvtRep} onChange={e => setResultatsMvtRep(e.target.value)} placeholder="Effet sur EVN / amplitude / douleur — centralisation, périphérisation…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  <DictableTextarea value={resultatsMvtRep} onChange={e => setResultatsMvtRep(e.target.value)} placeholder="Effet sur EVN / amplitude / douleur — centralisation, périphérisation…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                 </>
               )}
 
@@ -805,25 +806,25 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                         {lbl}
                         {lbl === 'Hoffman / Tromner' && (<><TestInfoButton testKey="hoffman" /><TestInfoButton testKey="tromner" /></>)}
                       </label>
-                      <input value={val} onChange={e => setter(e.target.value)} placeholder={ph} style={inputStyle} />
+                      <DictableInput value={val} onChange={e => setter(e.target.value)} placeholder={ph} inputStyle={inputStyle} />
                     </div>
                   ))}
                   {!coreMode && (
                     <>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Réversibilité</label>
-                      <input value={reversibilite} onChange={e => setReversibilite(e.target.value)} placeholder="Oui / Non — Force, Pinceau/Monofilaments…" style={inputStyle} />
+                      <DictableInput value={reversibilite} onChange={e => setReversibilite(e.target.value)} placeholder="Oui / Non — Force, Pinceau/Monofilaments…" inputStyle={inputStyle} />
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Comportement</label>
-                      <input value={comportement} onChange={e => setComportement(e.target.value)} placeholder="Utile / Inutile — Type…" style={inputStyle} />
+                      <DictableInput value={comportement} onChange={e => setComportement(e.target.value)} placeholder="Utile / Inutile — Type…" inputStyle={inputStyle} />
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Palpation Nerf(s)</label>
-                      <input value={palpationNerfs} onChange={e => setPalpationNerfs(e.target.value)} placeholder="Douleur, lequel…" style={inputStyle} />
+                      <DictableInput value={palpationNerfs} onChange={e => setPalpationNerfs(e.target.value)} placeholder="Douleur, lequel…" inputStyle={inputStyle} />
                       <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>Nerf / Racine</p>
                       <OuiNon label="Sous pression" value={nerfSousPression} onChange={setNerfSousPression} />
                       <OuiNon label="Malade" value={nerfMalade} onChange={setNerfMalade} />
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Précision(s)</label>
-                      <input value={nerfPrecisions} onChange={e => setNerfPrecisions(e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={nerfPrecisions} onChange={e => setNerfPrecisions(e.target.value)} placeholder="—" inputStyle={inputStyle} />
 
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', margin: '12px 0 4px' }}>Schéma des troubles sensitifs</label>
-                      <textarea value={troublesSensitifsNotes} onChange={e => setTroublesSensitifsNotes(e.target.value)} placeholder="Localisation, qualité (fourmillements, engourdissement…)" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      <DictableTextarea value={troublesSensitifsNotes} onChange={e => setTroublesSensitifsNotes(e.target.value)} placeholder="Localisation, qualité (fourmillements, engourdissement…)" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                     </>
                   )}
 
@@ -922,7 +923,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
                         />
                       ))}
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Autres tests</label>
-                      <textarea value={testsSpec.autresTestsFonctionnels ?? ''} onChange={e => updateTestSpec('autresTestsFonctionnels', e.target.value)} placeholder="Préciser…" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                      <DictableTextarea value={testsSpec.autresTestsFonctionnels ?? ''} onChange={e => updateTestSpec('autresTestsFonctionnels', e.target.value)} placeholder="Préciser…" rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
                     </>
                   )}
                 </>
@@ -931,7 +932,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
               {sec.id === 'conseils' && (
                 <>
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Conseils & recommandations au patient</label>
-                  <textarea value={conseilsRecos} onChange={e => setConseilsRecos(e.target.value)} placeholder="Hygiène de vie, gestion de la charge, exercices à privilégier, signes d'alerte…" rows={6} style={{ ...inputStyle, resize: 'vertical', minHeight: 140 }} />
+                  <DictableTextarea value={conseilsRecos} onChange={e => setConseilsRecos(e.target.value)} placeholder="Hygiène de vie, gestion de la charge, exercices à privilégier, signes d'alerte…" rows={6} textareaStyle={{ ...inputStyle, resize: 'vertical', minHeight: 140 }} />
                 </>
               )}
 

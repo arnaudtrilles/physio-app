@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef, useMemo } from 'react'
+import { DictableTextarea } from '../VoiceMic'
 import { Chrono } from './Chrono'
 import { SPPBInteractiveModal } from './SPPBInteractiveModal'
 import { QuestionnaireModal, TINETTI_QUESTIONS, interpretTinetti } from './QuestionnaireModal'
@@ -299,8 +300,8 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
         <SectionTitle num="2" title="Évolution clinique depuis le bilan initial" />
         <OuiNon label="Nouvelles chutes depuis le dernier bilan ?" value={nouvellesChutes} onChange={setNouvellesChutes} />
         {nouvellesChutes === 'oui' && (
-          <textarea value={chutesDetail} onChange={e => setChutesDetail(e.target.value)} rows={2} placeholder="Décrire les circonstances…"
-            style={{ ...inputStyle, resize: 'vertical', marginTop: 6 }} />
+          <DictableTextarea value={chutesDetail} onChange={e => setChutesDetail(e.target.value)} rows={2} placeholder="Décrire les circonstances…"
+            textareaStyle={{ ...inputStyle, resize: 'vertical', marginTop: 6 }} />
         )}
         <div style={{ marginTop: 10 }}>
           <label style={sublabel}>Tolérance au traitement</label>
@@ -321,8 +322,8 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
         </div>
         <div style={{ marginTop: 10 }}>
           <label style={sublabel}>Retentissement de la douleur sur l'autonomie</label>
-          <textarea value={retentissementDouleur} onChange={e => setRetentissementDouleur(e.target.value)} rows={2} placeholder="Marche, toilette, escaliers, sommeil…"
-            style={{ ...inputStyle, resize: 'vertical' }} />
+          <DictableTextarea value={retentissementDouleur} onChange={e => setRetentissementDouleur(e.target.value)} rows={2} placeholder="Marche, toilette, escaliers, sommeil…"
+            textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
         </div>
 
         {/* Yellow flags évolution */}
@@ -397,9 +398,9 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
         </div>
         <div style={{ marginTop: 6 }}>
           <label style={sublabel}>Observations équilibre / posture</label>
-          <textarea value={equilibreObs} onChange={e => setEquilibreObs(e.target.value)} rows={2}
+          <DictableTextarea value={equilibreObs} onChange={e => setEquilibreObs(e.target.value)} rows={2}
             placeholder="Appui monopodal, tandem, stabilité en double tâche…"
-            style={{ ...inputStyle, resize: 'vertical' }} />
+            textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
         </div>
       </div>
 
@@ -407,13 +408,13 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
       <div style={{ marginBottom: 18 }}>
         <SectionTitle num="4" title="Analyse & ajustement du plan" color="#059669" />
         <label style={sublabel}>Acquisitions validées</label>
-        <textarea value={acquisitions} onChange={e => setAcquisitions(e.target.value)} rows={3}
+        <DictableTextarea value={acquisitions} onChange={e => setAcquisitions(e.target.value)} rows={3}
           placeholder="Ex : Marche sécurisée avec déambulateur, force quadriceps améliorée…"
-          style={{ ...inputStyle, resize: 'vertical' }} />
+          textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
         <label style={{ ...sublabel, marginTop: 10 }}>Freins actuels</label>
-        <textarea value={freins} onChange={e => setFreins(e.target.value)} rows={3}
+        <DictableTextarea value={freins} onChange={e => setFreins(e.target.value)} rows={3}
           placeholder="Ex : Peur de tomber persistante à l'extérieur…"
-          style={{ ...inputStyle, resize: 'vertical' }} />
+          textareaStyle={{ ...inputStyle, resize: 'vertical' }} />
       </div>
 
       {/* ── Comparatif global (synthèse visuelle) ─────────────────────────── */}

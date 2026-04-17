@@ -1,5 +1,6 @@
 import { useState, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react'
 import type { BilanHandle } from '../types'
+import { DictableInput, DictableTextarea } from './VoiceMic'
 import { SectionHeader, ScoreRow as SharedScoreRow, EVASlider } from './bilans/shared'
 import { useQuestionnaires, type StoredResult } from './bilans/questionnaires/useQuestionnaires'
 import { SPPBInteractiveModal } from './bilans/SPPBInteractiveModal'
@@ -138,21 +139,6 @@ const taStyle: React.CSSProperties = {
 const lblStyle: React.CSSProperties = {
   display: 'block', fontSize: '0.82rem', fontWeight: 600,
   color: 'var(--text-main)', marginBottom: 4,
-}
-
-// ─── AI button icon (neural/brain) ────────────────────────────────────────────
-
-function AIButtonIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2a4 4 0 0 1 4 4c0 1.1-.9 2-2 2h-4a2 2 0 0 1-2-2 4 4 0 0 1 4-4z" />
-      <path d="M12 8v8" />
-      <path d="M8 12h8" />
-      <circle cx="12" cy="20" r="2" />
-      <path d="M12 18v-2" />
-      <path d="M6 12a6 6 0 0 0 12 0" />
-    </svg>
-  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -310,13 +296,13 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
   }, [])
 
   // ── Section 4: Synthese clinique ───────────────────────────────────────────
-  const [resumePEC, setResumePEC] = useState<string>((initialData?.resumePEC as string) ?? (prefill?.resumePEC ?? ''))
-  const [resultatsObtenus, setResultatsObtenus] = useState<string>((initialData?.resultatsObtenus as string) ?? (prefill?.resultats ?? ''))
-  const [facteursLimitants, setFacteursLimitants] = useState<string>((initialData?.facteursLimitants as string) ?? (prefill?.limitants ?? ''))
+  const [resumePEC, setResumePEC] = useState<string>((initialData?.resumePEC as string) ?? '')
+  const [resultatsObtenus, setResultatsObtenus] = useState<string>((initialData?.resultatsObtenus as string) ?? '')
+  const [facteursLimitants, setFacteursLimitants] = useState<string>((initialData?.facteursLimitants as string) ?? '')
 
   // ── Section 5: Recommandations post-traitement ─────────────────────────────
-  const [autoExercices, setAutoExercices] = useState<string>((initialData?.autoExercices as string) ?? (prefill?.exercices ?? ''))
-  const [precautions, setPrecautions] = useState<string>((initialData?.precautions as string) ?? (prefill?.conseils ?? ''))
+  const [autoExercices, setAutoExercices] = useState<string>((initialData?.autoExercices as string) ?? '')
+  const [precautions, setPrecautions] = useState<string>((initialData?.precautions as string) ?? '')
   const [suiviUlterieur, setSuiviUlterieur] = useState<boolean>((initialData?.suiviUlterieur as boolean) ?? false)
   const [suiviDetails, setSuiviDetails] = useState<string>((initialData?.suiviDetails as string) ?? '')
   const [infoMedecin, setInfoMedecin] = useState<string>((initialData?.infoMedecin as string) ?? '')
@@ -429,11 +415,11 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                   {needsDetails && (
                     <div style={{ marginBottom: 10 }}>
                       <label style={lblStyle}>{motif === 'Orientation spécialiste' ? 'Orientation vers' : 'Préciser'}</label>
-                      <input
+                      <DictableInput
                         value={motifDetails}
                         onChange={e => setMotifDetails(e.target.value)}
                         placeholder={motif === 'Orientation spécialiste' ? 'Ex: Chirurgien orthopédique, neurologue...' : 'Préciser le motif...'}
-                        style={inputStyle}
+                        inputStyle={inputStyle}
                       />
                     </div>
                   )}
@@ -562,11 +548,11 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                           color: 'white', fontWeight: 700, fontSize: '0.7rem', display: 'flex', alignItems: 'center',
                           justifyContent: 'center', flexShrink: 0,
                         }}>{idx + 1}</span>
-                        <input
+                        <DictableInput
                           value={obj.label}
                           onChange={e => updateObjectif(idx, 'label', e.target.value)}
                           placeholder="Décrire l'objectif..."
-                          style={{ ...inputStyle, border: 'none', borderBottom: '1px solid var(--border-color)', borderRadius: 0, padding: '0.3rem 0.4rem', flex: 1, marginBottom: 0 }}
+                          inputStyle={{ ...inputStyle, border: 'none', borderBottom: '1px solid var(--border-color)', borderRadius: 0, padding: '0.3rem 0.4rem', flex: 1, marginBottom: 0 }}
                         />
                         {objectifs.length > 1 && (
                           <button
@@ -609,12 +595,12 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                         })}
                       </div>
 
-                      <textarea
+                      <DictableTextarea
                         value={obj.commentaire}
                         onChange={e => updateObjectif(idx, 'commentaire', e.target.value)}
                         placeholder="Commentaire sur l'objectif..."
                         rows={2}
-                        style={{ ...taStyle, minHeight: 48, fontSize: '0.8rem', marginBottom: 0 }}
+                        textareaStyle={{ ...taStyle, minHeight: 48, fontSize: '0.8rem', marginBottom: 0 }}
                       />
                     </div>
                   ))}
@@ -642,30 +628,30 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
               {sec.id === 'syntheseClinique' && (
                 <>
                   <label style={lblStyle}>Résumé de la prise en charge</label>
-                  <textarea
+                  <DictableTextarea
                     value={resumePEC}
                     onChange={e => setResumePEC(e.target.value)}
                     placeholder="Techniques utilisées, fréquence, progression..."
                     rows={3}
-                    style={taStyle}
+                    textareaStyle={taStyle}
                   />
 
                   <label style={lblStyle}>Résultats obtenus</label>
-                  <textarea
+                  <DictableTextarea
                     value={resultatsObtenus}
                     onChange={e => setResultatsObtenus(e.target.value)}
                     placeholder="Gains fonctionnels, amélioration douleur, autonomie..."
                     rows={3}
-                    style={taStyle}
+                    textareaStyle={taStyle}
                   />
 
                   <label style={lblStyle}>Facteurs limitants rencontrés</label>
-                  <textarea
+                  <DictableTextarea
                     value={facteursLimitants}
                     onChange={e => setFacteursLimitants(e.target.value)}
                     placeholder="Compliance, comorbidités, facteurs psychosociaux..."
                     rows={2}
-                    style={taStyle}
+                    textareaStyle={taStyle}
                   />
 
                   {onGenerateSynthese && (
@@ -678,8 +664,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                       }}
                     >
-                      <AIButtonIcon />
-                      Générer avec l'analyse
+                      Créer la synthèse clinique
                     </button>
                   )}
                 </>
@@ -689,21 +674,21 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
               {sec.id === 'recommandations' && (
                 <>
                   <label style={lblStyle}>Auto-exercices à poursuivre</label>
-                  <textarea
+                  <DictableTextarea
                     value={autoExercices}
                     onChange={e => setAutoExercices(e.target.value)}
                     placeholder="Exercices à réaliser en autonomie, fréquence, durée..."
                     rows={3}
-                    style={taStyle}
+                    textareaStyle={taStyle}
                   />
 
                   <label style={lblStyle}>Précautions et conseils</label>
-                  <textarea
+                  <DictableTextarea
                     value={precautions}
                     onChange={e => setPrecautions(e.target.value)}
                     placeholder="Activités à éviter, ergonomie, reprise sportive..."
                     rows={2}
-                    style={taStyle}
+                    textareaStyle={taStyle}
                   />
 
                   {/* Suivi ultérieur */}
@@ -724,23 +709,23 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                       </span>
                     </label>
                     {suiviUlterieur && (
-                      <textarea
+                      <DictableTextarea
                         value={suiviDetails}
                         onChange={e => setSuiviDetails(e.target.value)}
                         placeholder="Motif du suivi, délai, fréquence suggérée..."
                         rows={2}
-                        style={{ ...taStyle, marginTop: 8, fontSize: '0.82rem' }}
+                        textareaStyle={{ ...taStyle, marginTop: 8, fontSize: '0.82rem' }}
                       />
                     )}
                   </div>
 
                   <label style={lblStyle}>Informations pour le médecin prescripteur</label>
-                  <textarea
+                  <DictableTextarea
                     value={infoMedecin}
                     onChange={e => setInfoMedecin(e.target.value)}
                     placeholder="Éléments importants pour le compte-rendu au médecin..."
                     rows={3}
-                    style={taStyle}
+                    textareaStyle={taStyle}
                   />
 
                   {onGenerateRecommandations && (
@@ -753,8 +738,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                       }}
                     >
-                      <AIButtonIcon />
-                      Générer les recommandations
+                      Créer les recommandations
                     </button>
                   )}
                 </>

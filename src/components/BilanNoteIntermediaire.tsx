@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DictableTextarea } from './VoiceMic'
 import type { AnalyseIAIntermediaire, AICallAuditEntry } from '../types'
 import { buildIntermediairePrompt, parseAnalyseIAIntermediaire, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanIntermediaireEntry, SeanceHistoryEntry } from '../utils/clinicalPrompt'
@@ -324,12 +325,12 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
                 <p style={{ fontSize: '0.75rem', color: '#78350f', margin: '0 0 8px', lineHeight: 1.5 }}>
                   Indiquez ce que vous souhaitez corriger. La note diagnostique sera ajustée en conséquence.
                 </p>
-                <textarea
+                <DictableTextarea
                   value={correction}
                   onChange={e => setCorrection(e.target.value)}
                   rows={3}
                   placeholder="Ex : L'évolution est plutôt favorable, le catastrophisme a diminué depuis la dernière séance. Retirer l'alerte sur la compliance."
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'white', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
+                  textareaStyle={{ width: '100%', padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'white', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
                 />
                 <button
                   onClick={runRefinement}

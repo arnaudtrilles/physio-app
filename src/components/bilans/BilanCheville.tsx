@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
@@ -283,8 +284,8 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
         </div>
       </div>
       {tests[k] && (
-        <input value={tests[k + 'Remarques'] ?? ''} onChange={e => setT(k + 'Remarques', e.target.value)} placeholder="Remarques…"
-          style={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+        <DictableInput value={tests[k + 'Remarques'] ?? ''} onChange={e => setT(k + 'Remarques', e.target.value)} placeholder="Remarques…"
+          inputStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
       )}
     </div>
   )
@@ -327,18 +328,18 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                     <>
                       <OuiNon label="Sur la même cheville ?" value={ant.precedentesMemeCheville} onChange={v => setA('precedentesMemeCheville', v)} />
                       <label style={lblStyle}>Combien ?</label>
-                      <input value={ant.precedentesCombien} onChange={e => setA('precedentesCombien', e.target.value)} placeholder="Nombre…" style={inputStyle} />
+                      <DictableInput value={ant.precedentesCombien} onChange={e => setA('precedentesCombien', e.target.value)} placeholder="Nombre…" inputStyle={inputStyle} />
                       <label style={lblStyle}>Type</label>
-                      <input value={ant.precedentesType} onChange={e => setA('precedentesType', e.target.value)} placeholder="Inversion / éversion / haute…" style={inputStyle} />
+                      <DictableInput value={ant.precedentesType} onChange={e => setA('precedentesType', e.target.value)} placeholder="Inversion / éversion / haute…" inputStyle={inputStyle} />
                     </>
                   )}
                   <OuiNon label="Entorse autre cheville" value={ant.autreCheville} onChange={v => setA('autreCheville', v)} />
                   {ant.autreCheville === 'oui' && (
                     <>
                       <label style={lblStyle}>Combien ?</label>
-                      <input value={ant.autreChevilleCombien} onChange={e => setA('autreChevilleCombien', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={ant.autreChevilleCombien} onChange={e => setA('autreChevilleCombien', e.target.value)} placeholder="—" inputStyle={inputStyle} />
                       <label style={lblStyle}>Type</label>
-                      <input value={ant.autreChevilleType} onChange={e => setA('autreChevilleType', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={ant.autreChevilleType} onChange={e => setA('autreChevilleType', e.target.value)} placeholder="—" inputStyle={inputStyle} />
                     </>
                   )}
                 </>
@@ -363,11 +364,11 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                 <>
                   <p style={sectionTitleStyle}>Morphostatique</p>
                   <label style={lblStyle}>Attitude des membres inférieurs</label>
-                  <input value={morpho.mi} onChange={e => setMorphoField('mi', e.target.value)} placeholder="Valgus / varus, rotation…" style={inputStyle} />
+                  <DictableInput value={morpho.mi} onChange={e => setMorphoField('mi', e.target.value)} placeholder="Valgus / varus, rotation…" inputStyle={inputStyle} />
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Attitude du rachis</label>
-                      <input value={morpho.rachis} onChange={e => setMorphoField('rachis', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={morpho.rachis} onChange={e => setMorphoField('rachis', e.target.value)} placeholder="—" inputStyle={inputStyle} />
                       <OuiNon label="Corrigeable ?" value={morpho.corrigeable} onChange={v => setMorphoField('corrigeable', v)} />
                     </>
                   )}
@@ -376,12 +377,12 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                   <OuiNon label="Boiterie à la marche" value={observation.boiterie} onChange={v => setObs('boiterie', v)} />
                   <OuiNon label="Œdème" value={observation.amyotrophie} onChange={v => setObs('amyotrophie', v)} />
                   {observation.amyotrophie === 'oui' && (
-                    <input value={observation.amyotrophieLoc} onChange={e => setObs('amyotrophieLoc', e.target.value)} placeholder="Localisation…" style={{ ...inputStyle, marginTop: 6 }} />
+                    <DictableInput value={observation.amyotrophieLoc} onChange={e => setObs('amyotrophieLoc', e.target.value)} placeholder="Localisation…" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                   )}
                   {!coreMode && (
                     <>
                       <label style={lblStyle}>Autre observation</label>
-                      <input value={observation.autre} onChange={e => setObs('autre', e.target.value)} placeholder="—" style={inputStyle} />
+                      <DictableInput value={observation.autre} onChange={e => setObs('autre', e.target.value)} placeholder="—" inputStyle={inputStyle} />
 
                       <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Œdème (mesures)</p>
                       <table className="mobility-table">
@@ -407,7 +408,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                       <StatusSymptomes label="Sauts bipodaux" status={fonctionnel.sautsBi} symptomes={fonctionnel.sautsBiSympt} onChangeStatus={v => setFonc('sautsBi', v)} onChangeSympt={v => setFonc('sautsBiSympt', v)} />
                       <StatusSymptomes label="Sauts unipodaux" status={fonctionnel.sautsUni} symptomes={fonctionnel.sautsUniSympt} onChangeStatus={v => setFonc('sautsUni', v)} onChangeSympt={v => setFonc('sautsUniSympt', v)} />
                       <label style={lblStyle}>Autres</label>
-                      <textarea value={fonctionnel.autres} onChange={e => setFonc('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={fonctionnel.autres} onChange={e => setFonc('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
 
@@ -483,7 +484,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                       {renderTestRow('abductionPronation', 'Abduction-pronation')}
 
                       <label style={{ ...lblStyle, marginTop: 10 }}>Autres tests</label>
-                      <textarea value={tests.autres ?? ''} onChange={e => setT('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={tests.autres ?? ''} onChange={e => setT('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>
@@ -523,7 +524,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                         </tbody>
                       </table>
                       <label style={{ ...lblStyle, marginTop: 10 }}>Autres tests de force</label>
-                      <textarea value={autresForce} onChange={e => setAutresForce(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={autresForce} onChange={e => setAutresForce(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>
@@ -553,9 +554,9 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                     <>
                       <p style={{ ...sectionTitleStyle, margin: '14px 0 8px' }}>Dynamique — Y Balance Test<TestInfoButton testKey="yBalance" /></p>
                       <label style={lblStyle}>Gauche (Antérieur / Postéro-médial / Postéro-latéral)</label>
-                      <input value={equilibre.yBalanceGauche} onChange={e => setEq('yBalanceGauche', e.target.value)} placeholder="ex: 65 / 95 / 90 cm" style={inputStyle} />
+                      <DictableInput value={equilibre.yBalanceGauche} onChange={e => setEq('yBalanceGauche', e.target.value)} placeholder="ex: 65 / 95 / 90 cm" inputStyle={inputStyle} />
                       <label style={lblStyle}>Droite (Antérieur / Postéro-médial / Postéro-latéral)</label>
-                      <input value={equilibre.yBalanceDroite} onChange={e => setEq('yBalanceDroite', e.target.value)} placeholder="ex: 67 / 96 / 92 cm" style={inputStyle} />
+                      <DictableInput value={equilibre.yBalanceDroite} onChange={e => setEq('yBalanceDroite', e.target.value)} placeholder="ex: 67 / 96 / 92 cm" inputStyle={inputStyle} />
                     </>
                   )}
                 </>
@@ -564,11 +565,11 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
               {sec.id === 'mvtRep' && (
                 <>
                   <label style={lblStyle}>Marqueurs avant procédure</label>
-                  <input value={mvtRepMarqueurs} onChange={e => setMvtRepMarqueurs(e.target.value)} placeholder="—" style={inputStyle} />
+                  <DictableInput value={mvtRepMarqueurs} onChange={e => setMvtRepMarqueurs(e.target.value)} placeholder="—" inputStyle={inputStyle} />
                   <label style={lblStyle}>Résultats</label>
-                  <textarea value={mvtRepResultats} onChange={e => setMvtRepResultats(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                  <DictableTextarea value={mvtRepResultats} onChange={e => setMvtRepResultats(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                   <label style={{ ...lblStyle, marginTop: 10 }}>Autres tests</label>
-                  <textarea value={autresTestsCheville} onChange={e => setAutresTestsCheville(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                  <DictableTextarea value={autresTestsCheville} onChange={e => setAutresTestsCheville(e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                 </>
               )}
 
@@ -587,7 +588,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
                   {!coreMode && (
                     <>
                       <label style={{ ...lblStyle, marginTop: 8 }}>Autres scores</label>
-                      <textarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
+                      <DictableTextarea value={scores.autres ?? ''} onChange={e => updScore('autres', e.target.value)} rows={2} textareaStyle={{ ...inputStyle, resize: 'vertical' }} placeholder="—" />
                     </>
                   )}
                 </>

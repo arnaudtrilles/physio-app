@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import { DictableInput, DictableTextarea } from '../VoiceMic'
 import type { BilanType } from '../../types'
 import { SectionHeader, OuiNon, EVASlider } from './shared'
 
@@ -398,7 +399,7 @@ export const BilanIntermediaire = forwardRef<
               {sec.id === 'infosGenerales' && (
                 <>
                   <label style={lblStyle}>Prescripteur</label>
-                  <input value={prescripteur} onChange={e => setPrescripteur(e.target.value)} style={inputStyle} placeholder="Nom du prescripteur" />
+                  <DictableInput value={prescripteur} onChange={e => setPrescripteur(e.target.value)} inputStyle={inputStyle} placeholder="Nom du prescripteur" />
                   <label style={lblStyle}>Nombre de séances réalisées</label>
                   <input type="number" value={nbSeances} onChange={e => setNbSeances(e.target.value)} style={{ ...inputStyle, width: 120 }} placeholder="0" min="0" />
                 </>
@@ -521,17 +522,17 @@ export const BilanIntermediaire = forwardRef<
                   <RadioGroup label="Tolérance au traitement" value={tolerance} onChange={setTolerance}
                     options={['Excellente', 'Bonne', 'Moyenne', 'Mauvaise']} />
                   {tolerance !== '' && tolerance !== 'Excellente' && (
-                    <textarea value={toleranceDetail} onChange={e => setToleranceDetail(e.target.value)}
+                    <DictableTextarea value={toleranceDetail} onChange={e => setToleranceDetail(e.target.value)}
                       placeholder="Préciser le problème de tolérance…" rows={2}
-                      style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', marginBottom: 10, boxSizing: 'border-box' }} />
+                      textareaStyle={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', marginBottom: 10, boxSizing: 'border-box' }} />
                   )}
 
                   <RadioGroup label="Observance (auto-rééducation)" value={observance} onChange={setObservance}
                     options={['Fait régulièrement', 'Irrégulièrement', 'Non fait']} />
                   {observance !== '' && observance !== 'Fait régulièrement' && (
-                    <textarea value={observanceDetail} onChange={e => setObservanceDetail(e.target.value)}
+                    <DictableTextarea value={observanceDetail} onChange={e => setObservanceDetail(e.target.value)}
                       placeholder="Préciser les difficultés d'observance…" rows={2}
-                      style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', marginBottom: 10, boxSizing: 'border-box' }} />
+                      textareaStyle={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical', marginBottom: 10, boxSizing: 'border-box' }} />
                   )}
 
                   <div style={{ marginBottom: 10 }}>
@@ -634,7 +635,7 @@ export const BilanIntermediaire = forwardRef<
                   {(bilanType === 'cervical' || bilanType === 'lombaire') && (
                     <>
                       <label style={lblStyle}>Morphostatique</label>
-                      <input value={morpho} onChange={e => setMorpho(e.target.value)} style={inputStyle}
+                      <DictableInput value={morpho} onChange={e => setMorpho(e.target.value)} inputStyle={inputStyle}
                         placeholder={bilanType === 'cervical' ? 'Tête en avant / Torticolis (corrigeable : Oui/Non)' : 'Shift D/G — Amélioration / Correction possible ?'} />
                     </>
                   )}
@@ -642,7 +643,7 @@ export const BilanIntermediaire = forwardRef<
                   {bilanType === 'cheville' && (
                     <>
                       <label style={lblStyle}>Œdème — Technique en 8 : Actuel ___ cm (Initial ___ cm)</label>
-                      <input value={oedeme} onChange={e => setOedeme(e.target.value)} style={inputStyle} placeholder="Ex : 28 cm (initial : 30 cm)" />
+                      <DictableInput value={oedeme} onChange={e => setOedeme(e.target.value)} inputStyle={inputStyle} placeholder="Ex : 28 cm (initial : 30 cm)" />
                     </>
                   )}
 
@@ -686,15 +687,15 @@ export const BilanIntermediaire = forwardRef<
                       </div>
 
                       <label style={lblStyle}>Modification des symptômes (tests scapulaires, neuromusculaires, positionnels)</label>
-                      <textarea value={modifSympt} onChange={e => setModifSympt(e.target.value)} style={taStyle}
+                      <DictableTextarea value={modifSympt} onChange={e => setModifSympt(e.target.value)} textareaStyle={taStyle}
                         placeholder="Assistance scapulaire, stabilisation scapula, activation coiffe, modification position cervicale/thoracique… (Mieux/Pareil/Pire)" />
 
                       <label style={lblStyle}>Examen des mouvements répétés</label>
-                      <textarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} style={taStyle}
+                      <DictableTextarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} textareaStyle={taStyle}
                         placeholder="Marqueurs avant procédure, évolution centralisation/périphérisation…" />
 
                       <label style={lblStyle}>Neurologique & mécanosensibilité (ULTT 1-4)</label>
-                      <textarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} style={taStyle}
+                      <DictableTextarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} textareaStyle={taStyle}
                         placeholder="Réflexes, déficit moteur, sensibilité, ULTT 1 (médian), ULTT 2 (médian), ULTT 3 (radial), ULTT 4 (ulnaire)…" />
                     </>
                   )}
@@ -730,7 +731,7 @@ export const BilanIntermediaire = forwardRef<
                       </div>
 
                       <label style={lblStyle}>Modification des symptômes</label>
-                      <textarea value={modifSympt} onChange={e => setModifSympt(e.target.value)} style={taStyle}
+                      <DictableTextarea value={modifSympt} onChange={e => setModifSympt(e.target.value)} textareaStyle={taStyle}
                         placeholder={
                           bilanType === 'hanche' ? 'Activation abducteurs, modification position lombo-pelvienne / MI, taping, chaussage… (Mieux/Pareil/Pire)' :
                           bilanType === 'genou' ? 'Modification appui, alignement MI, taping rotulien… (Mieux/Pareil/Pire)' :
@@ -738,11 +739,11 @@ export const BilanIntermediaire = forwardRef<
                         } />
 
                       <label style={lblStyle}>Examen des mouvements répétés</label>
-                      <textarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} style={taStyle}
+                      <DictableTextarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} textareaStyle={taStyle}
                         placeholder="Marqueurs avant procédure, évolution…" />
 
                       <label style={lblStyle}>Neurologique & mécanosensibilité</label>
-                      <textarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} style={taStyle}
+                      <DictableTextarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} textareaStyle={taStyle}
                         placeholder="Réflexes, déficit moteur, sensibilité, Lasègue / PKB / Slump…" />
                     </>
                   )}
@@ -750,9 +751,9 @@ export const BilanIntermediaire = forwardRef<
                   {bilanType === 'cheville' && (
                     <>
                       <label style={lblStyle}>Œdème — Technique en 8 (Initial → Actuel)</label>
-                      <input value={oedeme} onChange={e => setOedeme(e.target.value)} style={inputStyle} placeholder="Ex : 28 cm (initial : 30 cm)" />
+                      <DictableInput value={oedeme} onChange={e => setOedeme(e.target.value)} inputStyle={inputStyle} placeholder="Ex : 28 cm (initial : 30 cm)" />
                       <label style={lblStyle}>Weight Bearing Lunge Test (initial → actuel)</label>
-                      <input value={wbLunge} onChange={e => setWbLunge(e.target.value)} style={inputStyle} placeholder="Résultat actuel / initial" />
+                      <DictableInput value={wbLunge} onChange={e => setWbLunge(e.target.value)} inputStyle={inputStyle} placeholder="Résultat actuel / initial" />
                       <label style={lblStyle}>Y Balance Test — Actuel vs Initial</label>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
                         <input value={yBalance} onChange={e => setYBalance(e.target.value)} style={evnInStyle} placeholder="Actuel" />
@@ -771,16 +772,16 @@ export const BilanIntermediaire = forwardRef<
                   {(bilanType === 'cervical' || bilanType === 'lombaire') && (
                     <>
                       <label style={lblStyle}>Examen des Mouvements Répétés</label>
-                      <textarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} style={taStyle}
+                      <DictableTextarea value={mouvRep} onChange={e => setMouvRep(e.target.value)} textareaStyle={taStyle}
                         placeholder={bilanType === 'lombaire' ? 'Centralisation maintenue ou évolutive ? Marqueurs actuels…' : 'Évolution des marqueurs et de la centralisation/périphérisation…'} />
                       <label style={lblStyle}>Neuro / Mécanosensibilité</label>
-                      <textarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} style={taStyle}
+                      <DictableTextarea value={neuroMecano} onChange={e => setNeuroMecano(e.target.value)} textareaStyle={taStyle}
                         placeholder={bilanType === 'lombaire' ? 'Lasègue, PKB, Slump test, déficits radiculaires…' : 'Déficits moteurs/sensitifs, ULTT 1 à 4…'} />
                     </>
                   )}
 
                   <label style={lblStyle}>Tests spécifiques (évolution des tests initialement positifs)</label>
-                  <textarea value={testsSpec} onChange={e => setTestsSpec(e.target.value)} style={taStyle}
+                  <DictableTextarea value={testsSpec} onChange={e => setTestsSpec(e.target.value)} textareaStyle={taStyle}
                     placeholder={
                       bilanType === 'cheville' ? 'ALTD, RALTD, Talar Tilt, Kleiger, Squeeze, Grinding, Molloy, Spring Ligament… (Positifs / Négatifs / évolution)' :
                       bilanType === 'epaule'   ? "Bear Hug, Belly Press, ER Lag Sign, O'Brien, Cross-Arm, Apprehension/Relocation, Sulcus, Jerk, CKCUEST, ULRT, UQ-YBT… (positifs / négatifs / évolution)" :
@@ -797,7 +798,7 @@ export const BilanIntermediaire = forwardRef<
               {sec.id === 'synthese' && (
                 <>
                   <label style={lblStyle}>Bilan de l'évolution (points forts, points stagnants)</label>
-                  <textarea value={bilanEvol} onChange={e => setBilanEvol(e.target.value)} style={taStyle} placeholder="Points forts de la rééducation, points stagnants…" />
+                  <DictableTextarea value={bilanEvol} onChange={e => setBilanEvol(e.target.value)} textareaStyle={taStyle} placeholder="Points forts de la rééducation, points stagnants…" />
 
                   <RadioGroup label="Validation des anciens objectifs SMART" value={validObjSmrt} onChange={setValidObjSmrt}
                     options={['Atteints', 'Partiellement atteints', 'Non atteints']} />
@@ -805,19 +806,19 @@ export const BilanIntermediaire = forwardRef<
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 6 }}>Nouveaux objectifs SMART (court / moyen terme)</div>
                     {[[obj1, setObj1, '1'], [obj2, setObj2, '2'], [obj3, setObj3, '3']].map(([val, setter, n]) => (
-                      <input key={n as string} value={val as string} onChange={e => (setter as (v: string) => void)(e.target.value)}
-                        style={{ ...inputStyle, marginBottom: 6 }} placeholder={`Objectif ${n as string}…`} />
+                      <DictableInput key={n as string} value={val as string} onChange={e => (setter as (v: string) => void)(e.target.value)}
+                        inputStyle={{ ...inputStyle, marginBottom: 6 }} placeholder={`Objectif ${n as string}…`} />
                     ))}
                   </div>
 
                   <label style={lblStyle}>Ajustement du plan de traitement (nouveau contrat kiné)</label>
-                  <textarea value={ajustPlan} onChange={e => setAjustPlan(e.target.value)} style={taStyle} placeholder="Nouvelles priorités de prise en charge…" />
+                  <DictableTextarea value={ajustPlan} onChange={e => setAjustPlan(e.target.value)} textareaStyle={taStyle} placeholder="Nouvelles priorités de prise en charge…" />
 
                   <label style={lblStyle}>Nouvelles priorités en séance</label>
-                  <textarea value={priorities} onChange={e => setPriorities(e.target.value)} style={taStyle} placeholder="Thérapie manuelle, renforcement, contrôle moteur…" />
+                  <DictableTextarea value={priorities} onChange={e => setPriorities(e.target.value)} textareaStyle={taStyle} placeholder="Thérapie manuelle, renforcement, contrôle moteur…" />
 
                   <label style={lblStyle}>Nouveaux exercices d'auto-rééducation remis au patient</label>
-                  <textarea value={exercices} onChange={e => setExercices(e.target.value)} style={taStyle} placeholder="Décrire les exercices prescrits…" />
+                  <DictableTextarea value={exercices} onChange={e => setExercices(e.target.value)} textareaStyle={taStyle} placeholder="Décrire les exercices prescrits…" />
                 </>
               )}
 
