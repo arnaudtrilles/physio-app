@@ -10,21 +10,10 @@ export const config = {
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const TRANSCRIBE_MODEL = 'gpt-4o-transcribe'
 
-// Prompt de vocabulaire médical pour orienter la transcription sur le jargon kiné/physio.
-// OpenAI utilise ce prompt comme contexte stylistique et lexical.
+// Prompt court de vocabulaire — uniquement les abréviations/sigles pour orienter la
+// reconnaissance sans fournir assez de contexte pour que le modèle hallucine un bilan.
 const MEDICAL_VOCAB_PROMPT =
-  "Transcription d'un bilan kinésithérapique en français. Vocabulaire attendu : " +
-  "EVA, EVN, PSFS, HAD, DN4, DASH, Constant, OSS, Rowe, MRC, ROM, 5D3N, " +
-  "red flags, yellow flags, blue flags, black flags, bilan initial, " +
-  "douleur mécanique, douleur inflammatoire, tendinopathie, rupture de coiffe, " +
-  "conflit sous-acromial, capsulite rétractile, arthropathie acromio-claviculaire, " +
-  "sus-épineux, sous-épineux, sous-scapulaire, petit rond, grand rond, deltoïde, " +
-  "trapèze, rhomboïde, abduction, adduction, flexion, extension, rotation interne, " +
-  "rotation externe, élévation, antépulsion, rétropulsion, Hawkins, Neer, Jobe, " +
-  "Yocum, Patte, palm-up test, scapula alata, dyskinésie, articulation gléno-humérale, " +
-  "acromio-claviculaire, sterno-claviculaire, scapulo-thoracique, " +
-  "amplitude active, amplitude passive, catastrophisme, kinésiophobie, fear-avoidance, " +
-  "auto-rééducation, objectifs SMART, prise en charge, PEC, séance."
+  "EVA, EVN, PSFS, HAD, DN4, DASH, MRC, ROM, PEC, SMART, IRM."
 
 function readBody(req: VercelRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {

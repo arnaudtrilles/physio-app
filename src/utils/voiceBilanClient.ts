@@ -32,10 +32,15 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string> {
   if (!data.text) throw new Error('Transcription vide')
 
   const PROMPT_ECHOES = [
-    'EVA, EVN, PSFS, MRC, ROM, flexion, extension, abduction, rotation',
-    'Transcription kinésithérapie français',
-    'transcription d\'un bilan kinésithérapique',
+    'EVA, EVN, PSFS',
+    'transcription kinésithérapie',
+    'transcription d\'un bilan',
     'vocabulaire attendu',
+    'bilan kinésithérapique initial',
+    'le patient présente une douleur',
+    'les tests cliniques suggèrent',
+    'la prise en charge comprendra',
+    'objectifs smart incluent',
   ]
   const lower = data.text.toLowerCase().trim()
   const isEcho = PROMPT_ECHOES.some(p => lower.includes(p.toLowerCase()))
