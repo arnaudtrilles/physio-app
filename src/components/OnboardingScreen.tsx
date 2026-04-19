@@ -17,9 +17,10 @@ type Step = 1 | 2 | 3
 export function OnboardingScreen({ initialProfile, onComplete }: OnboardingScreenProps) {
   const [step, setStepRaw] = useState<Step>(1)
   const cardRef = useRef<HTMLFormElement>(null)
+  const stepChangedAt = useRef(0)
   const setStep = (s: Step) => {
     setStepRaw(s)
-    // Scroll card back to top when changing steps
+    stepChangedAt.current = Date.now()
     setTimeout(() => cardRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0)
   }
   const [draft, setDraft] = useState<ProfileData>({
@@ -355,7 +356,11 @@ export function OnboardingScreen({ initialProfile, onComplete }: OnboardingScree
           </button>
         )}
         {step === 3 && (
-          <button type="button" onClick={handleSubmit as () => void}
+          <button type="button" onClick={() => {
+              // Guard against ghost clicks from the step 2 "Passer" button at the same position
+              if (Date.now() - stepChangedAt.current < 400) return
+              onComplete(draft)
+            }}
             style={{ background: 'none', border: 'none', color: colors.textMuted, fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline' }}>
             Remplir plus tard
           </button>
