@@ -46,6 +46,8 @@ export function OnboardingScreen({ initialProfile, onComplete }: OnboardingScree
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    // Guard: ignore ghost clicks from step transition (Suivant → Commencer same position)
+    if (Date.now() - stepChangedAt.current < 500) return
     onComplete(draft)
   }
 
