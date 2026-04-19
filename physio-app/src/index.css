@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Premium Luxe Blue Palette */
+  --primary: #1e3a8a;
+  --primary-dark: #0f172a;
+  --primary-light: #3b82f6;
+  --secondary: #f8fafc;
+  --base-bg: #e2e8f0;
+  --surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #cbd5e1;
+  --accent: #2563eb;
+
+  /* Semantic — Success (vert) */
+  --color-success: #16a34a;
+  --color-success-dark: #166534;
+  --color-success-deeper: #15803d;
+  --color-success-bg: #f0fdf4;
+  --color-success-bg2: #dcfce7;
+  --color-success-border: #bbf7d0;
+  --color-success-border2: #86efac;
+  --color-emerald: #059669;
+
+  /* Semantic — Danger (rouge) */
+  --color-danger: #dc2626;
+  --color-danger-dark: #991b1b;
+  --color-danger-deeper: #7f1d1d;
+  --color-danger-bg: #fef2f2;
+  --color-danger-bg2: #fee2e2;
+  --color-danger-border: #fca5a5;
+
+  /* Semantic — Warning (orange/ambre) */
+  --color-warning: #d97706;
+  --color-warning-dark: #92400e;
+  --color-warning-deeper: #78350f;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-orange: #ea580c;
+  --color-orange-dark: #c2410c;
+  --color-orange-bg: #fff7ed;
+  --color-orange-border: #fed7aa;
+
+  /* Semantic — Info (bleu) */
+  --color-info: #1d4ed8;
+  --color-info-bg: #eff6ff;
+  --color-info-border: #bfdbfe;
+
+  /* Semantic — Violet (IA) */
+  --color-purple: #7c3aed;
+  --color-purple-dark: #6d28d9;
+  --color-purple-bg: #f5f3ff;
+  --color-purple-border: #c4b5fd;
+  --color-purple-deeper: #8b5cf6;
+
+  /* Semantic — Orange vif */
+  --color-orange-mid: #f97316;
+
+  /* Semantic — Rose */
+  --color-rose: #e11d48;
+  --color-rose-bg: #fff1f2;
+
+  /* Semantic — Emerald foncé */
+  --color-emerald-dark: #047857;
+  --color-emerald-deeper: #065f46;
+  --color-emerald-light: #a7f3d0;
+
+  /* Semantic — Violet foncé */
+  --color-purple-deeper2: #5b21b6;
+  --color-purple-light: #ddd6fe;
+
+  /* Semantic — Ambre */
+  --color-amber: #b45309;
+  --color-amber-bg: #fef3c7;
+  --color-amber-bg2: #fefce8;
+  --color-orange-red: #9a3412;
+
+  /* Echelle douleur (silhouette) */
+  --pain-low: #fde047;
+  --pain-mid: #fb923c;
+  --pain-high: #f87171;
+  --pain-critical: #fecaca;
+  --pain-scale-yellow: #fcd34d;
+  --pain-scale-amber: #fbbf24;
+
+  /* SVG corps — couleurs anatomiques */
+  --svg-body-fill: #dde6ee;
+  --svg-body-stroke: #7a8fa6;
+  --svg-highlight-stroke: #1e40af;
+
+  /* Autres */
+  --color-teal-light: #d1fae5;
+  --color-rose-dark: #be123c;
+  --color-gray-dark: #1f2937;
+  --color-gray-light: #f3f4f6;
+  --color-violet-light: #ede9fe;
+  --color-zinc: #71717a;
+
+  /* Neutral */
+  --color-slate: #94a3b8;
+  --color-slate-light: #f1f5f9;
+  --color-gray: #374151;
+  --color-gray-mid: #6b7280;
+  --color-gray-bg: #f9fafb;
+  --color-gray-border: #e5e7eb;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+}
+
+/* ── Screen transitions ──────────────────────────────────────── */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.slide-in-left  { animation: slideInLeft  0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.slide-in-right { animation: slideInRight 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.fade-in-up     { animation: fadeInUp     0.2s ease-out forwards; }
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Accessibilité — focus visible global */
+*:focus {
+  outline: none;
+}
+*:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Contraste text-muted amélioré : 4.5:1 → 5.9:1 */
+:root {
+  --text-muted: #475569;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background-color: var(--base-bg);
+  color: var(--text-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  justify-content: center; /* Center the mobile app on desktop */
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.2s ease-in-out;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* Strict Mobile Container */
+#root {
+  width: 100%;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 430px; /* iPhone Pro Max approximate width */
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-2xl); /* Make it pop on desktop */
+  padding: 2rem 1.5rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Charte graphique PhysioScan — Vert naturel + Beige chaud */
+  --primary: #2D5A4B;        /* Vert foncé — boutons, avatars, accents */
+  --primary-dark: #1A3830;   /* Vert très foncé — textes importants */
+  --primary-light: #4A8C73;  /* Vert moyen — hovers, badges */
+  --secondary: #F0EBE1;      /* Beige chaud — zones de formulaires */
+  --base-bg: #EDE8DC;        /* Beige fond principal */
+  --surface: #FAFAF7;        /* Blanc cassé — cartes */
+  --text-main: #1A1A1A;      /* Presque noir */
+  --text-muted: #7A7A6E;     /* Gris chaud */
+  --border-color: #DDD8CE;   /* Bordure beige */
+  --accent: #4A8C73;         /* Vert accent */
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+}
+
+/* ── Screen transitions ──────────────────────────────────────── */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.slide-in-left  { animation: slideInLeft  0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.slide-in-right { animation: slideInRight 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.fade-in-up     { animation: fadeInUp     0.2s ease-out forwards; }
+
+/* iOS-style full-width slide entries */
+@keyframes enterFromLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes enterFromRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.slide-enter-from-left  { animation: enterFromLeft  0.38s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.slide-enter-from-right { animation: enterFromRight 0.38s cubic-bezier(0.32, 0.72, 0, 1) both; }
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow: hidden;
+  background-color: var(--base-bg);
+  color-scheme: light;
+  position: fixed;
+  inset: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background-color: var(--base-bg);
+  color: var(--text-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  justify-content: center; /* Center the mobile app on desktop */
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding-top: env(safe-area-inset-top);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.2s ease-in-out;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  background: #ffffff !important;
+  color: var(--text-main) !important;
+}
+
+/* Strict Mobile Container */
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 430px; /* iPhone Pro Max approximate width */
+  margin: 0 auto;
+  height: 100%;
+  background-color: var(--base-bg);
+  box-shadow: none;
+  padding: 0.75rem 0.75rem 0.75rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
