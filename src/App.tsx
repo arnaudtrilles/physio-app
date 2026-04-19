@@ -368,7 +368,7 @@ function App() {
 
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
   const [_apiKeyStored, _setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
-  const [onboarded, setOnboarded] = useIndexedDB<boolean>('physio_onboarded', false)
+  const [onboarded, setOnboarded] = useIndexedDB<boolean>('physio_onboarded_v2', false)
   // Vertex AI: auth is server-side, no client key needed — always truthy
   const apiKey = 'vertex'
   const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded && closedLoaded
