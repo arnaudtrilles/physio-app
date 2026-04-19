@@ -34,8 +34,8 @@ import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
-import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
-import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
+import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
+import { analyseSeanceMiniSchema } from './utils/validation'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
@@ -51,7 +51,6 @@ import { TreatmentBodyChart } from './components/TreatmentBodyChart'
 import { DossierDocuments } from './components/DossierDocuments'
 import { BilanResumeModal } from './components/BilanResumeModal'
 import { SmartObjectifs } from './components/SmartObjectifs'
-import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { AuthScreen } from './components/AuthScreen'
@@ -366,7 +365,7 @@ function App() {
   const [evolutionZoneType, setEvolutionZoneType] = useState<BilanType | null>(null)
   // Modal de choix de zone pour les 4 actions du ConsultationChooser (séance, bilan intermédiaire, bilan de sortie, courrier).
   const [letterZonePicker, setLetterZonePicker] = useState<{ action: 'letter' | 'bilan_sortie' | 'seance' | 'intermediaire' } | null>(null)
-  const isOnline = useOnlineStatus()
+
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
   const [_apiKeyStored, _setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
   const [onboarded, setOnboarded] = useIndexedDB<boolean>('physio_onboarded', false)
@@ -520,7 +519,7 @@ function App() {
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
   const photoInputRef         = useRef<HTMLInputElement>(null)
-  const importDataRef    = useRef<HTMLInputElement>(null)
+
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const updateField = useCallback((field: keyof typeof formData, value: string) => {
@@ -1049,13 +1048,7 @@ function App() {
     return improvDelta(first, last)
   }
 
-  const allPatientKeys = Array.from(new Set(db.map(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim())))
 
-  const globalScore = (() => {
-    const scores = allPatientKeys.map(k => patientGeneralScore(k)).filter((s): s is number => s !== null)
-    if (scores.length === 0) return 0
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-  })()
 
   const getBilanData = (): Record<string, unknown> | null => {
     const zone = selectedBodyZone ?? ''
@@ -1349,66 +1342,6 @@ STRUCTURE (n'inclure que si données présentes) :
     }
   }
 
-  const handleExportExerciceBank = () => {
-    if (dbExerciceBank.length === 0) {
-      showToast('Aucun exercice dans la banque', 'info')
-      return
-    }
-    const csv = exportBankAsCSV(dbExerciceBank)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `banque-exercices-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast(`${dbExerciceBank.length} exercices exportés`, 'success')
-  }
-
-  const handleExportData = () => {
-    if (!allDataLoaded) { showToast('Chargement en cours, réessayez dans un instant', 'error'); return }
-    const payload = JSON.stringify({ db, dbIntermediaires, dbNotes, dbObjectifs, dbExerciceBank, dbPatientDocs, dbPrescriptions, profile, exportedAt: new Date().toISOString() }, null, 2)
-    const blob = new Blob([payload], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `physio-backup-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast('Données exportées', 'success')
-  }
-
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const raw = JSON.parse(ev.target?.result as string)
-        const parsed = backupSchema.parse(raw)
-        setDb(parsed.db)
-        if (parsed.dbIntermediaires) setDbIntermediaires(parsed.dbIntermediaires as unknown as BilanIntermediaireRecord[])
-        if (parsed.dbNotes) setDbNotes(parsed.dbNotes as unknown as NoteSeanceRecord[])
-        if (parsed.dbObjectifs) setDbObjectifs(parsed.dbObjectifs as unknown as SmartObjectif[])
-        if (parsed.dbExerciceBank) setDbExerciceBank(parsed.dbExerciceBank as unknown as ExerciceBankEntry[])
-        if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs as unknown as PatientDocument[])
-        if (parsed.dbPrescriptions) setDbPrescriptions(parsed.dbPrescriptions as unknown as PatientPrescription[])
-        if (parsed.profile) setProfile(parsed.profile as unknown as ProfileData)
-        const noteKeys = (parsed.dbNotes as Array<{ patientKey: string }> | undefined)?.map(n => n.patientKey) ?? []
-        const uniqueNoteKeys = [...new Set(noteKeys)]
-        const counts = [
-          `${parsed.db.length} bilans`,
-          parsed.dbIntermediaires?.length ? `${parsed.dbIntermediaires.length} intermédiaires` : '',
-          parsed.dbNotes?.length ? `${parsed.dbNotes.length} séances [${uniqueNoteKeys.join(', ')}]` : '⚠️ 0 séances dans le fichier',
-        ].filter(Boolean).join(', ')
-        showToast(`Importé : ${counts}`, 'success')
-      } catch {
-        showToast('Fichier invalide', 'error')
-      }
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
