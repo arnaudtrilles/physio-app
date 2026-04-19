@@ -15,7 +15,13 @@ const EQUIPEMENTS = ['Ondes de choc', 'TENS', 'Tecarthérapie (Winback/Indiba)',
 type Step = 1 | 2 | 3
 
 export function OnboardingScreen({ initialProfile, onComplete }: OnboardingScreenProps) {
-  const [step, setStep] = useState<Step>(1)
+  const [step, setStepRaw] = useState<Step>(1)
+  const cardRef = useRef<HTMLFormElement>(null)
+  const setStep = (s: Step) => {
+    setStepRaw(s)
+    // Scroll card back to top when changing steps
+    setTimeout(() => cardRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0)
+  }
   const [draft, setDraft] = useState<ProfileData>({
     ...initialProfile,
     profession: initialProfile.profession || 'Kinésithérapeute',
@@ -119,7 +125,7 @@ export function OnboardingScreen({ initialProfile, onComplete }: OnboardingScree
 
   return (
     <div style={containerStyle}>
-      <form onSubmit={handleSubmit} style={cardStyle}>
+      <form ref={cardRef} onSubmit={handleSubmit} style={cardStyle}>
         {/* Header */}
         <div style={{ textAlign: 'center' }}>
           <h1 style={{ margin: 0, fontSize: typography.hero, fontWeight: typography.extrabold as number, color: colors.primary, letterSpacing: '-0.03em' }}>
