@@ -52,6 +52,9 @@ import { DossierDocuments } from './components/DossierDocuments'
 import { BilanResumeModal } from './components/BilanResumeModal'
 import { SmartObjectifs } from './components/SmartObjectifs'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
+import { useAuth } from './hooks/useAuth'
+import { useSync } from './hooks/useSync'
+import { AuthScreen } from './components/AuthScreen'
 // ── Design system + patient command center ────────────────────────────────
 import { colors as c } from './design/tokens'
 import { PatientHeader } from './components/patient/PatientHeader'
@@ -262,6 +265,8 @@ function SwipeToDelete({ children, onDelete, disabled = false }: {
 }
 
 function App() {
+  const { user, loading: authLoading, signOut } = useAuth()
+
   const [step, setStep] = useState<Step>('dashboard')
   // ── iOS-style swipe navigation ──────────────────────────────────────────────
   const swipeRef = useRef<{ x: number; y: number; dir: 'h' | 'v' | null } | null>(null)
@@ -366,6 +371,17 @@ function App() {
   // Vertex AI: auth is server-side, no client key needed — always truthy
   const apiKey = 'vertex'
   const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded && closedLoaded
+
+  // ── Sync IndexedDB ↔ Supabase ──────────────────────────────────────────────
+  const { syncStatus } = useSync({
+    user, allDataLoaded,
+    db, setDb, dbIntermediaires, setDbIntermediaires,
+    dbNotes, setDbNotes, dbObjectifs, setDbObjectifs,
+    dbExerciceBank, setDbExerciceBank, dbPatientDocs, setDbPatientDocs,
+    dbLetters, setDbLetters, dbLetterAudit, setDbLetterAudit,
+    dbAICallAudit, setDbAICallAudit, dbPrescriptions, setDbPrescriptions,
+    dbClosedTreatments, setDbClosedTreatments, profile, setProfile,
+  })
 
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
   const recordAIAudit = useCallback((entry: AICallAuditEntry) => {
@@ -505,8 +521,12 @@ function App() {
   const importDataRef    = useRef<HTMLInputElement>(null)
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
-  const updateField = useCallback((field: keyof typeof formData, value: string) =>
-    setFormData(prev => ({ ...prev, [field]: value })), [])
+  const updateField = useCallback((field: keyof typeof formData, value: string) => {
+    let v = value
+    if (field === 'nom') v = value.toUpperCase()
+    if (field === 'prenom') v = value.replace(/\b\w/g, c => c.toUpperCase())
+    setFormData(prev => ({ ...prev, [field]: v }))
+  }, [])
 
   const goToPatientRecord = useCallback(() => {
     const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
@@ -1405,6 +1425,20 @@ STRUCTURE (n'inclure que si données présentes) :
   const stepProgress = STEP_ORDER.indexOf(step) >= 0 ? ((STEP_ORDER.indexOf(step) + 1) / STEP_ORDER.length) * 100 : 0
 
   // ── Render ────────────────────────────────────────────────────────────────────
+
+  // Auth gate: loading → login → app
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.surfaceMuted }}>
+        <div className="spinner" style={{ width: 32, height: 32 }} />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthScreen />
+  }
+
   return (
     <div className="app-container">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -3827,6 +3861,66 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 </div>
                 <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '0.15rem 0.45rem', borderRadius: 'var(--radius-full)' }}>Bientôt</span>
               </button>
+
+              {/* Synchronisation cloud */}
+              {(() => {
+                const patients = new Set(db.map(b => `${b.nom} ${b.prenom}`))
+                dbIntermediaires.forEach(b => patients.add(b.patientKey || `${b.nom} ${b.prenom}`))
+                dbNotes.forEach(n => patients.add(n.patientKey || `${n.nom} ${n.prenom}`))
+                const statusConfig = {
+                  idle: { color: 'var(--text-muted)', bg: 'var(--secondary)', label: 'En attente' },
+                  syncing: { color: '#f59e0b', bg: 'color-mix(in srgb, #f59e0b 10%, transparent)', label: 'Synchronisation...' },
+                  done: { color: '#22c55e', bg: 'color-mix(in srgb, #22c55e 10%, transparent)', label: 'Synchronisé' },
+                  error: { color: '#dc2626', bg: 'color-mix(in srgb, #dc2626 10%, transparent)', label: 'Erreur de sync' },
+                }[syncStatus]
+                const rows = [
+                  { label: 'Patients', count: patients.size },
+                  { label: 'Bilans', count: db.length },
+                  { label: 'Bilans inter.', count: dbIntermediaires.length },
+                  { label: 'Notes séance', count: dbNotes.length },
+                  { label: 'Objectifs', count: dbObjectifs.length },
+                  { label: 'Courriers', count: dbLetters.length },
+                  { label: 'Prescriptions', count: dbPrescriptions.reduce((s, p) => s + (p.prescriptions?.length || 0), 0) },
+                  { label: 'Exercices', count: dbExerciceBank.length },
+                ]
+                return (
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.75rem' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusConfig.color }} />
+                          <span style={{ fontSize: '0.72rem', color: statusConfig.color, fontWeight: 500 }}>{statusConfig.label}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem 1rem', fontSize: '0.78rem' }}>
+                      {rows.map(r => (
+                        <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>
+                          <span style={{ fontWeight: 600, color: r.count > 0 ? 'var(--primary-dark)' : 'var(--text-muted)' }}>{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Déconnexion */}
+              <button
+                onClick={() => signOut()}
+                style={{ background: 'var(--surface)', border: '1px solid #fecaca', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', marginTop: '0.5rem' }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #dc2626 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: '#dc2626', fontSize: '0.9rem' }}>Se déconnecter</div>
+                </div>
+              </button>
             </div>
           </div>
         </div>
@@ -4175,12 +4269,12 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Nom *</label>
                   <input type="text" className="input-luxe" placeholder="Ex: Dupont"
-                    value={quickAddData.nom} onChange={(e) => setQuickAddData(prev => ({ ...prev, nom: e.target.value }))} />
+                    value={quickAddData.nom} onChange={(e) => setQuickAddData(prev => ({ ...prev, nom: e.target.value.toUpperCase() }))} />
                 </div>
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Prénom *</label>
                   <input type="text" className="input-luxe" placeholder="Ex: Jean"
-                    value={quickAddData.prenom} onChange={(e) => setQuickAddData(prev => ({ ...prev, prenom: e.target.value }))} />
+                    value={quickAddData.prenom} onChange={(e) => setQuickAddData(prev => ({ ...prev, prenom: e.target.value.replace(/\b\w/g, c => c.toUpperCase()) }))} />
                 </div>
               </div>
 
