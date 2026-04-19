@@ -9,6 +9,8 @@ export function AuthScreen() {
   const { signIn, signUp } = useAuth()
 
   const [tab, setTab] = useState<Tab>('login')
+  const [nom, setNom] = useState('')
+  const [prenom, setPrenom] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -17,6 +19,8 @@ export function AuthScreen() {
   const [signupSuccess, setSignupSuccess] = useState(false)
 
   const resetForm = () => {
+    setNom('')
+    setPrenom('')
     setEmail('')
     setPassword('')
     setConfirmPassword('')
@@ -39,6 +43,10 @@ export function AuthScreen() {
     }
 
     if (tab === 'signup') {
+      if (!nom.trim() || !prenom.trim()) {
+        setError('Veuillez renseigner votre nom et prénom.')
+        return
+      }
       if (password !== confirmPassword) {
         setError('Les mots de passe ne correspondent pas.')
         return
@@ -54,7 +62,7 @@ export function AuthScreen() {
     const { error: authError } =
       tab === 'login'
         ? await signIn(email, password)
-        : await signUp(email, password)
+        : await signUp(email, password, nom.trim(), prenom.trim())
 
     setLoading(false)
 
@@ -228,6 +236,49 @@ export function AuthScreen() {
           onSubmit={handleSubmit}
           style={{ display: 'flex', flexDirection: 'column', gap: spacing.lg }}
         >
+          {tab === 'signup' && (
+            <div style={{ display: 'flex', gap: spacing.md }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Nom *</label>
+                <input
+                  type="text"
+                  value={nom}
+                  onChange={e => setNom(e.target.value.toUpperCase())}
+                  placeholder="DUPONT"
+                  autoComplete="family-name"
+                  style={inputStyle}
+                  onFocus={e => {
+                    e.currentTarget.style.borderColor = colors.primary
+                    e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.primary}22`
+                  }}
+                  onBlur={e => {
+                    e.currentTarget.style.borderColor = colors.borderSoft
+                    e.currentTarget.style.boxShadow = 'none'
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Prénom *</label>
+                <input
+                  type="text"
+                  value={prenom}
+                  onChange={e => setPrenom(e.target.value.replace(/\b\w/g, c => c.toUpperCase()))}
+                  placeholder="Jean"
+                  autoComplete="given-name"
+                  style={inputStyle}
+                  onFocus={e => {
+                    e.currentTarget.style.borderColor = colors.primary
+                    e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.primary}22`
+                  }}
+                  onBlur={e => {
+                    e.currentTarget.style.borderColor = colors.borderSoft
+                    e.currentTarget.style.boxShadow = 'none'
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label style={labelStyle}>Adresse e-mail</label>
             <input

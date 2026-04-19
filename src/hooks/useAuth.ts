@@ -36,8 +36,12 @@ export function useAuth() {
   }, [])
 
   const signUp = useCallback(
-    async (email: string, password: string): Promise<AuthResult> => {
-      const { error } = await supabase.auth.signUp({ email, password })
+    async (email: string, password: string, nom: string, prenom: string): Promise<AuthResult> => {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { nom: nom.toUpperCase(), prenom: prenom.replace(/\b\w/g, c => c.toUpperCase()) } },
+      })
       return { error }
     },
     [],
