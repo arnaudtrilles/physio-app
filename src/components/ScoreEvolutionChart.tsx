@@ -274,7 +274,7 @@ export const ScoreEvolutionChart = memo(function ScoreEvolutionChart({
           const last = points[points.length - 1].value
           const delta = last - first
           const trendColor =
-            delta > 0.5 ? '#16a34a' : delta < -0.5 ? '#dc2626' : '#64748b'
+            delta > 0.5 ? '#166534' : delta < -0.5 ? '#881337' : '#64748b'
           const arrow = delta > 0.5 ? '\u2191' : delta < -0.5 ? '\u2193' : '\u2192'
 
           return (

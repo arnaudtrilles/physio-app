@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { colors, spacing, radius, typography, shadow, motion } from './tokens'
 
 // ──────────────────────────────────────────────────────────────────
@@ -17,28 +17,62 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ open, onClose, title, subtitle, children, maxHeight = '70vh', footer }: BottomSheetProps) {
+  const [dragY, setDragY] = useState(0)
+  const [closing, setClosing] = useState(false)
+  const dragRef = useRef<{ startY: number; dragging: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!open) { setDragY(0); setClosing(false); dragRef.current = null }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismiss()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open])
+
+  const dismiss = () => {
+    setDragY(0)
+    setClosing(true)
+    setTimeout(() => { setClosing(false); onClose() }, 350)
+  }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (closing) return
+    dragRef.current = { startY: e.touches[0].clientY, dragging: true }
+  }
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!dragRef.current?.dragging || closing) return
+    const dy = e.touches[0].clientY - dragRef.current.startY
+    if (dy > 0) setDragY(dy)
+  }
+  const onTouchEnd = () => {
+    if (!dragRef.current || closing) return
+    dragRef.current = null
+    if (dragY > 80) {
+      dismiss()
+    } else {
+      setDragY(0)
+    }
+  }
 
   if (!open) return null
   return (
     <div
-      onClick={onClose}
+      onClick={dismiss}
       style={{
         position: 'fixed',
         top: 0,
-        left: 0,
-        right: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: 430,
         height: '100dvh',
-        background: 'rgba(15, 23, 42, 0.55)',
+        background: 'transparent',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
-        paddingBottom: '4.5rem',
         zIndex: 2000,
         animation: `sheet-fade-in ${motion.fast}`,
       }}
@@ -46,29 +80,41 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: colors.surface,
+          background: colors.surfaceMuted,
           borderRadius: `${radius['3xl']}px ${radius['3xl']}px 0 0`,
           width: '100%',
           maxWidth: 430,
           boxShadow: shadow.xl,
-          height: maxHeight,
+          maxHeight: maxHeight,
           display: 'flex',
           flexDirection: 'column',
-          animation: `sheet-slide-up ${motion.normal}`,
+          animation: dragY || closing ? 'none' : `sheet-slide-up ${motion.normal}`,
+          transform: closing ? 'translateY(100%)' : dragY ? `translateY(${dragY}px)` : undefined,
+          transition: closing ? 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)' : dragY ? 'none' : `transform ${motion.normal}`,
           overflow: 'hidden',
         }}
       >
         <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
           style={{
             display: 'flex',
             justifyContent: 'center',
             padding: '0.6rem 0 0.2rem',
+            cursor: 'grab',
+            touchAction: 'none',
           }}
         >
           <div style={{ width: 38, height: 4, borderRadius: radius.full, background: colors.borderSoft }} />
         </div>
         {(title || subtitle) && (
-          <div style={{ padding: '0.4rem 1.2rem 0.75rem' }}>
+          <div
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{ padding: '0.4rem 1.2rem 0.75rem', touchAction: 'none' }}
+          >
             {title && <div style={{ fontSize: typography.heading, fontWeight: typography.extrabold, color: colors.text }}>{title}</div>}
             {subtitle && <div style={{ fontSize: typography.meta, color: colors.textMuted, marginTop: 2 }}>{subtitle}</div>}
           </div>

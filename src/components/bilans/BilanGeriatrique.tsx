@@ -495,13 +495,13 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
                           {sppbTotal !== null ? 'SPPB — score total' : 'Lancer le test SPPB interactif'}
                         </div>
                         {sppbTotal !== null && (
-                          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: sppbTotal >= 10 ? '#16a34a' : sppbTotal >= 7 ? '#d97706' : '#dc2626', marginTop: 1 }}>
+                          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: sppbTotal >= 10 ? '#166534' : sppbTotal >= 7 ? '#d97706' : '#881337', marginTop: 1 }}>
                             {sppbTotal >= 10 ? 'Performance normale' : sppbTotal >= 7 ? 'Limitations modérées' : 'Fragilité'}
                           </div>
                         )}
                       </div>
                       {sppbTotal !== null ? (
-                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: sppbTotal >= 10 ? '#16a34a' : sppbTotal >= 7 ? '#d97706' : '#dc2626' }}>{sppbTotal}<span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}> / 12</span></span>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: sppbTotal >= 10 ? '#166534' : sppbTotal >= 7 ? '#d97706' : '#881337' }}>{sppbTotal}<span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}> / 12</span></span>
                       ) : (
                         <span style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600 }}>Remplir</span>
                       )}

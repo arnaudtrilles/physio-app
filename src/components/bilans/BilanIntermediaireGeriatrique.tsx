@@ -108,7 +108,7 @@ function CompareRow({ label, unit, initial, actuel, onChangeActuel, children, hi
       ? Math.round(((aNum - iNum) / iNum) * 100)
       : Math.round(((iNum - aNum) / iNum) * 100)
     : null
-  const color = delta === null ? 'var(--text-muted)' : delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#64748b'
+  const color = delta === null ? 'var(--text-muted)' : delta > 0 ? '#166534' : delta < 0 ? '#881337' : '#64748b'
 
   return (
     <div style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -366,9 +366,9 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
               maxScore={12}
               onClick={() => setOpenSppb(true)}
               interpretation={sppbTotal !== null ? (
-                sppbTotal >= 10 ? { label: 'Normal', color: '#16a34a' }
+                sppbTotal >= 10 ? { label: 'Normal', color: '#166534' }
                 : sppbTotal >= 7 ? { label: 'Modéré', color: '#f59e0b' }
-                : { label: 'Fragilité', color: '#dc2626' }
+                : { label: 'Fragilité', color: '#881337' }
               ) : undefined}
             />
           </CompareRow>
@@ -433,7 +433,7 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
               { label: '5 levers de chaise', value: comparisons.cinqLever },
             ].filter(x => x.value !== null).map(x => {
               const v = x.value!
-              const color = v > 0 ? '#16a34a' : v < 0 ? '#dc2626' : '#64748b'
+              const color = v > 0 ? '#166534' : v < 0 ? '#881337' : '#64748b'
               return (
                 <div key={x.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0' }}>
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-main)' }}>{x.label}</span>

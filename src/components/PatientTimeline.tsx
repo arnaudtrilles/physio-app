@@ -95,9 +95,9 @@ function extractEvnFromIntermed(item: IntermediaireItem): number | null {
 }
 
 const EVOLUTION_COLORS: Record<string, string> = {
-  'Amélioré': '#16a34a',
+  'Amélioré': '#166534',
   'Stable': '#71717a',
-  'Aggravé': '#dc2626',
+  'Aggravé': '#881337',
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
           <Badge
             label={item.data.tolerance}
             bg={item.data.tolerance === 'Bien toléré' ? '#dcfce7' : '#fffbeb'}
-            fg={item.data.tolerance === 'Bien toléré' ? '#16a34a' : '#d97706'}
+            fg={item.data.tolerance === 'Bien toléré' ? '#166534' : '#d97706'}
           />
         )}
       </div>

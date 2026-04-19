@@ -99,7 +99,7 @@ export function EvolutionChart({ points, title, compact, improvementPct }: Evolu
   const firstVal = sorted[0].value
   const lastVal = sorted[sorted.length - 1].value
   const delta = lastVal - firstVal
-  const trendColor = delta < -0.5 ? '#16a34a' : delta > 0.5 ? '#dc2626' : '#64748b'
+  const trendColor = delta < -0.5 ? '#166534' : delta > 0.5 ? '#881337' : '#64748b'
   const trendLabel = delta < -0.5 ? 'Amélioration' : delta > 0.5 ? 'Dégradation' : 'Stable'
 
   return (

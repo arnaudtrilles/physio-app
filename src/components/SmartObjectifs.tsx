@@ -52,9 +52,9 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
   }
 
   const statusColor = (s: SmartObjectif['status']) =>
-    s === 'atteint' ? '#16a34a' : s === 'non_atteint' ? '#dc2626' : '#d97706'
+    s === 'atteint' ? '#166534' : s === 'non_atteint' ? '#881337' : '#64748b'
   const statusBg = (s: SmartObjectif['status']) =>
-    s === 'atteint' ? '#dcfce7' : s === 'non_atteint' ? '#fef2f2' : '#fffbeb'
+    s === 'atteint' ? '#dcfce7' : s === 'non_atteint' ? '#fef2f2' : '#f1f5f9'
   const statusLabel = (s: SmartObjectif['status']) =>
     s === 'atteint' ? 'Atteint' : s === 'non_atteint' ? 'Non atteint' : 'En cours'
 
@@ -65,7 +65,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
       <div>
         <button
           onClick={() => setShowAdd(true)}
-          style={{ width: '100%', padding: '0.7rem', borderRadius: 10, border: '2px dashed #fde68a', background: 'transparent', color: '#d97706', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          style={{ width: '100%', padding: '0.7rem', borderRadius: 10, border: '2px dashed #93c5fd', background: '#eff6ff', color: '#1e3a8a', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Ajouter un objectif SMART
         </button>
       </div>
@@ -78,7 +78,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
       {enCours.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
           {enCours.map(obj => (
-            <div key={obj.id} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '0.7rem' }}>
+            <div key={obj.id} style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 10, padding: '0.7rem' }}>
               {editingId === obj.id ? (
                 <div>
                   <input value={editTitre} onChange={e => setEditTitre(e.target.value)} placeholder="Titre"
@@ -91,7 +91,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
                     <button onClick={() => {
                       if (editTitre.trim()) onUpdate(objectifs.map(o => o.id === obj.id ? { ...o, titre: editTitre.trim(), cible: editCible.trim(), dateCible: editDate } : o))
                       setEditingId(null)
-                    }} style={{ flex: 1, padding: '0.35rem', borderRadius: 6, border: 'none', background: '#d97706', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                    }} style={{ flex: 1, padding: '0.35rem', borderRadius: 6, border: 'none', background: '#1e3a8a', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
                       OK
                     </button>
                     <button onClick={() => setEditingId(null)}
@@ -104,24 +104,24 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#92400e' }}>{obj.titre}</div>
-                      <div style={{ fontSize: '0.78rem', color: '#b45309' }}>{obj.cible}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e3a8a' }}>{obj.titre}</div>
+                      <div style={{ fontSize: '0.78rem', color: '#3b82f6' }}>{obj.cible}</div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      {obj.dateCible && <div style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 600 }}>{obj.dateCible}</div>}
+                      {obj.dateCible && <div style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 600 }}>{obj.dateCible}</div>}
                       <button onClick={() => { setEditingId(obj.id); setEditTitre(obj.titre); setEditCible(obj.cible); setEditDate(obj.dateCible) }}
-                        style={{ fontSize: '0.62rem', color: '#b45309', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 1 }}>
+                        style={{ fontSize: '0.62rem', color: '#1e3a8a', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 1 }}>
                         Modifier
                       </button>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                     <button onClick={() => updateStatus(obj.id, 'atteint')}
-                      style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                      style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: 'none', background: '#166534', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
                       Atteint
                     </button>
                     <button onClick={() => updateStatus(obj.id, 'non_atteint')}
-                      style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: '1px solid #fca5a5', background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                      style={{ flex: 1, padding: '0.4rem', borderRadius: 8, border: 'none', background: '#881337', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
                       Non atteint
                     </button>
                     <button onClick={() => removeObj(obj.id)}
@@ -158,7 +158,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
 
       {/* Add form */}
       {showAdd ? (
-        <div style={{ background: 'var(--surface)', border: '1.5px solid #fde68a', borderRadius: 10, padding: '0.75rem', marginBottom: 6 }}>
+        <div style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 10, padding: '0.75rem', marginBottom: 6 }}>
           <input value={titre} onChange={e => setTitre(e.target.value)} placeholder="Titre de l'objectif (ex: Récupérer la flexion complète)"
             style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.85rem', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
           <input value={cible} onChange={e => setCible(e.target.value)} placeholder="Cible mesurable (ex: Flexion genou > 120° à J30)"
@@ -174,7 +174,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={handleAdd} disabled={!titre.trim() || !cible.trim()}
-              style={{ flex: 1, padding: '0.55rem', borderRadius: 8, background: titre.trim() && cible.trim() ? 'linear-gradient(135deg, #d97706, #b45309)' : 'var(--secondary)', border: 'none', color: titre.trim() && cible.trim() ? 'white' : 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: titre.trim() && cible.trim() ? 'pointer' : 'not-allowed' }}>
+              style={{ flex: 1, padding: '0.55rem', borderRadius: 8, background: titre.trim() && cible.trim() ? 'linear-gradient(135deg, #1e3a8a, #0f172a)' : 'var(--secondary)', border: 'none', color: titre.trim() && cible.trim() ? 'white' : 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: titre.trim() && cible.trim() ? 'pointer' : 'not-allowed' }}>
               Ajouter
             </button>
             <button onClick={() => setShowAdd(false)}
@@ -185,7 +185,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
         </div>
       ) : canAdd ? (
         <button onClick={() => setShowAdd(true)}
-          style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1.5px dashed #fde68a', background: 'transparent', color: '#d97706', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
+          style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1.5px dashed #93c5fd', background: '#eff6ff', color: '#1e3a8a', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
           + Ajouter un objectif
         </button>
       ) : null}

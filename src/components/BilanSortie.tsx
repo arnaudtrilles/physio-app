@@ -481,7 +481,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                                 Initial : {sc.initial}s
                                 {sc.final && Number(sc.initial) !== 0 && (() => {
                                   const delta = Math.round(((Number(sc.initial) - Number(sc.final)) / Number(sc.initial)) * 100)
-                                  const color = delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#64748b'
+                                  const color = delta > 0 ? '#166534' : delta < 0 ? '#881337' : '#64748b'
                                   return <span style={{ fontWeight: 700, color, marginLeft: 6 }}>({delta > 0 ? '+' : ''}{delta}%)</span>
                                 })()}
                               </div>
@@ -521,7 +521,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                                 Initial : {sc.initial}
                                 {sc.final && sc.initial && Number(sc.initial) !== 0 && (() => {
                                   const delta = Math.round(((Number(sc.final) - Number(sc.initial)) / Math.abs(Number(sc.initial))) * 100)
-                                  const color = delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#64748b'
+                                  const color = delta > 0 ? '#166534' : delta < 0 ? '#881337' : '#64748b'
                                   return <span style={{ fontWeight: 700, color, marginLeft: 6 }}>({delta > 0 ? '+' : ''}{delta}%)</span>
                                 })()}
                               </div>

@@ -21,9 +21,9 @@ function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
 }
 
 const TENDANCE_CONFIG = {
-  amelioration: { label: 'Amélioration', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '▲' },
+  amelioration: { label: 'Amélioration', color: '#166534', bg: '#f0fdf4', border: '#86efac', icon: '▲' },
   stationnaire:  { label: 'Stationnaire', color: '#d97706', bg: '#fffbeb', border: '#fcd34d', icon: '=' },
-  regression:    { label: 'Régression',   color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', icon: '▼' },
+  regression:    { label: 'Régression',   color: '#881337', bg: '#fef2f2', border: '#fca5a5', icon: '▼' },
   mixte:         { label: 'Évolution mixte', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: '~' },
 }
 
@@ -243,7 +243,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
                   const prev = i > 0 ? evolution.progression[i - 1].evn : null
                   const curr = p.evn
                   const delta = prev != null && curr != null ? Math.round(((prev - curr) / prev) * 100) : null
-                  const dColor = delta === null ? '#94a3b8' : delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8'
+                  const dColor = delta === null ? '#94a3b8' : delta > 0 ? '#166534' : delta < 0 ? '#881337' : '#94a3b8'
                   return (
                     <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 14, alignItems: 'flex-start' }}>
                       <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary-dark)', flexShrink: 0 }}>
@@ -273,7 +273,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
               <div className="ai-section-card">
                 <div className="ai-section-header">
                   <div className="ai-section-icon" style={{ background: '#f0fdf4' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12"/>
                     </svg>
                   </div>
@@ -282,7 +282,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
                 <div className="ai-section-body">
                   {evolution.pointsForts.map((p, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-                      <span style={{ color: '#16a34a', fontWeight: 700, flexShrink: 0 }}>✓</span>
+                      <span style={{ color: '#166534', fontWeight: 700, flexShrink: 0 }}>✓</span>
                       <span style={{ fontSize: '0.88rem', color: 'var(--text-main)', lineHeight: 1.5 }}>{p}</span>
                     </div>
                   ))}

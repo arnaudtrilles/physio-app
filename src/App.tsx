@@ -59,7 +59,7 @@ import { PatientHeroCard } from './components/patient/PatientHeroCard'
 import { ConsultationChooser } from './components/patient/ConsultationChooser'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -263,6 +263,80 @@ function SwipeToDelete({ children, onDelete, disabled = false }: {
 
 function App() {
   const [step, setStep] = useState<Step>('dashboard')
+  // ── iOS-style swipe navigation ──────────────────────────────────────────────
+  const swipeRef = useRef<{ x: number; y: number; dir: 'h' | 'v' | null } | null>(null)
+  const [swipeDragX, setSwipeDragX] = useState(0)
+  const [slideEntry, setSlideEntry] = useState<'from-left' | 'from-right' | null>(null)
+  const [slideReady, setSlideReady] = useState(false)
+  const swipedNav = useRef(false) // prevents fade-in after swipe
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (slideEntry) return
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, dir: null }
+  }
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!swipeRef.current || slideEntry) return
+    const dx = e.touches[0].clientX - swipeRef.current.x
+    const dy = e.touches[0].clientY - swipeRef.current.y
+    if (!swipeRef.current.dir) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        swipeRef.current.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'
+      }
+      return
+    }
+    if (swipeRef.current.dir !== 'h') return
+    if (step === 'dashboard' && dx > 0) setSwipeDragX(dx)
+    else if (step === 'database' && !selectedPatient && dx < 0) setSwipeDragX(dx)
+    else if (step === 'database' && selectedPatient && dx > 0) setSwipeDragX(dx)
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!swipeRef.current || swipeRef.current.dir !== 'h' || slideEntry) {
+      swipeRef.current = null
+      setSwipeDragX(0)
+      return
+    }
+    const dx = e.changedTouches[0].clientX - swipeRef.current.x
+    swipeRef.current = null
+
+    if (step === 'dashboard' && dx > 80) {
+      setSwipeDragX(0)
+      swipedNav.current = true
+      setSlideEntry('from-left'); setSlideReady(false)
+      setSelectedPatient(null); setSearchQuery(''); setStep('database')
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setSlideReady(true)
+        setTimeout(() => { setSlideEntry(null); setSlideReady(false) }, 420)
+      }))
+    } else if (step === 'database' && selectedPatient && dx > 80) {
+      setSwipeDragX(0)
+      swipedNav.current = true
+      setSlideEntry('from-left'); setSlideReady(false)
+      setSelectedPatient(null)
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setSlideReady(true)
+        setTimeout(() => { setSlideEntry(null); setSlideReady(false) }, 420)
+      }))
+    } else if (step === 'database' && !selectedPatient && dx < -80) {
+      setSwipeDragX(0)
+      swipedNav.current = true
+      setSlideEntry('from-right'); setSlideReady(false)
+      setStep('dashboard')
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setSlideReady(true)
+        setTimeout(() => { setSlideEntry(null); setSlideReady(false) }, 420)
+      }))
+    } else {
+      setSwipeDragX(0)
+    }
+  }
+  const swipeDragStyle: React.CSSProperties = swipeDragX ? {
+    transform: `translateX(${swipeDragX}px)`,
+    opacity: Math.max(0.3, 1 - Math.abs(swipeDragX) / 400),
+  } : {}
+  const slideEntryStyle: React.CSSProperties = slideEntry ? {
+    transform: slideReady ? 'translateX(0)' : `translateX(${slideEntry === 'from-left' ? '-100%' : '100%'})`,
+    transition: slideReady ? 'transform 0.38s cubic-bezier(0.32, 0.72, 0, 1)' : 'none',
+  } : {}
   const [initialLetterType, setInitialLetterType] = useState<string | null>(null)
   const [bilanSortieForLetter, setBilanSortieForLetter] = useState<Record<string, unknown> | null>(null)
   const { toasts, showToast, removeToast } = useToast()
@@ -1336,48 +1410,112 @@ STRUCTURE (n'inclure que si données présentes) :
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* ── Dashboard ──────────────────────────────────────────────────────────── */}
-      {step === 'dashboard' && (
-        <div className="start-screen fade-in">
-          <div style={{ width:80, height:80, borderRadius:'50%', overflow:'hidden', marginBottom:'2rem', boxShadow:'var(--shadow-lg)', flexShrink:0, background: profile.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            {profile.photo
-              ? <img src={profile.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
-              : <span style={{ fontSize:'2rem', fontWeight:700, color:'white' }}>{(profile.nom || profile.prenom || 'W')[0]}</span>}
+      {step === 'dashboard' && (() => {
+        const now = new Date()
+        const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+        const initials = `${(profile.nom || 'W')[0]}${(profile.prenom || '')[0] || ''}`.toUpperCase()
+        return (
+          <div className={slideEntry || swipedNav.current ? '' : 'fade-in'} style={{ ...swipeDragStyle, ...slideEntryStyle, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+            <div className="scroll-area" style={{ flex: 1, padding: '0.5rem 0.35rem 4rem' }}>
+              {/* Header — centered with settings */}
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.25rem', paddingTop: '0.3rem' }}>
+                <button onClick={() => setStep('settings')} style={{ position: 'absolute', top: '0.3rem', right: 0, width: 30, height: 30, borderRadius: 'var(--radius-full)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-full)', overflow: 'hidden', flexShrink: 0, background: profile.photo ? 'transparent' : 'color-mix(in srgb, var(--primary) 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
+                  {profile.photo
+                    ? <img src={profile.photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Profil" />
+                    : <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary)' }}>{initials}</span>}
+                </div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>{dateStr}</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.02em' }}>Bonjour, {profile.nom || profile.prenom}</div>
+              </div>
+
+              {/* Hero card — dernière activité */}
+              {(() => {
+                const parseFR = (d: string) => { const [dd, mm, yy] = d.split('/'); return new Date(`${yy}-${mm}-${dd}`).getTime() || 0 }
+                const activities: { patientKey: string; date: number; dateStr: string; type: string; zone?: string }[] = [
+                  ...db.filter(r => r.status === 'complet' || r.bilanData).map(r => ({ patientKey: `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim(), date: parseFR(r.dateBilan), dateStr: r.dateBilan, type: 'Bilan initial', zone: r.zone })),
+                  ...dbIntermediaires.map(r => ({ patientKey: r.patientKey, date: parseFR(r.dateBilan), dateStr: r.dateBilan, type: 'Bilan intermédiaire', zone: r.zone })),
+                  ...dbNotes.map(r => ({ patientKey: r.patientKey, date: parseFR(r.dateSeance), dateStr: r.dateSeance, type: 'Séance', zone: r.zone })),
+                ]
+                const last = activities.sort((a, b) => b.date - a.date)[0]
+                if (!last) return null
+                const diff = Math.floor((Date.now() - last.date) / 86400000)
+                const ago = diff === 0 ? "Aujourd'hui" : diff === 1 ? 'Hier' : `Il y a ${diff}j`
+                const totalThisWeek = activities.filter(a => Date.now() - a.date < 7 * 86400000).length
+                return (
+                  <div
+                    onClick={() => { setSelectedPatient(last.patientKey); setStep('database') }}
+                    style={{ background: 'var(--primary-dark)', borderRadius: 'var(--radius-xl)', padding: '1.1rem 1.15rem', marginBottom: '1rem', cursor: 'pointer', color: 'white', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15,23,42,0.18)' }}
+                  >
+                    <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+                    <div style={{ position: 'absolute', bottom: -30, right: 40, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
+                    <div style={{ fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6, marginBottom: '0.6rem' }}>Dernière activité</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.2rem', letterSpacing: '-0.01em' }}>{last.patientKey}</div>
+                    <div style={{ fontSize: '0.78rem', opacity: 0.7, marginBottom: '0.75rem' }}>
+                      {last.type}{last.zone ? ` · ${last.zone}` : ''} · {ago}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}>
+                        Ouvrir le dossier
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                      </span>
+                      {totalThisWeek > 0 && (
+                        <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>{totalThisWeek} activité{totalThisWeek > 1 ? 's' : ''} cette semaine</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Stats */}
+              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
+
+            </div>
+            {/* Action buttons — fixed bottom */}
+            <div style={{ position: 'absolute', bottom: '1.2rem', left: 0, right: 0, padding: '0.6rem 0.75rem', background: 'linear-gradient(to top, var(--secondary) 60%, transparent)', display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
+                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                Mes patients
+              </button>
+              <button
+                onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(15,23,138,0.15)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
+                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Nouveau patient
+              </button>
+            </div>
           </div>
-          <h1 className="title-premium" style={{fontSize: '1.8rem'}}>Bonjour, {profile.nom || profile.prenom}</h1>
-          <p className="subtitle">Bienvenue sur votre espace Physio</p>
-          <div className="spacer" />
-          <div style={{ width: '100%', marginBottom: '5.5rem' }}>
-            <button className="btn-primary-luxe" onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }} style={{marginBottom: 0}}>
-              Nouveau Patient
-            </button>
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Database ───────────────────────────────────────────────────────────── */}
       {step === 'database' && (
-        <div className="general-info-screen fade-in">
-          {selectedPatient ? (
+        <div className={`general-info-screen ${slideEntry || swipedNav.current ? '' : 'fade-in'}`} style={{ ...swipeDragStyle, ...slideEntryStyle, padding: '0 0.35rem' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+          {selectedPatient ? null : (
             <header className="screen-header">
-              <button className="btn-back" onClick={() => setSelectedPatient(null)}>
+              <button className="btn-back" onClick={() => setStep('dashboard')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <h2 className="title-section">Tous les patients</h2>
-              <div style={{width: '24px'}} />
-            </header>
-          ) : (
-            <div style={{ padding: '1rem 1.1rem 0.5rem', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.66rem', fontWeight: 800, color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Dossiers</div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: c.text, letterSpacing: '-0.02em', lineHeight: 1.1 }}>Patients</div>
-              </div>
+              <h2 className="title-section">Patients</h2>
               <button
                 onClick={() => setShowAddPatientChoice(true)}
                 aria-label="Ajouter un patient"
-                style={{ width: 44, height: 44, borderRadius: 999, background: `linear-gradient(135deg, ${c.primary}, ${c.primaryDark})`, color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px rgba(30,58,138,0.3)', flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--secondary)', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
-            </div>
+            </header>
           )}
           <div className="scroll-area">
             {!selectedPatient ? (
@@ -1389,7 +1527,7 @@ STRUCTURE (n'inclure que si données présentes) :
                     </svg>
                     <input type="text" placeholder="Rechercher un nom…"
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: c.surfaceMuted, color: c.text, outline: 'none', boxSizing: 'border-box' }} />
+                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: c.surfaceMuted, color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)' }} />
                   </div>
                 </div>
                 {(() => {
@@ -1415,7 +1553,7 @@ STRUCTURE (n'inclure que si données présentes) :
                   return (
                     <div style={{ display: 'flex', position: 'relative' }}>
                       {/* Patient list */}
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: '5rem', paddingRight: '1.75rem' }}>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: '5rem' }}>
                         {/* Patient count */}
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500, marginBottom: '0.75rem', letterSpacing: '0.02em' }}>
                           {patients.length} patient{patients.length > 1 ? 's' : ''}
@@ -1423,39 +1561,69 @@ STRUCTURE (n'inclure que si données présentes) :
                         {letters.map(letter => (
                           <div key={letter} id={`patient-section-${letter}`}>
                             {/* Letter header */}
-                            <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', background: 'var(--secondary)', marginBottom: '0.25rem' }}>
-                              <span style={{ width: 28, height: 28, borderRadius: 'var(--radius-md)', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem', flexShrink: 0 }}>{letter}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', marginBottom: '0.15rem' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>{letter}</span>
                               <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                             </div>
                             {/* Patients in this letter group */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.5rem' }}>
                               {grouped.get(letter)!.map(p => {
                                 const score = patientGeneralScore(p.key)
-                                const scoreColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : '#dc2626'
+                                const scoreColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : score < 0 ? '#881337' : '#94a3b8'
+                                const age = computeAge(p.dateNaissance)
                                 const lastBilan = [...p.records].sort((a, b) => b.id - a.id)[0]
+                                const firstBilanLabel = [...p.records].sort((a, b) => a.id - b.id).find(r => r.customLabel)?.customLabel
+                                const pathoLabel = firstBilanLabel || lastBilan?.pathologie || lastBilan?.zone || ''
+                                // Count total séances (bilans + intermédiaires + notes)
+                                const nBilans = p.records.filter(r => r.status === 'complet' || r.bilanData).length
+                                const nInter = dbIntermediaires.filter(r => r.patientKey === p.key).length
+                                const nNotes = dbNotes.filter(r => r.patientKey === p.key).length
+                                const totalSeances = nBilans + nInter + nNotes
+                                // Last activity date across all record types
+                                const parseFR = (d: string) => { const [dd, mm, yy] = d.split('/'); return new Date(`${yy}-${mm}-${dd}`).getTime() || 0 }
+                                const allDates = [
+                                  ...p.records.map(r => parseFR(r.dateBilan)),
+                                  ...dbIntermediaires.filter(r => r.patientKey === p.key).map(r => parseFR(r.dateBilan)),
+                                  ...dbNotes.filter(r => r.patientKey === p.key).map(r => parseFR(r.dateSeance)),
+                                ].filter(d => d > 0)
+                                const lastDate = allDates.length ? new Date(Math.max(...allDates)) : null
+                                const timeAgo = (() => {
+                                  if (!lastDate) return ''
+                                  const diff = Date.now() - lastDate.getTime()
+                                  const days = Math.floor(diff / 86400000)
+                                  if (days === 0) return "Aujourd'hui"
+                                  if (days === 1) return 'Hier'
+                                  if (days < 7) return `Il y a ${days}j`
+                                  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem.`
+                                  if (days < 365) return `Il y a ${Math.floor(days / 30)} mois`
+                                  return `Il y a ${Math.floor(days / 365)} an(s)`
+                                })()
                                 return (
                                   <div key={p.key} onClick={() => setSelectedPatient(p.key)}
-                                    style={{ background: 'var(--surface)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.1s' }}
+                                    style={{ background: 'var(--surface)', padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.15s', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)' }}
                                     onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.98)')}
                                     onPointerUp={e => (e.currentTarget.style.transform = 'scale(1)')}
                                     onPointerLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
-                                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: `linear-gradient(135deg, ${p.avatarBg || 'var(--primary)'}, ${p.avatarBg || 'var(--primary)'}dd)`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.92rem', boxShadow: `0 2px 8px ${p.avatarBg || 'var(--primary)'}40` }}>
-                                        {(p.nom[0] || '?')}{(p.prenom[0] || '?')}
+                                    <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)', fontWeight: 600, fontSize: '0.65rem', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)' }}>
+                                      {(p.nom[0] || '?')}{(p.prenom[0] || '?')}
+                                    </span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem', marginBottom: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        {p.key}
+                                        {isBirthday(p.dateNaissance) && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="14" width="18" height="8" rx="2"/><rect x="6" y="11" width="12" height="3" rx="1"/><line x1="8.5" y1="11" x2="8.5" y2="7"/><line x1="12" y1="11" x2="12" y2="7"/><line x1="15.5" y1="11" x2="15.5" y2="7"/><path d="M7.5 5.5c1-1.5 1-1.5 2 0M11 5.5c1-1.5 1-1.5 2 0M14.5 5.5c1-1.5 1-1.5 2 0"/></svg>}
                                       </div>
-                                      <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>{p.key}{isBirthday(p.dateNaissance) && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="14" width="18" height="8" rx="2"/><rect x="6" y="11" width="12" height="3" rx="1"/><line x1="8.5" y1="11" x2="8.5" y2="7"/><line x1="12" y1="11" x2="12" y2="7"/><line x1="15.5" y1="11" x2="15.5" y2="7"/><path d="M7.5 5.5c1-1.5 1-1.5 2 0M11 5.5c1-1.5 1-1.5 2 0M14.5 5.5c1-1.5 1-1.5 2 0"/></svg>}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>{lastBilan?.zone || 'Zone non renseignée'}</span>
-                                          {p.records.every(r => r.status === 'incomplet' && !r.bilanData)
-                                            ? <span style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.62rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap' }}>Sans bilan</span>
-                                            : <span style={{ whiteSpace: 'nowrap' }}> · {p.records.filter(r => r.status === 'complet' || r.bilanData).length} bilan(s)</span>
-                                          }
-                                        </div>
+                                      <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {age !== null && <>{age} ans</>}{age !== null && pathoLabel ? ' · ' : ''}{pathoLabel}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        {totalSeances > 0 && <span>{totalSeances} séance{totalSeances > 1 ? 's' : ''}</span>}
+                                        {totalSeances > 0 && timeAgo && <span>·</span>}
+                                        {timeAgo && <span>{timeAgo}</span>}
+                                        {totalSeances === 0 && !timeAgo && <span style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', color: 'var(--primary)', fontSize: '0.62rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)' }}>Nouveau</span>}
                                       </div>
                                     </div>
                                     {score !== null
-                                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.78rem', color: scoreColor, flexShrink: 0, letterSpacing: '-0.01em' }}>
+                                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.78rem', color: scoreColor, flexShrink: 0 }}>
                                           {score > 0 ? (
                                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
                                           ) : score < 0 ? (
@@ -1465,7 +1633,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                           )}
                                           {Math.abs(score)}%
                                         </span>
-                                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
                                     }
                                   </div>
                                 )
@@ -1478,7 +1646,7 @@ STRUCTURE (n'inclure que si données présentes) :
                       {/* Alphabet sidebar */}
                       {!searchQuery && letters.length > 1 && (
                         <div
-                          style={{ position: 'sticky', top: 0, right: 0, height: 'fit-content', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '0.35rem 0.15rem', zIndex: 20, alignSelf: 'flex-start' }}
+                          style={{ position: 'sticky', top: 0, right: 0, height: 'fit-content', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '0.35rem 0.15rem', marginLeft: '0.85rem', zIndex: 20, alignSelf: 'flex-start', flexShrink: 0, width: 22 }}
                           onTouchMove={e => {
                             const touch = e.touches[0]
                             const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
@@ -2018,9 +2186,9 @@ STRUCTURE (n'inclure que si données présentes) :
                       {/* ── Objectifs SMART ────────────────── */}
                       <div style={{ marginBottom: '0.75rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0.5rem', marginBottom: '0.5rem' }}>
-                          <div style={{ flex: 1, height: 1, background: '#fde68a' }} />
-                          <span style={{ fontSize: '0.65rem', color: '#d97706', fontWeight: 700, letterSpacing: '0.05em' }}>OBJECTIFS SMART</span>
-                          <div style={{ flex: 1, height: 1, background: '#fde68a' }} />
+                          <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>OBJECTIFS SMART</span>
+                          <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                         </div>
                         <SmartObjectifs objectifs={dbObjectifs} patientKey={selectedPatient ?? ''} onUpdate={setDbObjectifs} maxObjectifs={zonesForPicker.length} />
                       </div>
@@ -2183,7 +2351,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                   deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
                                 }
                               }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingTop: '0.15rem', paddingBottom: '0.85rem', paddingLeft: '0.75rem', borderLeft: `1.5px solid ${zoneClosed ? c.borderSoft : `${c.primary}55`}`, borderBottom: `1px solid ${c.borderSoft}`, borderTopLeftRadius: 10, borderBottomLeftRadius: 10, background: 'var(--surface)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : `color-mix(in srgb, ${c.primary} 2.5%, #f8fafc)` }}>
                               <div
                                 onClick={toggleThisEpisode}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
@@ -2272,7 +2440,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           const prevEvn = index > 0 ? zoneBilans[index - 1].evn : null
                           const currEvn = record.evn
                           const delta   = (prevEvn != null && currEvn != null) ? improvDelta(prevEvn, currEvn) : null
-                          const dColor  = delta === null ? '' : delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8'
+                          const dColor  = delta === null ? '' : delta > 0 ? '#166534' : delta < 0 ? '#881337' : '#94a3b8'
 
                           const incomplet = record.status === 'incomplet'
                           const bilanKey = `bilan-${record.id}`
@@ -2285,8 +2453,8 @@ STRUCTURE (n'inclure que si données présentes) :
                                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0.55rem 0.9rem', cursor: 'pointer' }}
                               >
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                    <span style={{ fontWeight: 700, color: '#1e40af', fontSize: '0.88rem' }}>Bilan n°{index + 1}</span>
+                                  <div style={{ fontSize: '0.88rem', lineHeight: 1.35 }}>
+                                    <span style={{ fontWeight: 700, color: '#1e40af' }}>Bilan n°{index + 1}</span>
                                     {editingLabelBilanId === record.id ? (
                                       <input
                                         autoFocus
@@ -2303,19 +2471,19 @@ STRUCTURE (n'inclure que si données présentes) :
                                           if (e.key === 'Escape') { setEditingLabelBilanId(null) }
                                         }}
                                         placeholder="Ex : tendinopathie coiffe des rotateurs"
-                                        style={{ flex: 1, minWidth: 120, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white' }}
+                                        style={{ display: 'inline', marginLeft: 4, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white', width: 'calc(100% - 90px)' }}
                                       />
                                     ) : (
                                       <span
                                         onClick={e => { e.stopPropagation(); setEditingLabelBilanId(record.id); setLabelDraft(record.customLabel ?? '') }}
                                         title={record.customLabel ? 'Cliquer pour modifier' : 'Cliquer pour ajouter un titre'}
-                                        style={{ fontSize: '0.78rem', fontWeight: 500, color: record.customLabel ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: record.customLabel ? 'normal' : 'italic', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                        style={{ fontSize: '0.78rem', fontWeight: 500, color: record.customLabel ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: record.customLabel ? 'normal' : 'italic', cursor: 'pointer' }}
                                       >
-                                        {record.customLabel ? `: ${record.customLabel}` : (
-                                          <>
+                                        {record.customLabel ? <>&nbsp;: {record.customLabel}</> : (
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 4, verticalAlign: 'middle' }}>
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                             titre
-                                          </>
+                                          </span>
                                         )}
                                       </span>
                                     )}
@@ -2502,8 +2670,8 @@ STRUCTURE (n'inclure que si données présentes) :
                                             <div style={{ padding: '0 0.75rem 0.75rem' }}>
                                             {(note.data.evolution || note.data.tolerance) && (
                                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-                                              {note.data.evolution && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.evolution === 'Amélioré' ? '#dcfce7' : note.data.evolution === 'Aggravé' ? '#fef2f2' : '#f3f4f6', color: note.data.evolution === 'Amélioré' ? '#16a34a' : note.data.evolution === 'Aggravé' ? '#dc2626' : '#6b7280' }}>{note.data.evolution}</span>}
-                                              {note.data.tolerance && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.tolerance === 'Bien toléré' ? '#dcfce7' : '#fffbeb', color: note.data.tolerance === 'Bien toléré' ? '#16a34a' : '#d97706' }}>{note.data.tolerance}</span>}
+                                              {note.data.evolution && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.evolution === 'Amélioré' ? '#dcfce7' : note.data.evolution === 'Aggravé' ? '#fef2f2' : '#f3f4f6', color: note.data.evolution === 'Amélioré' ? '#166534' : note.data.evolution === 'Aggravé' ? '#881337' : '#6b7280' }}>{note.data.evolution}</span>}
+                                              {note.data.tolerance && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.tolerance === 'Bien toléré' ? '#dcfce7' : '#fffbeb', color: note.data.tolerance === 'Bien toléré' ? '#166534' : '#d97706' }}>{note.data.tolerance}</span>}
                                             </div>
                                             )}
                                             {(() => {
@@ -2690,7 +2858,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       const baseEvn = !isNaN(evnInitNum) ? evnInitNum : (firstInitial?.evn ?? null)
                                       const score = (!isNaN(evnActNum) && baseEvn != null && baseEvn > 0)
                                         ? improvDelta(baseEvn, evnActNum) : null
-                                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : score < 0 ? '#dc2626' : '#94a3b8'
+                                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : score < 0 ? '#881337' : '#94a3b8'
 
                                       const intermKey = `interm-${rec.id}`
                                       const intermOpen = openTimelineKey === intermKey
@@ -2850,7 +3018,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       setEvolutionZoneType(zoneType as BilanType)
                                       setStep('evolution_ia')
                                     }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #0f766e, #0d9488)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(30,58,138,0.2)' }}>
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                                     Rapport d'évolution — {zoneLabel}
                                   </button>
@@ -2906,7 +3074,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                         closeTreatment(selectedPatient ?? '', zoneType as BilanType, zoneBilans[0]?.zone)
                                       }
                                     }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #86efac', background: 'transparent', color: '#166534', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--border-color)', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                                     Clôturer la PEC {zoneLabel}
                                   </button>
@@ -3112,12 +3280,12 @@ STRUCTURE (n'inclure que si données présentes) :
         const slot = (n: number) => total > 0 ? (n / total) * circ : 0
         const seg  = (n: number) => Math.max(slot(n) - 6, 0)
         const startOff = -circ / 4
-        const gsColor = globalScore >= 50 ? '#16a34a' : globalScore >= 20 ? '#f97316' : '#dc2626'
+        const gsColor = globalScore >= 50 ? '#166534' : globalScore >= 20 ? '#f97316' : '#881337'
         const incompletCount = db.filter(r => r.status === 'incomplet').length
         return (
           <div className="general-info-screen fade-in">
             <header className="screen-header">
-              <button className="btn-back" onClick={() => editingProfile ? setEditingProfile(false) : setStep('dashboard')}>
+              <button className="btn-back" onClick={() => editingProfile ? setStep('settings') : setStep('settings')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <h2 className="title-section">{editingProfile ? 'Modifier le profil' : 'Tableau de bord'}</h2>
@@ -3467,7 +3635,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   </div>
 
                   {/* Dashboard Stats */}
-                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} />
+                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
 
                   <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.1rem 1.15rem', marginBottom:'1.25rem', border:'1px solid var(--border-color)' }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem' }}>
@@ -3575,7 +3743,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                       const bilans = getPatientBilans(key)
                       const firstRec = bilans[0]
                       const score = patientGeneralScore(key)
-                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#16a34a' : '#dc2626'
+                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : '#881337'
                       const sBg    = score === null ? '#f1f5f9' : score > 0 ? '#dcfce7' : '#fee2e2'
                       const initials = `${(firstRec?.nom[0] || '?')}${(firstRec?.prenom[0] || '?')}`
                       return (
@@ -3605,33 +3773,63 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         )
       })()}
 
-      {/* ── Bottom nav ─────────────────────────────────────────────────────────── */}
-      {(step === 'dashboard' || step === 'database' || step === 'profile') && (
-        <nav className="bottom-nav">
-          <button className={`bottom-nav-item${step === 'database' ? ' active' : ''}`}
-            onClick={() => { setSelectedPatient(null); setSearchQuery(''); setStep('database') }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-            <span>Patients</span>
-          </button>
-          <button className={`bottom-nav-item${step === 'dashboard' ? ' active' : ''}`} onClick={() => setStep('dashboard')}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-              <polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
-            <span>Accueil</span>
-          </button>
-          <button className={`bottom-nav-item${step === 'profile' ? ' active' : ''}`} onClick={() => setStep('profile')}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            <span>Profil</span>
-          </button>
-        </nav>
+      {/* ── Settings ──────────────────────────────────────────────────────────── */}
+      {step === 'settings' && (
+        <div className="general-info-screen fade-in">
+          <header className="screen-header">
+            <button className="btn-back" onClick={() => setStep('dashboard')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <h2 className="title-section">Réglages</h2>
+            <div style={{ width: 24 }} />
+          </header>
+          <div className="scroll-area" style={{ paddingBottom: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {/* Profil */}
+              <button
+                onClick={() => { setEditingProfile(true); setProfileEditDraft(profile); setStep('profile') }}
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Profil</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Nom, photo, profession, compétences</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+
+              {/* Préférences */}
+              <button
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', opacity: 0.6 }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Préférences</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mode sombre, langue, notifications</div>
+                </div>
+                <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '0.15rem 0.45rem', borderRadius: 'var(--radius-full)' }}>Bientôt</span>
+              </button>
+
+              {/* Plan */}
+              <button
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', opacity: 0.6 }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement et facturation</div>
+                </div>
+                <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '0.15rem 0.45rem', borderRadius: 'var(--radius-full)' }}>Bientôt</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Résumé bilan modal ─────────────────────────────────────────────────── */}
@@ -3948,9 +4146,9 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               </button>
               <button
                 onClick={() => { setShowAddPatientChoice(false); setQuickAddData({ nom: '', prenom: '', dateNaissance: '', zone: '', evn: '', pathologie: '', notes: '' }); setShowQuickAddPatient(true) }}
-                style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', border: '2px solid #10b981', background: '#ecfdf5', cursor: 'pointer', textAlign: 'left' }}>
-                <div style={{ fontWeight: 700, color: '#065f46', fontSize: '0.95rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                style={{ padding: '1rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border-color)', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
                   Patient existant (sans bilan)
                 </div>
                 <div style={{ fontSize: '0.78rem', color: '#6b7280', lineHeight: 1.4 }}>Patient déjà suivi — ajout rapide pour notes de séance</div>

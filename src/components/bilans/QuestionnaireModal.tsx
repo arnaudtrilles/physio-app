@@ -181,9 +181,9 @@ export const FES_I_QUESTIONS: Question[] = [
 ]
 
 export function interpretFesI(score: number): { label: string; color: string } {
-  if (score <= 22) return { label: 'Peur faible', color: '#16a34a' }
+  if (score <= 22) return { label: 'Peur faible', color: '#166534' }
   if (score <= 31) return { label: 'Peur modérée', color: '#f59e0b' }
-  return { label: 'Peur élevée — risque de chute', color: '#dc2626' }
+  return { label: 'Peur élevée — risque de chute', color: '#881337' }
 }
 
 // Mini GDS (4 items, oui/non)
@@ -204,8 +204,8 @@ export const MINI_GDS_QUESTIONS: Question[] = [
 ]
 
 export function interpretMiniGds(score: number): { label: string; color: string } {
-  if (score === 0) return { label: 'Pas de dépression suspectée', color: '#16a34a' }
-  return { label: 'Forte probabilité de dépression', color: '#dc2626' }
+  if (score === 0) return { label: 'Pas de dépression suspectée', color: '#166534' }
+  return { label: 'Forte probabilité de dépression', color: '#881337' }
 }
 
 // Tinetti (16 items : 9 équilibre + 7 marche, max 28)
@@ -269,7 +269,7 @@ export const TINETTI_GAIT_QUESTIONS: Question[] = [
 export const TINETTI_QUESTIONS: Question[] = [...TINETTI_BALANCE_QUESTIONS, ...TINETTI_GAIT_QUESTIONS]
 
 export function interpretTinetti(score: number): { label: string; color: string } {
-  if (score >= 25) return { label: 'Risque de chute faible', color: '#16a34a' }
+  if (score >= 25) return { label: 'Risque de chute faible', color: '#166534' }
   if (score >= 20) return { label: 'Risque modéré', color: '#f59e0b' }
-  return { label: 'Risque de chute élevé', color: '#dc2626' }
+  return { label: 'Risque de chute élevé', color: '#881337' }
 }

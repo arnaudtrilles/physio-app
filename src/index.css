@@ -6,7 +6,7 @@
   --primary-dark: #0f172a; /* Slate 900 - Near Black */
   --primary-light: #3b82f6; /* Bright Royal Blue for specific accents */
   --secondary: #f8fafc; /* Premium off-white */
-  --base-bg: #e2e8f0; /* Darker background for desktop to emphasize the mobile app frame */
+  --base-bg: var(--secondary); /* Match app background */
   --surface: #ffffff;
   --text-main: #0f172a;
   --text-muted: #64748b;
@@ -54,6 +54,18 @@
 .slide-in-right { animation: slideInRight 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 .fade-in-up     { animation: fadeInUp     0.2s ease-out forwards; }
 
+/* iOS-style full-width slide entries */
+@keyframes enterFromLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes enterFromRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.slide-enter-from-left  { animation: enterFromLeft  0.38s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.slide-enter-from-right { animation: enterFromRight 0.38s cubic-bezier(0.32, 0.72, 0, 1) both; }
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -62,24 +74,25 @@
 
 html {
   overflow: hidden;
-  height: 100%;
-  height: 100dvh;
+  background-color: #f8fafc;
+  color-scheme: light;
+  position: fixed;
+  inset: 0;
 }
 
 body {
   font-family: 'Inter', -apple-system, sans-serif;
-  background-color: var(--base-bg);
+  background-color: #f8fafc;
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   display: flex;
   justify-content: center; /* Center the mobile app on desktop */
+  width: 100%;
   height: 100%;
-  height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
-  position: fixed;
-  width: 100%;
+  padding-top: env(safe-area-inset-top);
 }
 
 button {
@@ -106,9 +119,9 @@ input, textarea, select {
   max-width: 430px; /* iPhone Pro Max approximate width */
   margin: 0 auto;
   height: 100%;
-  background-color: var(--surface);
-  box-shadow: var(--shadow-2xl); /* Make it pop on desktop */
-  padding: 2rem 1.5rem;
+  background-color: var(--secondary);
+  box-shadow: none;
+  padding: 0.75rem 0.75rem 0.75rem;
   position: relative;
   display: flex;
   flex-direction: column;

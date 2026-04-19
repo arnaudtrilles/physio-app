@@ -102,7 +102,7 @@ function ScorePill({ score, label }: { score: number | null; label: string }) {
   if (score === null) return (
     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
   )
-  const color = score === 4 ? '#16a34a' : score >= 2 ? '#f59e0b' : '#dc2626'
+  const color = score === 4 ? '#166534' : score >= 2 ? '#f59e0b' : '#881337'
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: 700, color }}>
       {label} : {score}/4
@@ -131,7 +131,7 @@ export function SPPBInteractiveModal({ initialData = {}, onValidate, onClose }: 
 
   const total = (balanceScore ?? 0) + (gaitScore ?? 0) + (chairScore ?? 0)
   const allSet = balanceScore !== null && gaitScore !== null && chairScore !== null
-  const totalColor = allSet ? (total >= 10 ? '#16a34a' : total >= 7 ? '#f59e0b' : '#dc2626') : 'var(--text-muted)'
+  const totalColor = allSet ? (total >= 10 ? '#166534' : total >= 7 ? '#f59e0b' : '#881337') : 'var(--text-muted)'
 
   const handleValidate = () => {
     onValidate({

@@ -21,13 +21,13 @@ export const colors = {
   textFaint: '#94a3b8',
 
   // Semantic
-  success: '#16a34a',
+  success: '#166534',
   successBg: '#dcfce7',
   successSoft: '#f0fdf4',
   warning: '#d97706',
   warningBg: '#fef3c7',
   warningSoft: '#fff7ed',
-  danger: '#dc2626',
+  danger: '#881337',
   dangerBg: '#fee2e2',
   dangerSoft: '#fef2f2',
   info: '#2563eb',
@@ -95,7 +95,7 @@ export const shadow = {
   lg: '0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.06)',
   xl: '0 20px 40px -12px rgba(15, 23, 42, 0.18)',
   primary: '0 4px 14px 0 rgba(30, 58, 138, 0.22)',
-  primaryStrong: '0 8px 22px rgba(30, 58, 138, 0.32)',
+  primaryStrong: '0 12px 24px -10px rgba(30, 58, 138, 0.25)',
 } as const
 
 export const motion = {

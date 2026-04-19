@@ -19,7 +19,7 @@ export function PatientHeader({ name, initials, avatarBg, birthday, subtitle, on
         position: 'sticky',
         top: 0,
         zIndex: 30,
-        background: `linear-gradient(180deg, ${colors.surface} 0%, ${colors.surface} 78%, transparent 100%)`,
+        background: `linear-gradient(180deg, ${colors.surfaceMuted} 0%, ${colors.surfaceMuted} 78%, transparent 100%)`,
         display: 'flex',
         alignItems: 'center',
         gap: spacing.md,
@@ -46,24 +46,25 @@ export function PatientHeader({ name, initials, avatarBg, birthday, subtitle, on
       >
         <IconBack size={18} strokeWidth={2.5} />
       </button>
-      <div
+      <span
         style={{
-          width: 42,
-          height: 42,
-          borderRadius: radius.full,
-          background: `linear-gradient(135deg, ${avatarBg || colors.primary}, ${avatarBg || colors.primary}cc)`,
+          width: 32,
+          height: 32,
+          borderRadius: radius.md,
+          background: 'color-mix(in srgb, var(--primary) 10%, transparent)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'white',
-          fontWeight: typography.bold,
-          fontSize: typography.label,
+          color: colors.primary,
+          fontWeight: typography.semibold,
+          fontSize: '0.65rem',
+          letterSpacing: '0.03em',
           flexShrink: 0,
-          boxShadow: shadow.sm,
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
         }}
       >
         {initials}
-      </div>
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{

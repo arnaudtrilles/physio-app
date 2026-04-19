@@ -275,11 +275,11 @@ export function EVASlider({
   const num = value === '' ? null : Number(value)
   const display = num == null || isNaN(num) ? '—' : String(num)
   const color = num == null || isNaN(num) ? 'var(--text-muted)'
-    : num === 0 ? '#16a34a'
+    : num === 0 ? '#166534'
     : num <= 3 ? '#65a30d'
     : num <= 5 ? '#ca8a04'
     : num <= 7 ? '#ea580c'
-    : '#dc2626'
+    : '#881337'
 
   return (
     <div style={{ marginBottom: compact ? 0 : 10 }}>

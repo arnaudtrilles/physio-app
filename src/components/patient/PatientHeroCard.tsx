@@ -32,13 +32,13 @@ export function PatientHeroCard({
   return (
     <div
       style={{
-        background: colors.surfaceMuted,
+        background: 'linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)',
         borderRadius: radius['2xl'],
         padding: `${spacing.lg}px`,
         marginBottom: spacing.lg,
         color: colors.text,
         border: `1.5px solid ${colors.primary}`,
-        boxShadow: shadow.primary,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 2px rgba(15,23,42,0.04), 0 6px 16px -8px rgba(15,23,42,0.12), 0 2px 4px -2px rgba(15,23,42,0.06)',
       }}
     >
       {/* Traitements en cours */}
@@ -91,7 +91,7 @@ export function PatientHeroCard({
 
       {/* CTA */}
       <Button
-        variant="outline"
+        variant="primary"
         size="lg"
         fullWidth
         onClick={onAddConsultation}
