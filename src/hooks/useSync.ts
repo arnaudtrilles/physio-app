@@ -13,7 +13,7 @@ import {
   syncProfile, replaceStore, ensurePatient,
   convertBilans, convertIntermediaires, convertNotes,
   convertObjectifs, convertClosedTreatments, convertExerciceBank,
-  deduplicateLocalData, pk,
+  deduplicateLocalData,
   type PatientMap, type LocalData,
 } from '../lib/syncEngine'
 import type {

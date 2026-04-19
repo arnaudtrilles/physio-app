@@ -46,7 +46,7 @@ export interface LocalData {
 
 /** Remove duplicate records by comparing content (ignoring id) */
 export function deduplicateLocalData(data: LocalData): LocalData {
-  function dedup<T extends Record<string, unknown>>(items: T[], keyFn: (item: T) => string): T[] {
+  function dedup<T>(items: T[], keyFn: (item: T) => string): T[] {
     const seen = new Set<string>()
     return items.filter(item => {
       const key = keyFn(item)
