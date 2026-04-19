@@ -1,4 +1,4 @@
-import { colors, spacing, radius, typography, shadow } from '../../design/tokens'
+import { colors, spacing, radius, typography } from '../../design/tokens'
 import { IconPlus } from '../../design/icons'
 import { Button } from '../../design/primitives'
 

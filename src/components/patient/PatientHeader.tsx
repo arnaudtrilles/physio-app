@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { colors, spacing, radius, typography, shadow } from '../../design/tokens'
+import { colors, spacing, radius, typography } from '../../design/tokens'
 import { IconBack, IconMoreH } from '../../design/icons'
 
 interface PatientHeaderProps {
@@ -12,7 +12,7 @@ interface PatientHeaderProps {
   onMenu?: () => void
 }
 
-export function PatientHeader({ name, initials, avatarBg, birthday, subtitle, onBack, onMenu }: PatientHeaderProps) {
+export function PatientHeader({ name, initials, birthday, subtitle, onBack, onMenu }: PatientHeaderProps) {
   return (
     <header
       style={{
