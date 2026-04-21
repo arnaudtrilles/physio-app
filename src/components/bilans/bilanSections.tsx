@@ -7,7 +7,7 @@ import { DictableInput, DictableTextarea } from '../VoiceMic'
 // ─── Common styles ─────────────────────────────────────────────────────────
 export const inputStyle: React.CSSProperties = {
   width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.92rem',
-  color: 'var(--text-main)', background: '#FDFCFA',
+  color: 'var(--text-main)', background: 'var(--input-bg)',
   border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', marginBottom: 8,
 }
 export const lblStyle: React.CSSProperties = {
@@ -564,7 +564,7 @@ export function ContratKineSection({ state, onChange }: {
 }) {
   return (
     <div style={{
-      background: '#FDFCFA', borderRadius: 14,
+      background: 'var(--input-bg)', borderRadius: 14,
       border: '1px solid var(--border-color)',
       padding: '1rem', boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
     }}>
@@ -622,7 +622,7 @@ export function PSFSCards({ items, onChange }: { items: PsfsItem[]; onChange: (i
         const scoreNum = item.score === '' ? null : Math.max(0, Math.min(10, Number(item.score)))
         const accent = scoreNum === null ? 'var(--text-muted)' : scoreNum >= 7 ? '#059669' : scoreNum >= 4 ? '#d97706' : '#dc2626'
         return (
-          <div key={i} style={{ background: '#FDFCFA', borderRadius: 'var(--radius-xl)', padding: '0.9rem 1rem', marginBottom: 10, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div key={i} style={{ background: 'var(--input-bg)', borderRadius: 'var(--radius-xl)', padding: '0.9rem 1rem', marginBottom: 10, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', flexShrink: 0 }}>0{i + 1}</span>
               <input value={item.label} onChange={e => update(i, { label: e.target.value })}

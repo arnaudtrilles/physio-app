@@ -80,7 +80,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: '#FDFCFA',
+          background: 'var(--input-bg)',
           borderRadius: `${radius['3xl']}px ${radius['3xl']}px 0 0`,
           width: '100%',
           maxWidth: 430,

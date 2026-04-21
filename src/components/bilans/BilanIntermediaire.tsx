@@ -98,7 +98,7 @@ export const BilanIntermediaire = forwardRef<
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem',
-    color: 'var(--text-main)', background: '#FDFCFA',
+    color: 'var(--text-main)', background: 'var(--input-bg)',
     border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', marginBottom: 8,
   }
   const taStyle: React.CSSProperties = {
@@ -375,7 +375,7 @@ export const BilanIntermediaire = forwardRef<
     cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
   }
 
-  const evnInStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', textAlign: 'center' }
+  const evnInStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', textAlign: 'center' }
   const lblStyle: React.CSSProperties = { fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }
 
   const sections = [

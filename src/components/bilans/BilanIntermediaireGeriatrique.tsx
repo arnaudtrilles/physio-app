@@ -270,7 +270,7 @@ export const BilanIntermediaireGeriatrique = forwardRef<BilanIntermediaireGeriat
   }))
 
   const sublabel: React.CSSProperties = { fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }
 
   const noBaseline = !baseline || Object.keys(baseline).length === 0
 

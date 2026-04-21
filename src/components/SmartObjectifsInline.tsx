@@ -33,7 +33,7 @@ export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objecti
     width: '100%', padding: '0.55rem 0.75rem', fontSize: '0.82rem',
     border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)',
     marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)',
-    background: '#FDFCFA',
+    background: 'var(--input-bg)',
   }
 
   return (
@@ -58,7 +58,7 @@ export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objecti
             <div key={obj.id} style={{
               display: 'flex', alignItems: 'flex-start', gap: 8,
               padding: '0.6rem 0.75rem',
-              background: '#FDFCFA', border: '1px solid var(--border-color)',
+              background: 'var(--input-bg)', border: '1px solid var(--border-color)',
               borderRadius: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}>
@@ -80,7 +80,7 @@ export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objecti
 
       {/* Formulaire d'ajout */}
       {showAdd ? (
-        <div style={{ background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.75rem', marginBottom: 6, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.75rem', marginBottom: 6, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <input value={titre} onChange={e => setTitre(e.target.value)}
             placeholder="Objectif (ex: Récupérer la flexion complète)"
             style={fieldStyle} />
@@ -112,7 +112,7 @@ export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objecti
           style={{
             width: '100%', padding: '0.55rem', borderRadius: 10,
             border: '1.5px solid var(--border-color)',
-            background: '#FDFCFA', color: 'var(--primary)',
+            background: 'var(--input-bg)', color: 'var(--primary)',
             fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',

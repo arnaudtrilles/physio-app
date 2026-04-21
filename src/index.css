@@ -1,18 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Charte graphique PhysioScan — Vert naturel + Beige chaud */
-  --primary: #2D5A4B;        /* Vert foncé — boutons, avatars, accents */
-  --primary-dark: #1A3830;   /* Vert très foncé — textes importants */
-  --primary-light: #4A8C73;  /* Vert moyen — hovers, badges */
-  --secondary: #F0EBE1;      /* Beige chaud — zones de formulaires */
-  --base-bg: #EDE8DC;        /* Beige fond principal */
-  --surface: #FAFAF7;        /* Blanc cassé — cartes */
-  --text-main: #1A1A1A;      /* Presque noir */
-  --text-muted: #7A7A6E;     /* Gris chaud */
-  --border-color: #DDD8CE;   /* Bordure beige */
-  --accent: #4A8C73;         /* Vert accent */
-
+  /* Shared tokens — same across all themes */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
@@ -23,6 +12,37 @@
   --radius-xl: 16px;
   --radius-2xl: 24px;
   --radius-full: 9999px;
+}
+
+/* ── Thème "Soft" — Vert naturel + Beige chaud (défaut) ───────── */
+:root,
+:root[data-theme="soft"] {
+  --primary: #2D5A4B;        /* Vert foncé — boutons, avatars, accents */
+  --primary-dark: #1A3830;   /* Vert très foncé — textes importants */
+  --primary-light: #4A8C73;  /* Vert moyen — hovers, badges */
+  --secondary: #F0EBE1;      /* Beige chaud — zones de formulaires */
+  --base-bg: #EDE8DC;        /* Beige fond principal */
+  --surface: #FAFAF7;        /* Blanc cassé — cartes */
+  --text-main: #1A1A1A;      /* Presque noir */
+  --text-muted: #7A7A6E;     /* Gris chaud */
+  --border-color: #DDD8CE;   /* Bordure beige */
+  --accent: #4A8C73;         /* Vert accent */
+  --input-bg: #FDFCFA;       /* Fond inputs et cards beige clair */
+}
+
+/* ── Thème "Médical" — Bleu profond + Blanc clinique ───────────── */
+:root[data-theme="medical"] {
+  --primary: #1e3a8a;        /* Deep Navy Blue */
+  --primary-dark: #0f172a;   /* Slate 900 — near black */
+  --primary-light: #3b82f6;  /* Bright royal blue */
+  --secondary: #f8fafc;      /* Premium off-white */
+  --base-bg: #f8fafc;
+  --surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #cbd5e1;
+  --accent: #2563eb;
+  --input-bg: #ffffff;
 }
 
 /* ── Screen transitions ──────────────────────────────────────── */
@@ -117,7 +137,7 @@ input, textarea, select {
 input:not(.mobility-table input):not([type="range"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),
 textarea,
 select {
-  background: #FDFCFA;
+  background: var(--input-bg);
   border-radius: var(--radius-xl);
 }
 
