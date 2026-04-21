@@ -50,50 +50,38 @@ export function MRCInfo() {
   )
 }
 
-// ─── Toggle styles ─────────────────────────────────────────────────────────
-const btnBase: React.CSSProperties = {
-  padding: '2px 7px', fontSize: '0.68rem', fontWeight: 700, border: 'none', cursor: 'pointer', lineHeight: '16px',
-}
-const btnComplet = (active: boolean): React.CSSProperties => ({
-  ...btnBase,
-  background: active ? '#dcfce7' : 'transparent',
-  color: active ? '#166534' : 'var(--text-muted)',
-  borderRadius: '4px 0 0 4px',
-})
-const btnIncomplet = (active: boolean): React.CSSProperties => ({
-  ...btnBase,
-  background: active ? '#fff7ed' : 'transparent',
-  color: active ? '#92400e' : 'var(--text-muted)',
-  borderRadius: '0 4px 4px 0',
-})
-
 // ─── AmplitudeInput ────────────────────────────────────────────────────────
-// value: '' = neutral, 'complet' = complet, anything else = incomplet + text
+// value: '' = complet by default (nothing shown), anything else = incomplet + text
 export function AmplitudeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const isComplet = value === 'complet'
-  const [iMode, setIMode] = useState(value !== '' && value !== 'complet')
+  const isIncomplet = value !== '' && value !== 'complet'
+  const [editing, setEditing] = useState(isIncomplet)
 
-  const clickC = () => {
-    if (isComplet) { onChange(''); setIMode(false) }
-    else { onChange('complet'); setIMode(false) }
-  }
-  const clickI = () => {
-    if (iMode) { onChange(''); setIMode(false) }
-    else { if (isComplet) onChange(''); setIMode(true) }
+  const toggle = () => {
+    if (editing) { onChange(''); setEditing(false) }
+    else { setEditing(true) }
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
-      <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
-        <button onClick={clickC} style={btnComplet(isComplet)}>C</button>
-        <button onClick={clickI} style={btnIncomplet(iMode)}>I</button>
-      </div>
-      {iMode && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <button
+        onClick={toggle}
+        style={{
+          padding: '3px 9px', fontSize: '0.65rem', fontWeight: editing ? 600 : 400, cursor: 'pointer', lineHeight: '18px',
+          transition: 'all 0.18s', borderRadius: 'var(--radius-full)', flexShrink: 0, alignSelf: 'flex-start',
+          background: editing ? '#edf4f1' : '#FDFCFA',
+          color: editing ? 'var(--primary-dark)' : 'var(--text-muted)',
+          boxShadow: editing ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
+          border: editing ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
+        }}
+      >
+        Incomplet
+      </button>
+      {editing && (
         <input
-          value={isComplet ? '' : value}
+          value={value === 'complet' ? '' : value}
           onChange={e => onChange(e.target.value)}
           placeholder="ex: 45°"
-          style={{ width: 64, fontSize: '0.78rem', color: 'var(--text-main)', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', padding: '1px 4px', outline: 'none' }}
+          style={{ width: '100%', maxWidth: 100, fontSize: '0.78rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: '4px 8px', outline: 'none' }}
           autoFocus
         />
       )}
@@ -117,7 +105,7 @@ export function OuiNon({ label, value, onChange, detail, onDetailChange }: { lab
       </div>
       {value === 'oui' && onDetailChange && (
         <DictableTextarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
-          textareaStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box' }} />
+          textareaStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }} />
       )}
     </div>
   )
@@ -260,9 +248,10 @@ export function ScoreRow({ label, value, onChange, onOpenQuestionnaire, result }
   )
 }
 
-// ─── EVA Slider (0-10, always) ─────────────────────────────────────────────
+// ─── EVA Scale (0-10, button-row style) ───────────────────────────────────
 // Single source of truth for pain intensity input everywhere in the app.
-// Label defaults to "EVA"; compact mode for CompareRow-like grids.
+// Visual: big colored number + row of 11 clickable buttons (0→10).
+// Compact mode shrinks the layout for inline/grid contexts.
 export function EVASlider({
   label = 'EVA', value, onChange, compact = false, disabled = false,
 }: {
@@ -276,74 +265,101 @@ export function EVASlider({
   const display = num == null || isNaN(num) ? '—' : String(num)
   const color = num == null || isNaN(num) ? 'var(--text-muted)'
     : num === 0 ? '#166534'
-    : num <= 3 ? '#65a30d'
+    : num <= 3 ? '#2D5A4B'
     : num <= 5 ? '#ca8a04'
     : num <= 7 ? '#ea580c'
     : '#881337'
 
+  const btnSize = compact ? 22 : 30
+  const btnFont = compact ? '0.68rem' : '0.78rem'
+  const btnGap = compact ? 2 : 4
+  const numFont = compact ? '1.25rem' : '2.2rem'
+  const numMb = compact ? 6 : 12
+  const cardPadY = compact ? '0.55rem' : '1.2rem'
+  const cardPadB = compact ? '0.5rem' : '1rem'
+  const cardPadX = compact ? '0.55rem' : '1rem'
+
   return (
     <div style={{ marginBottom: compact ? 0 : 10 }}>
       {label && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: compact ? 2 : 4 }}>
-          <span style={{ fontSize: compact ? '0.7rem' : '0.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>{label}</span>
-          <span style={{ fontSize: compact ? '0.85rem' : '1.05rem', fontWeight: 800, color, minWidth: 24, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-            {display}<span style={{ fontSize: '0.6em', fontWeight: 600, color: 'var(--text-muted)', marginLeft: 2 }}>/10</span>
-          </span>
+        <div style={{ fontSize: compact ? '0.68rem' : '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: compact ? 4 : 6, textTransform: compact ? 'uppercase' : 'none', letterSpacing: compact ? '0.04em' : 0 }}>
+          {label}
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          type="range"
-          min="0"
-          max="10"
-          step="1"
-          value={num == null || isNaN(num) ? 0 : num}
-          onChange={e => onChange(e.target.value)}
-          disabled={disabled}
-          style={{ flex: 1, accentColor: color, cursor: disabled ? 'not-allowed' : 'pointer' }}
-        />
-        {value !== '' && !disabled && (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            title="Effacer"
-            style={{
-              flexShrink: 0, width: 22, height: 22, borderRadius: '50%',
-              border: '1px solid var(--border-color)', background: 'white',
-              color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-            }}
-          >×</button>
-        )}
+      <div style={{
+        background: '#FDFCFA', borderRadius: compact ? 10 : 14,
+        border: '1px solid var(--border-color)',
+        padding: `${cardPadY} ${cardPadX} ${cardPadB}`,
+        textAlign: 'center', position: 'relative',
+        boxShadow: compact ? 'none' : '0 1px 4px rgba(0,0,0,0.04)',
+        opacity: disabled ? 0.6 : 1,
+      }}>
+        <div style={{ fontSize: numFont, fontWeight: 800, color, marginBottom: numMb, lineHeight: 1 }}>
+          {display}
+          <span style={{ fontSize: '0.4em', fontWeight: 600, color: 'var(--text-muted)', marginLeft: 2 }}>/10</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: btnGap, flexWrap: compact ? 'wrap' : 'nowrap' }}>
+          {Array.from({ length: 11 }, (_, i) => {
+            const selected = value === String(i)
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={disabled}
+                onClick={() => !disabled && onChange(selected ? '' : String(i))}
+                style={{
+                  width: btnSize, height: btnSize,
+                  borderRadius: compact ? 5 : 8,
+                  border: selected ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
+                  background: selected ? 'var(--primary)' : 'transparent',
+                  color: selected ? 'white' : 'var(--text-main)',
+                  fontWeight: selected ? 700 : 500,
+                  fontSize: btnFont,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 0,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {i}
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
 export function ForceInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const isComplet = value === 'complet'
-  const [iMode, setIMode] = useState(value !== '' && value !== 'complet')
+  const isIncomplet = value !== '' && value !== 'complet'
+  const [editing, setEditing] = useState(isIncomplet)
 
-  const clickC = () => {
-    if (isComplet) { onChange(''); setIMode(false) }
-    else { onChange('complet'); setIMode(false) }
-  }
-  const clickI = () => {
-    if (iMode) { onChange(''); setIMode(false) }
-    else { if (isComplet) onChange(''); setIMode(true) }
+  const toggle = () => {
+    if (editing) { onChange(''); setEditing(false) }
+    else { setEditing(true) }
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
-      <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
-        <button onClick={clickC} style={btnComplet(isComplet)}>C</button>
-        <button onClick={clickI} style={btnIncomplet(iMode)}>I</button>
-      </div>
-      {iMode && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <button
+        onClick={toggle}
+        style={{
+          padding: '3px 9px', fontSize: '0.65rem', fontWeight: editing ? 600 : 400, cursor: 'pointer', lineHeight: '18px',
+          transition: 'all 0.18s', borderRadius: 'var(--radius-full)', flexShrink: 0, alignSelf: 'flex-start',
+          background: editing ? '#edf4f1' : '#FDFCFA',
+          color: editing ? 'var(--primary-dark)' : 'var(--text-muted)',
+          boxShadow: editing ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
+          border: editing ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
+        }}
+      >
+        Incomplet
+      </button>
+      {editing && (
         <select
-          value={isComplet ? '' : value}
+          value={value === 'complet' ? '' : value}
           onChange={e => onChange(e.target.value)}
-          style={{ fontSize: '0.78rem', color: 'var(--text-main)', border: 'none', borderBottom: '1px solid var(--border-color)', background: 'transparent', padding: '1px 2px', outline: 'none', cursor: 'pointer' }}
+          style={{ fontSize: '0.78rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: '4px 8px', outline: 'none', cursor: 'pointer', maxWidth: 100 }}
           autoFocus
         >
           <option value="">—</option>
