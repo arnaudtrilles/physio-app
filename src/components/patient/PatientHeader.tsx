@@ -16,7 +16,7 @@ interface PatientHeaderProps {
   onMenu?: () => void
 }
 
-export function PatientHeader({ name, initials, birthday, subtitle, infoLine, stats, onBack, onMenu }: PatientHeaderProps) {
+export function PatientHeader({ name, initials, birthday, infoLine, stats, onBack, onMenu }: PatientHeaderProps) {
   return (
     <div style={{ marginBottom: spacing.md }}>
       {/* Top bar: back + title + menu */}
