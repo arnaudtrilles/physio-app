@@ -35,14 +35,15 @@ import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
-import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
+import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
+import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
 import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
-import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
+import type { NoteSeanceHandle, NoteSeanceData, ExerciceDomicile } from './components/NoteSeance'
 import { DictableInput, DictableTextarea } from './components/VoiceMic'
 import { PDFPreview } from './components/PDFPreview'
 import { DashboardStats } from './components/DashboardStats'
@@ -52,6 +53,7 @@ import { TreatmentBodyChart } from './components/TreatmentBodyChart'
 import { DossierDocuments } from './components/DossierDocuments'
 import { BilanResumeModal } from './components/BilanResumeModal'
 import { SmartObjectifs } from './components/SmartObjectifs'
+import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { AuthScreen } from './components/AuthScreen'
@@ -92,7 +94,37 @@ class ErrorBoundary extends Component<{ children: ReactNode; onReset?: () => voi
   }
 }
 
-// ── Zone picker : grille compacte 2 colonnes ───────────────────────────────
+// ── Zone picker : liste design avec icônes SVG anatomiques ───────────────
+function ZoneIcon({ zone, size = 22, color = 'currentColor' }: { zone: string; size?: number; color?: string }) {
+  const s = { width: size, height: size, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  switch (zone) {
+    case 'Épaule': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M12 8v4"/><path d="M8 9c-3 1-5 3.5-5 6"/><path d="M16 9c3 1 5 3.5 5 6"/><path d="M8 9l-2 7"/><path d="M16 9l2 7"/></svg>
+    )
+    case 'Genou': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v6"/><ellipse cx="12" cy="11" rx="4" ry="3"/><path d="M12 14v8"/><path d="M9 11c-1.5.5-2 2-1.5 3.5"/><path d="M15 11c1.5.5 2 2 1.5 3.5"/></svg>
+    )
+    case 'Hanche': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 3v5"/><ellipse cx="12" cy="11" rx="6" ry="4"/><path d="M8 14l-3 8"/><path d="M16 14l3 8"/><circle cx="12" cy="11" r="1.5"/></svg>
+    )
+    case 'Cheville': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v12"/><path d="M10 14c-2 1-3 3-3 5h10c0-2-1-4-3-5"/><path d="M7 19c-1 0-2 .5-2 2h14c0-1.5-1-2-2-2"/></svg>
+    )
+    case 'Cervicales': return (
+      <svg viewBox="0 0 24 24" {...s}><circle cx="12" cy="5" r="3"/><path d="M12 8v14"/><path d="M9 10h6"/><path d="M8 13h8"/><path d="M9 16h6"/></svg>
+    )
+    case 'Rachis Lombaire': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v20"/><path d="M8 5h8"/><path d="M7 8h10"/><path d="M6 11h12"/><path d="M7 14h10"/><path d="M8 17h8"/><path d="M9 20h6"/></svg>
+    )
+    case 'Gériatrie': return (
+      <svg viewBox="0 0 24 24" {...s}><circle cx="11" cy="4" r="2.5"/><path d="M11 6.5v6"/><path d="M8 9l-2 5"/><path d="M14 9l2 3"/><path d="M11 12.5l-3 9"/><path d="M11 12.5l2 5"/><path d="M16 12l4 3"/><line x1="20" y1="15" x2="20" y2="22"/></svg>
+    )
+    default: return (
+      <svg viewBox="0 0 24 24" {...s}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>
+    )
+  }
+}
+
 const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
   { zone: 'Épaule',          label: 'Épaule' },
   { zone: 'Genou',           label: 'Genou' },
@@ -106,25 +138,27 @@ const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
 
 interface ZonePickerSheetProps {
   title: string
-  accent: string          // ex: 'var(--primary)', '#92400e', '#5b21b6'
-  accentBg: string        // ex: 'var(--secondary)', '#fff7ed', '#f5f3ff'
-  accentBorder: string    // ex: 'var(--border-color)', '#fed7aa', '#ddd6fe'
+  accent: string
+  accentBg: string
+  accentBorder: string
   selectedZone?: string | null
   onSelect: (zone: string) => void
   onClose: () => void
 }
 
-function ZonePickerSheet({ title, accent, accentBg, accentBorder, selectedZone, onSelect, onClose }: ZonePickerSheetProps) {
+function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerSheetProps) {
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', width: '100%', maxWidth: 430, boxShadow: 'var(--shadow-2xl)', padding: '1rem 1.1rem 1.2rem', maxHeight: '85vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
-          <h3 className="title-section" style={{ margin: 0, fontSize: '0.98rem' }}>{title}</h3>
-          <button onClick={onClose} aria-label="Fermer" style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--secondary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--base-bg)', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 430, boxShadow: '0 -8px 40px rgba(0,0,0,0.15)', padding: '0.5rem 1.1rem 2rem', maxHeight: '85vh', overflow: 'auto', animation: 'slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1)' }}>
+        {/* Handle bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border-color)' }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div style={{ marginBottom: '1.1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.01em' }}>{title}</h3>
+          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Choisissez la zone anatomique du bilan</p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {ZONE_PICKER_ITEMS.map(({ zone, label }) => {
             const active = selectedZone === zone
             return (
@@ -132,22 +166,34 @@ function ZonePickerSheet({ title, accent, accentBg, accentBorder, selectedZone, 
                 key={zone}
                 onClick={() => onSelect(zone)}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0.85rem 0.75rem',
-                  borderRadius: 'var(--radius-lg)',
-                  border: `1.5px solid ${active ? accent : accentBorder}`,
-                  background: active ? accentBg : 'var(--surface)',
-                  color: active ? accent : 'var(--text-main)',
-                  fontWeight: active ? 700 : 600,
-                  fontSize: '0.86rem',
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '0.85rem 1rem',
+                  borderRadius: 14,
+                  border: active ? '2px solid var(--primary)' : '1.5px solid transparent',
+                  background: active ? '#edf4f1' : '#FDFCFA',
+                  color: active ? 'var(--primary-dark)' : 'var(--text-main)',
+                  fontWeight: active ? 600 : 500,
+                  fontSize: '0.88rem',
                   cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.15s',
-                  minHeight: 52,
-                  lineHeight: 1.2,
+                  textAlign: 'left',
+                  transition: 'all 0.18s ease',
+                  boxShadow: active ? '0 2px 10px rgba(45,90,75,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
                 }}
               >
-                {label}
+                <div style={{
+                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                  background: active ? 'var(--primary)' : 'var(--secondary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.18s',
+                }}>
+                  <ZoneIcon zone={zone} size={22} color={active ? 'white' : 'var(--primary)'} />
+                </div>
+                <span style={{ flex: 1 }}>{label}</span>
+                {active && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
               </button>
             )
           })}
@@ -158,11 +204,11 @@ function ZonePickerSheet({ title, accent, accentBg, accentBorder, selectedZone, 
 }
 
 const DEMO_DB: BilanRecord[] = [
-  { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
-  { id:2,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'29/10/2025', zoneCount:1, evn:7, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
-  { id:3,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'12/11/2025', zoneCount:1, evn:5, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
-  { id:4,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'26/11/2025', zoneCount:1, evn:4, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
-  { id:5,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'10/12/2025', zoneCount:1, evn:3, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#3b82f6', bilanType:'epaule', status:'complet' },
+  { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
+  { id:2,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'29/10/2025', zoneCount:1, evn:7, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
+  { id:3,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'12/11/2025', zoneCount:1, evn:5, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
+  { id:4,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'26/11/2025', zoneCount:1, evn:4, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
+  { id:5,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'10/12/2025', zoneCount:1, evn:3, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
   { id:6,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'01/10/2025', zoneCount:1, evn:7, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
   { id:7,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'15/10/2025', zoneCount:1, evn:5, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
   { id:8,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'29/10/2025', zoneCount:1, evn:6, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
@@ -267,6 +313,7 @@ function SwipeToDelete({ children, onDelete, disabled = false }: {
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth()
+  useTheme()
 
   const [step, setStep] = useState<Step>('dashboard')
   // ── iOS-style swipe navigation ──────────────────────────────────────────────
@@ -366,9 +413,8 @@ function App() {
   const [evolutionZoneType, setEvolutionZoneType] = useState<BilanType | null>(null)
   // Modal de choix de zone pour les 4 actions du ConsultationChooser (séance, bilan intermédiaire, bilan de sortie, courrier).
   const [letterZonePicker, setLetterZonePicker] = useState<{ action: 'letter' | 'bilan_sortie' | 'seance' | 'intermediaire' } | null>(null)
-
+  const isOnline = useOnlineStatus()
   const [profile, setProfile, profLoaded] = useIndexedDB<ProfileData>('physio_profile', DEFAULT_PROFILE)
-  const [theme, setTheme] = useTheme()
   const [_apiKeyStored, _setApiKey, keyLoaded] = useIndexedDB<string>('physio_api_key', '')
   const [onboarded, setOnboarded] = useIndexedDB<boolean>('physio_onboarded_v3', false)
   // Vertex AI: auth is server-side, no client key needed — always truthy
@@ -462,7 +508,7 @@ function App() {
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
   const [resumeBilan, setResumeBilan] = useState<{ record: BilanRecord; bilanNum: number } | null>(null)
-  // editingProfile state removed — profile page is always in edit mode now
+  const [editingProfile, setEditingProfile] = useState(false)
   // testingApiKey / apiKeyStatus removed — Vertex AI, no client key needed
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -530,16 +576,11 @@ function App() {
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
   const photoInputRef         = useRef<HTMLInputElement>(null)
-  const importDataRef         = useRef<HTMLInputElement>(null)
-
+  const importDataRef    = useRef<HTMLInputElement>(null)
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
-  const updateField = useCallback((field: keyof typeof formData, value: string) => {
-    let v = value
-    if (field === 'nom') v = value.toUpperCase()
-    if (field === 'prenom') v = value.replace(/\b\w/g, c => c.toUpperCase())
-    setFormData(prev => ({ ...prev, [field]: v }))
-  }, [])
+  const updateField = useCallback((field: keyof typeof formData, value: string) =>
+    setFormData(prev => ({ ...prev, [field]: value })), [])
 
   const goToPatientRecord = useCallback(() => {
     const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
@@ -729,6 +770,67 @@ function App() {
       if (ta !== tb) return ta - tb
       return a.id - b.id
     })
+
+  const handleGenerateExercices = useCallback(async (prompt: string): Promise<ExerciceDomicile[]> => {
+    const systemPrompt = `Tu es un kinésithérapeute expert. À partir de la dictée du thérapeute, génère la liste des exercices à domicile structurés en JSON.
+
+Le thérapeute peut dicter :
+- plusieurs exercices d'un coup ("squat mural 3×15, pont fessier 3×12…") → tu renvoies TOUS les exercices
+- un seul exercice décrit librement → tu renvoies un array à 1 élément
+
+Réponds UNIQUEMENT avec un objet JSON valide (pas de markdown, pas de commentaire) avec cette structure exacte :
+{
+  "exercices": [
+    {
+      "nom": "Nom professionnel de l'exercice",
+      "categorie": "Catégorie · Contexte (ex: Renforcement quadriceps · Phase 2 post-LCA)",
+      "protocole": {
+        "series": "3",
+        "tempsOuReps": "15" ou "30 sec",
+        "recuperation": "45 sec",
+        "frequence": "2× par jour"
+      },
+      "description": "Consignes brèves : position de départ, mouvement clé, limite de sécurité. Langage accessible au patient."
+    }
+  ]
+}
+
+Règles :
+- Si le thérapeute donne un dosage explicite (ex: "3×15"), utilise-le tel quel.
+- Si aucun dosage n'est donné, propose un dosage adapté au contexte clinique.
+- Maximum 6 exercices.
+- Sois précis et professionnel.`
+
+    const result = await callGeminiSecure({
+      apiKey,
+      systemPrompt,
+      userPrompt: prompt,
+      maxOutputTokens: 4096,
+      jsonMode: true,
+      preferredModel: 'gemini-2.5-flash',
+      patient: { nom: formData.nom || '', prenom: formData.prenom || '', patientKey: `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim() },
+      category: 'fiche_exercice',
+    })
+
+    const parsed = JSON.parse(result)
+    const list = Array.isArray(parsed?.exercices) ? parsed.exercices : []
+    return list.map((ex: { nom?: string; categorie?: string; protocole?: ExerciceDomicile['protocole']; description?: string }) => ({
+      nom: ex.nom || prompt,
+      fait: false,
+      categorie: ex.categorie || '',
+      protocole: ex.protocole || undefined,
+      description: ex.description || '',
+      source: 'ia' as const,
+    }))
+  }, [apiKey, formData.nom, formData.prenom])
+
+  const handleExportExercicesPDF = useCallback((exercices: ExerciceDomicile[]) => {
+    if (exercices.length === 0) return
+    downloadExercicesPDF(exercices, {
+      patient: { nom: formData.nom, prenom: formData.prenom },
+      zone: noteSeanceZone ?? undefined,
+    })
+  }, [formData.nom, formData.prenom, noteSeanceZone])
 
   const handleSaveNote = () => {
     const data = noteSeanceRef.current?.getData()
@@ -1060,7 +1162,13 @@ function App() {
     return improvDelta(first, last)
   }
 
+  const allPatientKeys = Array.from(new Set(db.map(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim())))
 
+  const globalScore = (() => {
+    const scores = allPatientKeys.map(k => patientGeneralScore(k)).filter((s): s is number => s !== null)
+    if (scores.length === 0) return 0
+    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+  })()
 
   const getBilanData = (): Record<string, unknown> | null => {
     const zone = selectedBodyZone ?? ''
@@ -1099,7 +1207,7 @@ function App() {
         zoneCount: 1,
         zone: selectedBodyZone ?? undefined,
         pathologie: bilanData ? '' : undefined,
-        avatarBg: '#3b82f6',
+        avatarBg: '#4A8C73',
         status,
         bilanType,
         bilanData: bilanData ?? undefined,
@@ -1354,13 +1462,20 @@ STRUCTURE (n'inclure que si données présentes) :
     }
   }
 
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setProfileEditDraft(p => ({ ...p, photo: ev.target?.result as string }))
-    reader.readAsDataURL(file)
+  const handleExportExerciceBank = () => {
+    if (dbExerciceBank.length === 0) {
+      showToast('Aucun exercice dans la banque', 'info')
+      return
+    }
+    const csv = exportBankAsCSV(dbExerciceBank)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `banque-exercices-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    showToast(`${dbExerciceBank.length} exercices exportés`, 'success')
   }
 
   const handleExportData = () => {
@@ -1392,13 +1507,28 @@ STRUCTURE (n'inclure que si données présentes) :
         if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs as unknown as PatientDocument[])
         if (parsed.dbPrescriptions) setDbPrescriptions(parsed.dbPrescriptions as unknown as PatientPrescription[])
         if (parsed.profile) setProfile(parsed.profile as unknown as ProfileData)
-        showToast(`Importé : ${parsed.db.length} bilans`, 'success')
+        const noteKeys = (parsed.dbNotes as Array<{ patientKey: string }> | undefined)?.map(n => n.patientKey) ?? []
+        const uniqueNoteKeys = [...new Set(noteKeys)]
+        const counts = [
+          `${parsed.db.length} bilans`,
+          parsed.dbIntermediaires?.length ? `${parsed.dbIntermediaires.length} intermédiaires` : '',
+          parsed.dbNotes?.length ? `${parsed.dbNotes.length} séances [${uniqueNoteKeys.join(', ')}]` : '⚠️ 0 séances dans le fichier',
+        ].filter(Boolean).join(', ')
+        showToast(`Importé : ${counts}`, 'success')
       } catch {
         showToast('Fichier invalide', 'error')
       }
     }
     reader.readAsText(file)
     e.target.value = ''
+  }
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => setProfileEditDraft(p => ({ ...p, photo: ev.target?.result as string }))
+    reader.readAsDataURL(file)
   }
 
   // testApiKey function removed — Vertex AI, no client key needed
@@ -1501,11 +1631,11 @@ STRUCTURE (n'inclure que si données présentes) :
               })()}
 
               {/* Stats */}
-              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
+              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
 
             </div>
             {/* Action buttons — fixed bottom */}
-            <div style={{ position: 'absolute', bottom: '1.2rem', left: 0, right: 0, padding: '0.6rem 0.75rem', background: 'linear-gradient(to top, var(--secondary) 60%, transparent)', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ position: 'absolute', bottom: '1.2rem', left: 0, right: 0, padding: '0.6rem 0.75rem', background: 'linear-gradient(to top, var(--base-bg) 60%, transparent)', display: 'flex', gap: '0.5rem' }}>
               <button
                 onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
@@ -1543,7 +1673,7 @@ STRUCTURE (n'inclure que si données présentes) :
               <button
                 onClick={() => setShowAddPatientChoice(true)}
                 aria-label="Ajouter un patient"
-                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--secondary)', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)' }}>
+                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: '#FDFCFA', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             </header>
@@ -1558,7 +1688,7 @@ STRUCTURE (n'inclure que si données présentes) :
                     </svg>
                     <input type="text" placeholder="Rechercher un nom…"
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: c.surfaceMuted, color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)' }} />
+                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: '#FDFCFA', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
                   </div>
                 </div>
                 {(() => {
@@ -1763,7 +1893,27 @@ STRUCTURE (n'inclure que si données présentes) :
                         initials={`${firstR?.nom[0] || '?'}${firstR?.prenom[0] || '?'}`}
                         avatarBg={firstR?.avatarBg}
                         birthday={isBirthday(firstR?.dateNaissance)}
-                        subtitle={firstR?.dateNaissance ? (firstR.dateNaissance.includes('-') ? firstR.dateNaissance.split('-').reverse().join('/') : firstR.dateNaissance) : undefined}
+                        infoLine={(() => {
+                          const parts: string[] = []
+                          if (firstR?.dateNaissance) {
+                            const age = computeAge(firstR.dateNaissance)
+                            if (age !== null) parts.push(`${age} ans`)
+                          }
+                          return parts.length > 0 ? parts.join(' · ') : undefined
+                        })()}
+                        stats={[
+                          { label: 'Depuis', value: (() => {
+                            const d = firstR?.dateBilan
+                            if (!d) return '—'
+                            const parts = d.includes('-') ? d.split('-') : d.split('/')
+                            const months = ['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.']
+                            const day = d.includes('-') ? parts[2] : parts[0]
+                            const monthIdx = parseInt(d.includes('-') ? parts[1] : parts[1], 10) - 1
+                            return `${parseInt(day, 10)} ${months[monthIdx] ?? ''}`
+                          })() },
+                          { label: 'Bilans', value: String(bilans.length) },
+                          { label: 'Séances', value: String(getPatientNotes(selectedPatient ?? '').length + bilans.length + getPatientIntermediaires(selectedPatient ?? '').length) },
+                        ]}
                         onBack={() => setSelectedPatient(null)}
                       />
                       <PatientHeroCard
@@ -2382,11 +2532,11 @@ STRUCTURE (n'inclure que si données présentes) :
                                   deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
                                 }
                               }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : `color-mix(in srgb, ${c.primary} 2.5%, #f8fafc)` }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : '#FDFCFA', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
                               <div
                                 onClick={toggleThisEpisode}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
-                                <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : `${c.primary}12`, color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : 'var(--secondary)', color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {zoneClosed ? (
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                                   ) : (
@@ -2477,7 +2627,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           const bilanKey = `bilan-${record.id}`
                           const bilanOpen = openTimelineKey === bilanKey
                           return (
-                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? '#93c5fd' : '#dbeafe'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
+                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? '#8bc4b0' : '#c8e0d8'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
                               <div
                                 role="button"
                                 onClick={() => toggleTimeline(bilanKey)}
@@ -2485,7 +2635,7 @@ STRUCTURE (n'inclure que si données présentes) :
                               >
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: '0.88rem', lineHeight: 1.35 }}>
-                                    <span style={{ fontWeight: 700, color: '#1e40af' }}>Bilan n°{index + 1}</span>
+                                    <span style={{ fontWeight: 700, color: '#2D5A4B' }}>Bilan n°{index + 1}</span>
                                     {editingLabelBilanId === record.id ? (
                                       <input
                                         autoFocus
@@ -2502,7 +2652,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                           if (e.key === 'Escape') { setEditingLabelBilanId(null) }
                                         }}
                                         placeholder="Ex : tendinopathie coiffe des rotateurs"
-                                        style={{ display: 'inline', marginLeft: 4, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white', width: 'calc(100% - 90px)' }}
+                                        style={{ display: 'inline', marginLeft: 4, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'var(--surface)', width: 'calc(100% - 90px)' }}
                                       />
                                     ) : (
                                       <span
@@ -2519,7 +2669,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '0.72rem', color: '#3b82f6', marginTop: 1 }}>
+                                  <div style={{ fontSize: '0.72rem', color: '#4A8C73', marginTop: 1 }}>
                                     {record.dateBilan}{currEvn != null ? ` · EVN ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
                                   </div>
                                 </div>
@@ -2538,7 +2688,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       {Math.abs(delta)}%
                                     </span>
                                   ) : null}
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8bc4b0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
                                 </div>
                               </div>
                               {bilanOpen && (incomplet ? (
@@ -2571,7 +2721,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
                                   {record.analyseIA && (
                                     <div style={{ marginBottom: 2 }}>
-                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Analysé</span>
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: '#edf4f1', color: '#2D5A4B', border: '1px solid #b8d4ca' }}>Analysé</span>
                                     </div>
                                   )}
                                   {/* Rangée 1 : Bilan PDF + Analyse */}
@@ -2585,7 +2735,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       Bilan PDF
                                     </button>
                                     <button
-                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: '#eff6ff', border: '1.5px solid #bfdbfe', color: '#1d4ed8', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: '#edf4f1', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                       onClick={() => {
                                         setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
                                         setSelectedBodyZone(record.zone ?? null)
@@ -2622,7 +2772,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
                                     <button
                                       onClick={() => setResumeBilan({ record, bilanNum: index + 1 })}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#2D5A4B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                       Résumé
                                     </button>
@@ -2736,12 +2886,12 @@ STRUCTURE (n'inclure que si données présentes) :
                                                 <div style={{ marginBottom: 8 }}>
                                                   <button
                                                     onClick={() => setOpenAnalyseNoteIds(prev => { const next = new Set(prev); if (next.has(note.id)) next.delete(note.id); else next.add(note.id); return next })}
-                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: '#edf4f1', border: '1px solid #b8d4ca', color: '#2D5A4B', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <span>Analyse</span>
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="6 9 12 15 18 9"/></svg>
                                                   </button>
                                                   {isOpen && (
-                                                    <div style={{ background: '#eff6ff', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#1e3a8a', lineHeight: 1.5, borderLeft: '3px solid #2563eb', borderTop: 'none' }}>
+                                                    <div style={{ background: '#edf4f1', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#2D5A4B', lineHeight: 1.5, borderLeft: '3px solid #4A8C73', borderTop: 'none' }}>
                                                       <div style={{ marginBottom: 3 }}>{note.analyseIA.resume}</div>
                                                       <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{note.analyseIA.evolution}</div>
                                                       {note.analyseIA.vigilance.length > 0 && (<div style={{ color: '#dc2626', fontSize: '0.72rem', marginBottom: 3 }}>Vigilance : {note.analyseIA.vigilance.join(' / ')}</div>)}
@@ -2755,7 +2905,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                               <div style={{ display: 'flex', gap: 6 }}>
                                                 <button
-                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: '#eff6ff', border: '1.5px solid #bfdbfe', color: '#1d4ed8', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: '#edf4f1', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                                                   onClick={async () => {
                                                     if (!apiKey) { showToast('Clé API requise', 'error'); return }
                                                     showToast('Analyse en cours...', 'success')
@@ -3054,37 +3204,6 @@ STRUCTURE (n'inclure que si données présentes) :
                                     Rapport d'évolution — {zoneLabel}
                                   </button>
                                 )}
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                  <button
-                                    onClick={() => {
-                                      const firstRec = zoneBilans[0] ?? allPatientRecords[0]
-                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? ''
-                                      setNoteSeanceZone(z)
-                                      setCurrentNoteSeanceId(null)
-                                      setCurrentNoteSeanceData(null)
-                                      setStep('note_seance')
-                                    }}
-                                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #c4b5fd', background: 'transparent', color: '#6d28d9', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Séance
-                                  </button>
-                                  {!isZoneEmpty && (
-                                    <button
-                                      onClick={() => {
-                                        const firstRec = zoneBilans[0] ?? allPatientRecords[0]
-                                        setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                        const patKey = selectedPatient ?? ''
-                                        const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? ''
-                                        setBilanIntermediaireZone(z)
-                                        setCurrentBilanIntermediaireId(null)
-                                        setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
-                                        setStep('bilan_intermediaire')
-                                      }}
-                                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #fed7aa', background: 'transparent', color: '#c2410c', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                                      <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan interm.
-                                    </button>
-                                  )}
-                                </div>
                                 {isZoneEmpty ? (
                                   <button
                                     onClick={() => {
@@ -3300,57 +3419,39 @@ STRUCTURE (n'inclure que si données présentes) :
         </div>
       )}
 
-      {/* ── Profile ─────────────────────────────────────────────── */}
+      {/* ── Profile / Dashboard Tab ─────────────────────────────────────────────── */}
       {step === 'profile' && (() => {
-        const profileChipStyle = (active: boolean) => ({
-          padding: '0.45rem 0.75rem',
-          borderRadius: 'var(--radius-full)',
-          border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-          background: active ? '#eff6ff' : 'transparent',
-          color: active ? 'var(--primary)' : 'var(--text-muted)',
-          fontWeight: active ? 600 : 400,
-          fontSize: '0.78rem',
-          cursor: 'pointer' as const,
-        })
-        const profileSectionTitle = {
-          fontWeight: 700,
-          color: 'var(--primary)',
-          fontSize: '0.95rem',
-          marginBottom: 8,
-        }
-        const profileLabelStyle = {
-          display: 'block' as const,
-          fontSize: '0.82rem',
-          fontWeight: 600,
-          color: 'var(--text-main)',
-          marginBottom: 6,
-        }
-        const profileInputStyle = {
-          width: '100%',
-          padding: '0.6rem 0.85rem',
-          fontSize: '0.88rem',
-          color: 'var(--text-main)',
-          background: 'var(--secondary)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-lg)',
-          outline: 'none',
-          boxSizing: 'border-box' as const,
-        }
+        const r = 52, circ = 2 * Math.PI * r
+        const total     = allPatientKeys.length
+        const forte     = allPatientKeys.filter(k => (patientGeneralScore(k) ?? 0) > 50).length
+        const moderee   = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s > 0 && s <= 50 }).length
+        const regressN  = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s <= 0 }).length
+        const sansScore = Math.max(total - forte - moderee - regressN, 0)
+        const slot = (n: number) => total > 0 ? (n / total) * circ : 0
+        const seg  = (n: number) => Math.max(slot(n) - 6, 0)
+        const startOff = -circ / 4
+        const gsColor = globalScore >= 50 ? '#166534' : globalScore >= 20 ? '#f97316' : '#881337'
+        const incompletCount = db.filter(r => r.status === 'incomplet').length
         return (
           <div className="general-info-screen fade-in">
             <header className="screen-header">
-              <button className="btn-back" onClick={() => setStep('settings')}>
+              <button className="btn-back" onClick={() => editingProfile ? setStep('settings') : setStep('settings')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <h2 className="title-section">Profil</h2>
-              <div style={{ width: 24 }} />
+              <h2 className="title-section">{editingProfile ? 'Modifier le profil' : 'Tableau de bord'}</h2>
+              <button onClick={() => { setEditingProfile(v => !v); setProfileEditDraft(profile) }}
+                style={{ fontSize:'0.85rem', fontWeight:600, color:'var(--primary)', background:'none', border:'none', cursor:'pointer' }}>
+                {editingProfile ? 'Annuler' : 'Modifier'}
+              </button>
             </header>
             <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
-                <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+              {editingProfile ? (
+                <div className="fade-in">
                   {/* Photo */}
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.75rem' }}>
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.75rem', marginBottom:'2rem' }}>
                     <div onClick={() => photoInputRef.current?.click()}
-                      style={{ position:'relative', width:96, height:96, borderRadius:'50%', overflow:'hidden', cursor:'pointer', boxShadow:'var(--shadow-lg)', background: profileEditDraft.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), #8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      style={{ position:'relative', width:96, height:96, borderRadius:'50%', overflow:'hidden', cursor:'pointer', boxShadow:'var(--shadow-lg)', background: profileEditDraft.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
                       {profileEditDraft.photo
                         ? <img src={profileEditDraft.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
                         : <span style={{ fontSize:'2.2rem', fontWeight:700, color:'white' }}>{(profileEditDraft.nom || profileEditDraft.prenom || 'W')[0]}</span>}
@@ -3362,27 +3463,17 @@ STRUCTURE (n'inclure que si données présentes) :
                       </div>
                     </div>
                     <input ref={photoInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handlePhotoUpload} />
-                    <span style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>Appuyez pour changer la photo</span>
+                    <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Appuyez pour changer la photo</span>
                   </div>
 
-                  {/* Nom affiché */}
-                  <div>
-                    <label style={profileLabelStyle}>Nom affiché *</label>
-                    <input type="text" value={profileEditDraft.nom}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, nom: e.target.value }))} placeholder="Ex : Dr. Dupont" style={profileInputStyle} />
+                  <div className="form-group">
+                    <label>Prénom / Nom affiché</label>
+                    <input type="text" className="input-luxe" value={profileEditDraft.nom}
+                      onChange={e => setProfileEditDraft(p => ({ ...p, nom: e.target.value }))} placeholder="Renseignez votre nom" />
                   </div>
-
-                  {/* Prénom */}
-                  <div>
-                    <label style={profileLabelStyle}>Prénom</label>
-                    <input type="text" value={profileEditDraft.prenom ?? ''}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, prenom: e.target.value }))} placeholder="Ex : Marie" style={profileInputStyle} />
-                  </div>
-
-                  {/* Profession — 2 boutons uniquement */}
-                  <div>
-                    <label style={profileLabelStyle}>Profession *</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="form-group">
+                    <label>Profession</label>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
                       {(['Kinésithérapeute', 'Physiothérapeute'] as const).map(opt => (
                         <button
                           key={opt}
@@ -3390,45 +3481,52 @@ STRUCTURE (n'inclure que si données présentes) :
                           onClick={() => setProfileEditDraft(p => ({ ...p, profession: opt }))}
                           style={{
                             flex: 1,
-                            padding: '0.6rem 0.5rem',
+                            padding: '0.65rem 0.75rem',
                             borderRadius: 'var(--radius-md)',
                             border: profileEditDraft.profession === opt ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                            background: profileEditDraft.profession === opt ? '#eff6ff' : 'var(--surface)',
+                            background: profileEditDraft.profession === opt ? '#edf4f1' : 'var(--surface)',
                             color: profileEditDraft.profession === opt ? 'var(--primary-dark)' : 'var(--text-main)',
                             fontWeight: profileEditDraft.profession === opt ? 700 : 500,
-                            fontSize: '0.82rem',
+                            fontSize: '0.85rem',
                             cursor: 'pointer',
                           }}
                         >
                           {opt}
-                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: 2 }}>
-                            {opt === 'Kinésithérapeute' ? 'France' : 'Suisse / Belgique'}
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: 2 }}>
+                            {opt === 'Kinésithérapeute' ? '🇫🇷 France' : '🇨🇭 Suisse / 🇧🇪 Belgique'}
                           </div>
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* Spécialisations libellé */}
-                  <div>
-                    <label style={profileLabelStyle}>Spécialisations (affichées sur les courriers)</label>
-                    <input type="text" value={profileEditDraft.specialisationsLibelle ?? ''}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, specialisationsLibelle: e.target.value }))}
-                      placeholder="Ex : Thérapie manuelle, Sport" style={profileInputStyle} />
-                  </div>
-
                   {/* Compétences & Équipements */}
-                  <div>
+                  {(() => {
+                    const chipStyle = (active: boolean): React.CSSProperties => ({
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: 'var(--radius-full)',
+                      border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
+                      background: active ? '#edf4f1' : 'transparent',
+                      color: active ? 'var(--primary-dark)' : 'var(--text-muted)',
+                      fontWeight: active ? 600 : 400,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s',
+                    })
+                    const sectionTitle: React.CSSProperties = { fontWeight: 700, color: 'var(--primary)', fontSize: '0.95rem', marginBottom: 8 }
+                    return (
+                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
+                    <div style={sectionTitle}>Compétences & Équipements</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
                       Les propositions de prise en charge seront adaptées en fonction de vos compétences et équipements.
                     </p>
 
                     {/* Spécialités */}
                     <div style={{ marginBottom: 16 }}>
-                      <div style={profileSectionTitle}>Spécialités</div>
+                      <div style={sectionTitle}>Spécialités</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {['Thérapie manuelle', 'McKenzie (MDT)', 'Sport', 'Pédiatrie', 'Neurologie', 'Vestibulaire', 'Périnéologie', 'Respiratoire', 'Rhumatologie', 'Gériatrie', 'Orthopédie'].map(s => (
-                          <button key={s} type="button" style={profileChipStyle((profileEditDraft.specialites ?? []).includes(s))}
+                          <button key={s} type="button" style={chipStyle((profileEditDraft.specialites ?? []).includes(s))}
                             onClick={() => setProfileEditDraft(p => ({
                               ...p,
                               specialites: (p.specialites ?? []).includes(s)
@@ -3441,10 +3539,10 @@ STRUCTURE (n'inclure que si données présentes) :
 
                     {/* Techniques */}
                     <div style={{ marginBottom: 16 }}>
-                      <div style={profileSectionTitle}>Techniques maîtrisées</div>
+                      <div style={sectionTitle}>Techniques maîtrisées</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {['Dry needling', 'Mulligan', 'Maitland', 'Cupping', 'Taping / K-Tape', 'PNF (Kabat)', 'Chaînes musculaires (GDS/Busquet)', 'Éducation neurosciences douleur', 'Crochetage / IASTM', 'Drainage lymphatique', 'Trigger points', 'Ventouses', 'Stretching global actif'].map(t => (
-                          <button key={t} type="button" style={profileChipStyle((profileEditDraft.techniques ?? []).includes(t))}
+                          <button key={t} type="button" style={chipStyle((profileEditDraft.techniques ?? []).includes(t))}
                             onClick={() => setProfileEditDraft(p => ({
                               ...p,
                               techniques: (p.techniques ?? []).includes(t)
@@ -3457,81 +3555,101 @@ STRUCTURE (n'inclure que si données présentes) :
 
                     {/* Équipements */}
                     <div style={{ marginBottom: 16 }}>
-                      <div style={profileSectionTitle}>Équipements au cabinet</div>
+                      <div style={sectionTitle}>Équipements au cabinet</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Ondes de choc', 'TENS', 'Tecarthérapie (Winback/Indiba)', 'Ultrasons', 'Laser', 'Isocinétisme', 'Plateforme proprioceptive', 'Huber / LPG', 'Pressothérapie', 'Électrostimulation', 'Cryothérapie', 'Traction cervicale/lombaire', 'Vélo / Elliptique', 'Presse'].map(eq => (
-                          <button key={eq} type="button" style={profileChipStyle((profileEditDraft.equipements ?? []).includes(eq))}
+                        {['Ondes de choc', 'TENS', 'Tecarthérapie (Winback/Indiba)', 'Ultrasons', 'Laser', 'Isocinétisme', 'Plateforme proprioceptive', 'Huber / LPG', 'Pressothérapie', 'Électrostimulation', 'Cryothérapie', 'Traction cervicale/lombaire', 'Vélo / Elliptique', 'Presse'].map(e => (
+                          <button key={e} type="button" style={chipStyle((profileEditDraft.equipements ?? []).includes(e))}
                             onClick={() => setProfileEditDraft(p => ({
                               ...p,
-                              equipements: (p.equipements ?? []).includes(eq)
-                                ? (p.equipements ?? []).filter(x => x !== eq)
-                                : [...(p.equipements ?? []), eq]
-                            }))}>{eq}</button>
+                              equipements: (p.equipements ?? []).filter(x => x !== e).length === (p.equipements ?? []).length
+                                ? [...(p.equipements ?? []), e]
+                                : (p.equipements ?? []).filter(x => x !== e)
+                            }))}>{e}</button>
                         ))}
                       </div>
                     </div>
 
                     {/* Autres compétences (texte libre) */}
                     <div>
-                      <label style={profileLabelStyle}>Autres (non listés ci-dessus)</label>
+                      <div style={sectionTitle}>Autres (non listés ci-dessus)</div>
                       <textarea
                         value={profileEditDraft.autresCompetences ?? ''}
                         onChange={e => setProfileEditDraft(p => ({ ...p, autresCompetences: e.target.value }))}
-                        placeholder="Ex : méthode Schroth, posturologie, biofeedback..."
+                        placeholder="Ex : méthode Schroth, rééducation maxillo-faciale, posturologie, biofeedback, Game Ready..."
                         rows={2}
-                        style={{ ...profileInputStyle, resize: 'vertical' as const }}
+                        className="input-luxe"
+                        style={{ fontSize: '0.82rem', resize: 'vertical' }}
                       />
                     </div>
                   </div>
+                    )
+                  })()}
 
-                  {/* Coordonnées professionnelles */}
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.95rem', marginBottom: 8 }}>Coordonnées professionnelles</div>
+                  {/* En-tête Courriers */}
+                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 8 }}>En-tête des courriers</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Ces informations apparaîtront en en-tête de vos courriers PDF.
+                      Ces informations apparaîtront en en-tête de vos courriers PDF (fin de PEC, demande d'imagerie, etc.).
                     </p>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div>
-                        <label style={profileLabelStyle}>Adresse</label>
-                        <input type="text" value={profileEditDraft.adresse ?? ''}
+                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid var(--border-color)' }}>
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Prénom (si différent du nom affiché)</label>
+                        <input type="text" className="input-luxe" value={profileEditDraft.prenom ?? ''}
+                          onChange={e => setProfileEditDraft(p => ({ ...p, prenom: e.target.value }))}
+                          placeholder="Ex : Marie" />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Spécialisations (libellé affiché)</label>
+                        <input type="text" className="input-luxe" value={profileEditDraft.specialisationsLibelle ?? ''}
+                          onChange={e => setProfileEditDraft(p => ({ ...p, specialisationsLibelle: e.target.value }))}
+                          placeholder="Ex : Thérapie manuelle, Rééducation du sportif" />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Numéro RCC / ADELI</label>
+                        <input type="text" className="input-luxe" value={profileEditDraft.rcc ?? ''}
+                          onChange={e => setProfileEditDraft(p => ({ ...p, rcc: e.target.value }))}
+                          placeholder="Ex : 123456789" />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Adresse</label>
+                        <input type="text" className="input-luxe" value={profileEditDraft.adresse ?? ''}
                           onChange={e => setProfileEditDraft(p => ({ ...p, adresse: e.target.value }))}
-                          placeholder="Ex : 12 rue des Lilas" style={profileInputStyle} />
+                          placeholder="Ex : 12 rue des Lilas" />
                       </div>
-                      <div>
-                        <label style={profileLabelStyle}>Complément (bâtiment, étage)</label>
-                        <input type="text" value={profileEditDraft.adresseComplement ?? ''}
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Complément (bâtiment, étage)</label>
+                        <input type="text" className="input-luxe" value={profileEditDraft.adresseComplement ?? ''}
                           onChange={e => setProfileEditDraft(p => ({ ...p, adresseComplement: e.target.value }))}
-                          placeholder="Ex : Cabinet 2B" style={profileInputStyle} />
+                          placeholder="Ex : Cabinet 2B" />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10 }}>
-                        <div>
-                          <label style={profileLabelStyle}>CP</label>
-                          <input type="text" value={profileEditDraft.codePostal ?? ''}
+                      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10, marginBottom: 10 }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontSize: '0.82rem' }}>CP</label>
+                          <input type="text" className="input-luxe" value={profileEditDraft.codePostal ?? ''}
                             onChange={e => setProfileEditDraft(p => ({ ...p, codePostal: e.target.value }))}
-                            placeholder="75001" style={profileInputStyle} />
+                            placeholder="75001" />
                         </div>
-                        <div>
-                          <label style={profileLabelStyle}>Ville</label>
-                          <input type="text" value={profileEditDraft.ville ?? ''}
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontSize: '0.82rem' }}>Ville</label>
+                          <input type="text" className="input-luxe" value={profileEditDraft.ville ?? ''}
                             onChange={e => setProfileEditDraft(p => ({ ...p, ville: e.target.value }))}
-                            placeholder="Paris" style={profileInputStyle} />
+                            placeholder="Paris" />
                         </div>
                       </div>
-                      <div>
-                        <label style={profileLabelStyle}>Téléphone</label>
-                        <input type="text" value={profileEditDraft.telephone ?? ''}
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Téléphone</label>
+                        <input type="text" className="input-luxe" value={profileEditDraft.telephone ?? ''}
                           onChange={e => setProfileEditDraft(p => ({ ...p, telephone: e.target.value }))}
-                          placeholder="01 23 45 67 89" style={profileInputStyle} />
+                          placeholder="01 23 45 67 89" />
                       </div>
-                      <div>
-                        <label style={profileLabelStyle}>Email professionnel</label>
-                        <input type="email" value={profileEditDraft.email ?? ''}
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Email</label>
+                        <input type="email" className="input-luxe" value={profileEditDraft.email ?? ''}
                           onChange={e => setProfileEditDraft(p => ({ ...p, email: e.target.value }))}
-                          placeholder="contact@cabinet.fr" style={profileInputStyle} />
+                          placeholder="contact@cabinet.fr" />
                       </div>
-                      <div>
-                        <label style={profileLabelStyle}>Signature manuscrite (image)</label>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '0.82rem' }}>Signature manuscrite (image)</label>
                         <input
                           type="file"
                           accept="image/png,image/jpeg"
@@ -3545,7 +3663,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           style={{ fontSize: '0.8rem', marginTop: 4 }}
                         />
                         {profileEditDraft.signatureImage && (
-                          <div style={{ marginTop: 8, padding: 8, background: 'white', border: '1px solid var(--border-color)', borderRadius: 6, display: 'inline-block' }}>
+                          <div style={{ marginTop: 8, padding: 8, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 6, display: 'inline-block' }}>
                             <img src={profileEditDraft.signatureImage} alt="Signature" style={{ maxHeight: 50, maxWidth: 180 }} />
                             <button
                               onClick={() => setProfileEditDraft(p => ({ ...p, signatureImage: null }))}
@@ -3570,7 +3688,7 @@ STRUCTURE (n'inclure que si données présentes) :
                       </div>
                       <div style={{
                         fontSize: '0.78rem', color: '#064e3b', lineHeight: 1.55,
-                        background: 'white', padding: '10px 12px', borderRadius: 8,
+                        background: 'var(--surface)', padding: '10px 12px', borderRadius: 8,
                         border: '1px solid #bbf7d0', fontFamily: 'Georgia, serif',
                         whiteSpace: 'pre-line',
                       }}>
@@ -3595,13 +3713,13 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                             navigator.clipboard.writeText(text).then(() => showToast('Mention copiée', 'success'))
                           }
                         }}
-                        style={{ marginTop: 10, width: '100%', padding: '0.55rem', borderRadius: 8, background: 'white', border: '1px solid #86efac', color: '#065f46', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
+                        style={{ marginTop: 10, width: '100%', padding: '0.55rem', borderRadius: 8, background: 'var(--surface)', border: '1px solid #86efac', color: '#065f46', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
                         Copier le texte
                       </button>
                     </div>
 
-                    <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 12, padding: 14, marginTop: 10 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e3a8a', marginBottom: 4 }}>
+                    <div style={{ background: '#edf4f1', border: '1px solid #8bc4b0', borderRadius: 12, padding: 14, marginTop: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#2D5A4B', marginBottom: 4 }}>
                         Registre des traitements
                       </div>
                       {(() => {
@@ -3609,10 +3727,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                         const suspiciousCount = dbAICallAudit.filter(e => e.scrubReplacements > 0).length
                         const withDocsCount = dbAICallAudit.filter(e => e.hasDocuments).length
                         if (totalCount === 0) {
-                          return <p style={{ fontSize: '0.75rem', color: '#1e40af', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
+                          return <p style={{ fontSize: '0.75rem', color: '#2D5A4B', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
                         }
                         return (
-                          <div style={{ fontSize: '0.75rem', color: '#1e40af', marginBottom: 10, lineHeight: 1.5 }}>
+                          <div style={{ fontSize: '0.75rem', color: '#2D5A4B', marginBottom: 10, lineHeight: 1.5 }}>
                             <div>• <strong>{dbLetterAudit.length}</strong> courrier{dbLetterAudit.length > 1 ? 's' : ''} généré{dbLetterAudit.length > 1 ? 's' : ''}</div>
                             <div>• <strong>{dbAICallAudit.length}</strong> autre{dbAICallAudit.length > 1 ? 's' : ''} analyse{dbAICallAudit.length > 1 ? 's' : ''} (bilans, fiches exos…)</div>
                             {withDocsCount > 0 && (
@@ -3640,7 +3758,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                           })
                           showToast('Registre exporté', 'success')
                         }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'white', border: '1px solid #93c5fd', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#1e3a8a', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
+                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid #8bc4b0', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
                         Exporter le registre (PDF)
                       </button>
                     </div>
@@ -3649,12 +3767,166 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
                     onClick={() => {
                       setProfile(profileEditDraft)
-                      setStep('settings')
+                      setEditingProfile(false)
                       showToast('Profil enregistré', 'success')
                     }}>
                     Enregistrer
                   </button>
                 </div>
+              ) : (
+                <>
+                  <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.5rem', padding:'1rem', background:'var(--secondary)', borderRadius:'var(--radius-lg)' }}>
+                    <div style={{ width:52, height:52, borderRadius:'50%', overflow:'hidden', flexShrink:0, boxShadow:'var(--shadow-md)', background: profile.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {profile.photo
+                        ? <img src={profile.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
+                        : <span style={{ fontSize:'1.4rem', fontWeight:700, color:'white' }}>{(profile.nom || profile.prenom || 'W')[0]}</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:'1.1rem', color:'var(--primary-dark)' }}>{profile.nom}</div>
+                      <div style={{ fontSize:'0.85rem', color:'var(--text-muted)' }}>{profile.profession}</div>
+                      {apiKey && <div style={{ fontSize:'0.75rem', color:'#16a34a', fontWeight:600, marginTop:2 }}>Analyse active</div>}
+                    </div>
+                    {!isOnline && (
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
+                        Hors-ligne
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dashboard Stats */}
+                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
+
+                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.1rem 1.15rem', marginBottom:'1.25rem', border:'1px solid var(--border-color)' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem' }}>
+                      <div style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--primary-dark)', letterSpacing:'0.01em' }}>Mes Patients</div>
+                      <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', fontWeight:500 }}>Répartition par évolution</div>
+                    </div>
+
+                    {/* Donut + breakdown patients */}
+                    <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
+                      <svg viewBox="0 0 150 150" width="112" height="112" style={{ flexShrink:0 }}>
+                        <circle cx="75" cy="75" r={r} fill="none" stroke="#f1f5f9" strokeWidth="10"/>
+                        {forte   > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#22c55e" strokeWidth="10" strokeDasharray={`${seg(forte)} ${circ}`}   strokeDashoffset={startOff} strokeLinecap="round"/>}
+                        {moderee > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#f97316" strokeWidth="10" strokeDasharray={`${seg(moderee)} ${circ}`} strokeDashoffset={startOff - slot(forte)} strokeLinecap="round"/>}
+                        {regressN> 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#ef4444" strokeWidth="10" strokeDasharray={`${seg(regressN)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee)} strokeLinecap="round"/>}
+                        {sansScore > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#cbd5e1" strokeWidth="10" strokeDasharray={`${seg(sansScore)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee) - slot(regressN)} strokeLinecap="round"/>}
+                        <text x="75" y="72" textAnchor="middle" fill="var(--primary-dark)" fontSize="28" fontWeight="700" letterSpacing="-0.02em">{total}</text>
+                        <text x="75" y="90" textAnchor="middle" fill="#94a3b8" fontSize="10" letterSpacing="0.04em">PATIENTS</text>
+                      </svg>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                        {[
+                          { c:'#22c55e', label:'Forte amélioration', hint:'>50%',  n: forte },
+                          { c:'#f97316', label:'Modérée',            hint:'1–50%', n: moderee },
+                          { c:'#ef4444', label:'Régression',         hint:'EVN ↑', n: regressN },
+                          { c:'#cbd5e1', label:'Sans score',         hint:'< 2 bilans', n: sansScore },
+                        ].map(s => (
+                          <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <span style={{ width:8, height:8, borderRadius:'50%', background:s.c, flexShrink:0 }} />
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:'0.78rem', color:'var(--text-main)', fontWeight:600, lineHeight:1.2 }}>{s.label}</div>
+                              <div style={{ fontSize:'0.66rem', color:'var(--text-muted)', lineHeight:1.2 }}>{s.hint}</div>
+                            </div>
+                            <div style={{ fontSize:'0.95rem', fontWeight:700, color:'var(--primary-dark)', minWidth:20, textAlign:'right' }}>{s.n}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Métriques complémentaires (pas liées au donut) */}
+                    <div style={{ display:'flex', gap:0, marginTop:'0.9rem', paddingTop:'0.75rem', borderTop:'1px solid #f1f5f9' }}>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
+                        <div style={{ fontSize:'1.05rem', fontWeight:700, color:'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{db.length}</div>
+                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Bilans</div>
+                      </div>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
+                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: gsColor, lineHeight:1, letterSpacing:'-0.01em' }}>{globalScore}%</div>
+                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Score global</div>
+                      </div>
+                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: incompletCount > 0 ? '#d97706' : 'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{incompletCount}</div>
+                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Incomplets</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Export / Import */}
+                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
+                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Synchronisation multi-appareils</div>
+                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>Exporte tes données depuis ce navigateur, puis importe le fichier sur un autre appareil (téléphone, tablette…).</p>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      <button onClick={handleExportData}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', border:'none', color:'white', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="7 10 12 15 17 10"/>
+                          <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Exporter mes données (.json)
+                      </button>
+                      <button onClick={() => importDataRef.current?.click()}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'var(--surface)', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="17 8 12 3 7 8"/>
+                          <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        Importer un fichier de sauvegarde
+                      </button>
+                      <input ref={importDataRef} type="file" accept=".json" style={{ display:'none' }} onChange={handleImportData} />
+                    </div>
+                  </div>
+
+                  {/* Banque d'exercices */}
+                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.5rem' }}>
+                      <div style={{ fontWeight:700, color:'var(--primary-dark)', fontSize:'0.92rem' }}>Banque d'exercices</div>
+                      <span style={{ fontSize:'0.75rem', fontWeight:700, padding:'0.15rem 0.55rem', borderRadius:'var(--radius-full)', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0' }}>
+                        {dbExerciceBank.length} {dbExerciceBank.length > 1 ? 'exercices' : 'exercice'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>
+                      Tous les exercices uniques générés sont collectés ici automatiquement. Exporte-les en CSV pour construire ta banque personnelle.
+                    </p>
+                    <button onClick={handleExportExerciceBank} disabled={dbExerciceBank.length === 0}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background: dbExerciceBank.length === 0 ? 'var(--secondary)' : 'linear-gradient(135deg, #059669, #047857)', border: dbExerciceBank.length === 0 ? '1px solid var(--border-color)' : 'none', color: dbExerciceBank.length === 0 ? 'var(--text-muted)' : 'white', fontWeight:700, fontSize:'0.88rem', cursor: dbExerciceBank.length === 0 ? 'not-allowed' : 'pointer' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                      </svg>
+                      Exporter en CSV (.csv)
+                    </button>
+                  </div>
+
+                  <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Aperçu des patients</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem' }}>
+                    {allPatientKeys.map(key => {
+                      const bilans = getPatientBilans(key)
+                      const firstRec = bilans[0]
+                      const score = patientGeneralScore(key)
+                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : '#881337'
+                      const sBg    = score === null ? '#f1f5f9' : score > 0 ? '#dcfce7' : '#fee2e2'
+                      const initials = `${(firstRec?.nom[0] || '?')}${(firstRec?.prenom[0] || '?')}`
+                      return (
+                        <div key={key} onClick={() => { setSelectedPatient(key); setStep('database') }}
+                          style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:'0.9rem 1rem', border:'1px solid var(--border-color)', display:'flex', alignItems:'center', gap:'0.85rem', boxShadow:'var(--shadow-sm)', cursor:'pointer' }}>
+                          <div style={{ width:42, height:42, borderRadius:'50%', background: firstRec?.avatarBg || 'var(--primary)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:700, fontSize:'0.9rem' }}>{initials}</div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontWeight:600, color:'var(--primary-dark)', fontSize:'0.95rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{key}</div>
+                            <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{firstRec?.pathologie || ''}</div>
+                          </div>
+                          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.2rem', flexShrink:0 }}>
+                            {score !== null && (
+                              <span style={{ fontWeight:700, fontSize:'0.85rem', color: sColor, background: sBg, padding:'0.2rem 0.6rem', borderRadius:'var(--radius-full)' }}>
+                                {score > 0 ? '+' : ''}{score}%
+                              </span>
+                            )}
+                            <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>{bilans.length} bilan(s)</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )
@@ -3674,7 +3946,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {/* Profil */}
               <button
-                onClick={() => { setProfileEditDraft(profile); setStep('profile') }}
+                onClick={() => { setEditingProfile(true); setProfileEditDraft(profile); setStep('profile') }}
                 style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
               >
                 <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -3687,55 +3959,19 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
 
-              {/* Apparence — sélecteur de thème */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.9rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Apparence</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Choisissez le thème visuel</div>
-                  </div>
+              {/* Préférences */}
+              <button
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', opacity: 0.6 }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {([
-                    { id: 'soft' as const, label: 'Soft', desc: 'Vert & beige', swatch: ['#2D5A4B', '#F0EBE1'] },
-                    { id: 'medical' as const, label: 'Médical', desc: 'Bleu & blanc', swatch: ['#1e3a8a', '#f8fafc'] },
-                  ]).map(t => {
-                    const active = theme === t.id
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => setTheme(t.id)}
-                        style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8,
-                          padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                          border: active ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                          background: active ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--surface)',
-                          cursor: 'pointer', textAlign: 'left',
-                          transition: 'border-color 0.15s, background 0.15s',
-                        }}
-                      >
-                        <div style={{ display: 'flex', gap: 4, height: 24, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                          <div style={{ flex: 1, background: t.swatch[0] }} />
-                          <div style={{ flex: 1, background: t.swatch[1] }} />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.85rem' }}>{t.label}</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{t.desc}</div>
-                        </div>
-                        {active && (
-                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            ✓ Actif
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Préférences</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mode sombre, langue, notifications</div>
                 </div>
-              </div>
+                <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '0.15rem 0.45rem', borderRadius: 'var(--radius-full)' }}>Bientôt</span>
+              </button>
 
               {/* Plan */}
               <button
@@ -3753,82 +3989,27 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
               {/* Synchronisation cloud */}
               {(() => {
-                const patients = new Set(db.map(b => `${b.nom} ${b.prenom}`))
-                dbIntermediaires.forEach(b => patients.add(b.patientKey || `${b.nom} ${b.prenom}`))
-                dbNotes.forEach(n => patients.add(n.patientKey || `${n.nom} ${n.prenom}`))
                 const statusConfig = {
                   idle: { color: 'var(--text-muted)', bg: 'var(--secondary)', label: 'En attente' },
                   syncing: { color: '#f59e0b', bg: 'color-mix(in srgb, #f59e0b 10%, transparent)', label: 'Synchronisation...' },
                   done: { color: '#22c55e', bg: 'color-mix(in srgb, #22c55e 10%, transparent)', label: 'Synchronisé' },
                   error: { color: '#dc2626', bg: 'color-mix(in srgb, #dc2626 10%, transparent)', label: 'Erreur de sync' },
                 }[syncStatus]
-                const rows = [
-                  { label: 'Patients', count: patients.size },
-                  { label: 'Bilans', count: db.length },
-                  { label: 'Bilans inter.', count: dbIntermediaires.length },
-                  { label: 'Notes séance', count: dbNotes.length },
-                  { label: 'Objectifs', count: dbObjectifs.length },
-                  { label: 'Courriers', count: dbLetters.length },
-                  { label: 'Prescriptions', count: dbPrescriptions.reduce((s, p) => s + (p.prescriptions?.length || 0), 0) },
-                  { label: 'Exercices', count: dbExerciceBank.length },
-                ]
                 return (
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.75rem' }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
-                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusConfig.color }} />
-                          <span style={{ fontSize: '0.72rem', color: statusConfig.color, fontWeight: 500 }}>{statusConfig.label}</span>
-                        </div>
-                      </div>
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem 1rem', fontSize: '0.78rem' }}>
-                      {rows.map(r => (
-                        <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0', borderBottom: '1px solid var(--border-color)' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>
-                          <span style={{ fontWeight: 600, color: r.count > 0 ? 'var(--primary-dark)' : 'var(--text-muted)' }}>{r.count}</span>
-                        </div>
-                      ))}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
+                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusConfig.color }} />
+                        <span style={{ fontSize: '0.72rem', color: statusConfig.color, fontWeight: 500 }}>{isOnline ? statusConfig.label : 'Hors ligne'}</span>
+                      </div>
                     </div>
                   </div>
                 )
               })()}
-
-              {/* Sauvegarde locale */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.75rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Sauvegarde locale</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Export / import de vos données</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button onClick={handleExportData}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.65rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Exporter mes données (.json)
-                  </button>
-                  <button onClick={() => importDataRef.current?.click()}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.65rem', borderRadius: 10, background: 'white', border: '1.5px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    Importer une sauvegarde
-                  </button>
-                  <input ref={importDataRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportData} />
-                </div>
-              </div>
 
               {/* Déconnexion */}
               <button
@@ -3992,7 +4173,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                     <button
                       key={t}
                       onClick={() => runAction(t)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.85rem 1rem', borderRadius: 12, border: `1.5px solid ${closed ? '#86efac' : 'var(--border-color)'}`, background: closed ? '#f0fdf4' : 'white', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'left' }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.85rem 1rem', borderRadius: 12, border: `1.5px solid ${closed ? '#86efac' : 'var(--border-color)'}`, background: closed ? '#f0fdf4' : 'var(--surface)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'left' }}>
                       <div style={{ width: 4, height: 22, background: closed ? '#16a34a' : 'var(--primary)', borderRadius: 2 }} />
                       <span style={{ flex: 1 }}>{zoneLabelForType(t)}</span>
                       {closed && <span style={{ fontSize: '0.62rem', fontWeight: 700, background: '#16a34a', color: 'white', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase' }}>Terminée</span>}
@@ -4131,7 +4312,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         <ZonePickerSheet
           title="Zone du bilan"
           accent="var(--primary)"
-          accentBg="#eff6ff"
+          accentBg="#edf4f1"
           accentBorder="var(--border-color)"
           selectedZone={selectedBodyZone}
           onSelect={(zone) => { setSelectedBodyZone(zone); setShowZonePopup(false) }}
@@ -4190,12 +4371,12 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Nom *</label>
                   <input type="text" className="input-luxe" placeholder="Ex: Dupont"
-                    value={quickAddData.nom} onChange={(e) => setQuickAddData(prev => ({ ...prev, nom: e.target.value.toUpperCase() }))} />
+                    value={quickAddData.nom} onChange={(e) => setQuickAddData(prev => ({ ...prev, nom: e.target.value }))} />
                 </div>
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>Prénom *</label>
                   <input type="text" className="input-luxe" placeholder="Ex: Jean"
-                    value={quickAddData.prenom} onChange={(e) => setQuickAddData(prev => ({ ...prev, prenom: e.target.value.replace(/\b\w/g, c => c.toUpperCase()) }))} />
+                    value={quickAddData.prenom} onChange={(e) => setQuickAddData(prev => ({ ...prev, prenom: e.target.value }))} />
                 </div>
               </div>
 
@@ -4256,7 +4437,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             <button
               disabled={!quickAddData.nom.trim() || !quickAddData.prenom.trim() || !quickAddData.zone}
               onClick={() => {
-                const AVATAR_COLORS = ['#3b82f6', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
+                const AVATAR_COLORS = ['#4A8C73', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
                 const avatarBg = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
                 const newId = Math.max(0, ...db.map(r => r.id)) + 1
                 const record: BilanRecord = {
@@ -4301,10 +4482,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area">
-            <div style={{ display: 'flex', background: 'var(--secondary)', borderRadius: 'var(--radius-xl)', padding: '0.4rem', marginBottom: '1.5rem', width: '100%' }}>
+            <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '0.4rem', marginBottom: '1.5rem', width: '100%', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.06)' }}>
               {(['new', 'existing'] as const).map(mode => (
                 <button key={mode} onClick={() => setPatientMode(mode)}
-                  style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-lg)', background: patientMode === mode ? 'var(--surface)' : 'transparent', color: patientMode === mode ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: patientMode === mode ? 600 : 400, boxShadow: patientMode === mode ? 'var(--shadow-sm)' : 'none' }}>
+                  style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-lg)', background: patientMode === mode ? '#ffffff' : 'transparent', color: patientMode === mode ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: patientMode === mode ? 600 : 400, boxShadow: patientMode === mode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>
                   {mode === 'new' ? 'Nouveau patient' : 'Patient existant'}
                 </button>
               ))}
@@ -4349,8 +4530,15 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
               <button
                 onClick={() => setShowZonePopup(true)}
-                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: selectedBodyZone ? '1.5px solid var(--primary)' : '1.5px dashed var(--border-color)', background: selectedBodyZone ? 'var(--secondary)' : 'transparent', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span>{selectedBodyZone ?? 'Sélectionner une zone…'}</span>
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? '#edf4f1' : '#FDFCFA', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {selectedBodyZone && (
+                    <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ZoneIcon zone={selectedBodyZone} size={16} color="white" />
+                    </span>
+                  )}
+                  {selectedBodyZone ? ZONE_PICKER_ITEMS.find(z => z.zone === selectedBodyZone)?.label ?? selectedBodyZone : 'Sélectionner une zone…'}
+                </span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
             </div>
@@ -4385,23 +4573,23 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           <div className="scroll-area">
             <div className="form-group">
               <label>Activité professionnelle</label>
-              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Activité physique / sportive</label>
-              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents familiaux</label>
-              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents chirurgicaux</label>
-              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Notes complémentaires</label>
-              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
           </div>
           <div className="fixed-bottom">
@@ -4462,7 +4650,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 onChange={e => setBilanNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Patient stressé, travail physique intensifié ce mois-ci, essai de 3 séances de kiné il y a 6 mois sans succès…"
-                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box' }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -4534,7 +4722,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               ))}
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => setShowDocSourceMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-md)', border: '1.5px dashed var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'none', width: '100%' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: '#FDFCFA', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
@@ -4568,7 +4756,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
             {/* ── Actions (fin de page) ── */}
             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)' }}
+            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #2D5A4B, #4A8C73)' }}
               onClick={handleSaveAndAnalyse}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -4676,50 +4864,20 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#5b21b6' }}>Note de séance n°{numSeance}</div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)' }}>Note de séance n°{numSeance}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{formData.nom} {formData.prenom} · {ZONE_LABELS[bilanType]}</div>
               </div>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-full)', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe' }}>SOAP</span>
             </header>
 
             <div className="scroll-area" style={{ paddingBottom: '9rem' }}>
-              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} />
+              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} onGenerateExercices={handleGenerateExercices} onExportExercicesPDF={handleExportExercicesPDF} />
             </div>
 
-            <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="fixed-bottom">
               <button
-                style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+                style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(45,90,75,0.25)' }}
                 onClick={handleSaveNote}>
                 Enregistrer la note de séance
-              </button>
-              <button
-                style={{ width: '100%', padding: '0.7rem', borderRadius: 'var(--radius-lg)', background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                onClick={() => {
-                  const data = noteSeanceRef.current?.getData()
-                  handleSaveNote()
-                  // Build contexte from la séance en cours
-                  const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-                  const bt = getBilanType(noteSeanceZone ?? '')
-                  const allNotesForZone = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
-                  const allBilansForZone = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
-                  const historiqueStr = [
-                    ...allBilansForZone.map(b => `Bilan ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
-                    ...allNotesForZone.map(n => `Séance n°${n.numSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution}`),
-                  ].join('\n')
-                  const savedNoteId = dbNotes.filter(n => n.patientKey === patKey).sort((a, b) => b.id - a.id)[0]?.id ?? Date.now()
-                  setFicheExerciceContextOverride({
-                    zone: noteSeanceZone ?? '',
-                    bilanData: {},
-                    notesLibres: `SÉANCE DU JOUR\nEVA: ${data?.eva ?? '?'}/10 — ${data?.evolution ?? ''}\nInterventions: ${data?.interventions?.join(', ') ?? ''}\nDosage: ${data?.detailDosage ?? ''}\nTolérance: ${data?.tolerance ?? ''}\nRessenti: ${data?.noteSubjective ?? ''}\n\nHistorique:\n${historiqueStr}`,
-                  })
-                  setFicheExerciceSource({ type: 'note', id: savedNoteId })
-                  setFicheBackStep('database')
-                  setStep('fiche_exercice')
-                }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-                Fiche d'exercices
               </button>
             </div>
           </>
@@ -5001,7 +5159,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   </div>
                 </div>
               ))}
-              <div style={{ marginTop: 12, padding: '0.7rem 0.85rem', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: '#1e40af', lineHeight: 1.5 }}>
+              <div style={{ marginTop: 12, padding: '0.7rem 0.85rem', background: '#edf4f1', border: '1px solid #8bc4b0', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: '#2D5A4B', lineHeight: 1.5 }}>
                 <strong>Conseil :</strong> annulez cet envoi, retournez à l'étape précédente et retirez les documents ou remplacez-les par des versions masquées (gommer noms, dates de naissance, adresses avec l'outil de masquage).
               </div>
             </div>
