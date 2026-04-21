@@ -363,15 +363,15 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   // Blue/Black flags → approfondissement.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
-    { id: 'douleur',       title: 'Douleur',                              color: 'var(--primary)', priority: 'noyau' },
-    { id: 'redFlags',      title: 'Red Flags 🚩',                          color: '#dc2626',        priority: 'noyau' },
+    { id: 'douleur',       title: 'Douleur',                              color: '#1A1A1A', priority: 'noyau' },
+    { id: 'redFlags',      title: 'Red Flags 🚩',                          color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                       color: '#d97706',        priority: 'noyau' },
     { id: 'blueBlackFlags',title: 'Blue / Black Flags',                    color: '#7c3aed',        priority: 'approfondissement' },
-    { id: 'examClinique',  title: 'Examen clinique',                       color: 'var(--primary)', priority: 'noyau' },
-    { id: 'force',         title: 'Force musculaire',                      color: 'var(--primary)', priority: 'noyau' },
-    { id: 'neuro',         title: 'Neurologique & mécanosensibilité',      color: 'var(--primary)', priority: 'noyau' },
-    { id: 'testsSpec',     title: 'Tests spécifiques',                     color: 'var(--primary)', priority: 'noyau' },
-    { id: 'scores',        title: 'Scores fonctionnels',                   color: 'var(--primary)', priority: 'noyau' },
+    { id: 'examClinique',  title: 'Examen clinique',                       color: '#1A1A1A', priority: 'noyau' },
+    { id: 'force',         title: 'Force musculaire',                      color: '#1A1A1A', priority: 'noyau' },
+    { id: 'neuro',         title: 'Neurologique & mécanosensibilité',      color: '#1A1A1A', priority: 'noyau' },
+    { id: 'testsSpec',     title: 'Tests spécifiques',                     color: '#1A1A1A', priority: 'noyau' },
+    { id: 'scores',        title: 'Scores fonctionnels',                   color: '#1A1A1A', priority: 'noyau' },
     { id: 'contrat',       title: 'Contrat kiné',                          color: '#059669',        priority: 'noyau' },
     { id: 'conseils',      title: 'Conseils & recommandations',            color: '#059669',        priority: 'noyau' },
   ]
@@ -608,14 +608,16 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
               )}
 
               {sec.id === 'contrat' && (
-                <>
+                <div style={{ background: '#FDFCFA', borderRadius: 14, border: '1px solid var(--border-color)', padding: '1rem', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
                   <SmartObjectifsInline objectifs={objectifsSMART} onChange={setObjectifsSMART} />
-                  <OuiNon label="S'engage à faire l'auto-rééducation" value={autoReeducation} onChange={setAutoReeducation} />
+                  <div style={{ marginTop: 12 }}>
+                    <OuiNon label="S'engage à faire l'auto-rééducation" value={autoReeducation} onChange={setAutoReeducation} />
+                  </div>
                   {autoReeducation === 'oui' && (
                     <DictableInput value={frequenceDuree} onChange={e => setFrequenceDuree(e.target.value)}
                       placeholder="Fréquence / Durée… Ex: 3x/semaine, 20 min" inputStyle={{ ...inputStyle, marginTop: 6 }} />
                   )}
-                </>
+                </div>
               )}
 
               {sec.id === 'examClinique' && (

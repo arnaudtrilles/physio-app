@@ -60,24 +60,28 @@ export function TestResultInput({
             type="button"
             onClick={() => setStatus('+')}
             style={{
-              padding: '5px 14px', fontSize: '0.78rem', fontWeight: 700,
+              padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700,
               border: `1.5px solid ${parsed.status === '+' ? '#fca5a5' : 'var(--border-color)'}`,
-              borderRadius: 6, cursor: 'pointer',
-              background: parsed.status === '+' ? '#fee2e2' : 'transparent',
+              borderRadius: 10, cursor: 'pointer',
+              background: parsed.status === '+' ? '#fee2e2' : '#FDFCFA',
               color: parsed.status === '+' ? '#991b1b' : 'var(--text-muted)',
               minWidth: 44,
+              boxShadow: parsed.status === '+' ? '0 2px 6px rgba(153,27,27,0.15)' : '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'all 0.15s',
             }}
           >+</button>
           <button
             type="button"
             onClick={() => setStatus('-')}
             style={{
-              padding: '5px 14px', fontSize: '0.78rem', fontWeight: 700,
+              padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700,
               border: `1.5px solid ${parsed.status === '-' ? '#86efac' : 'var(--border-color)'}`,
-              borderRadius: 6, cursor: 'pointer',
-              background: parsed.status === '-' ? '#dcfce7' : 'transparent',
+              borderRadius: 10, cursor: 'pointer',
+              background: parsed.status === '-' ? '#dcfce7' : '#FDFCFA',
               color: parsed.status === '-' ? '#166534' : 'var(--text-muted)',
               minWidth: 44,
+              boxShadow: parsed.status === '-' ? '0 2px 6px rgba(22,101,52,0.15)' : '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'all 0.15s',
             }}
           >−</button>
         </div>
@@ -89,8 +93,8 @@ export function TestResultInput({
           style={{
             flex: 1, minWidth: 140,
             padding: '0.5rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)',
-            background: 'var(--secondary)', border: '1px solid var(--border-color)',
-            borderRadius: 8, boxSizing: 'border-box',
+            background: '#FDFCFA', border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-xl)', boxSizing: 'border-box',
           }}
         />
       </div>
@@ -177,24 +181,26 @@ export function ClusterLaslettInput({ value, onChange }: { value: string; onChan
                   type="button"
                   onClick={() => setSub(st.key, '+')}
                   style={{
-                    padding: '3px 12px', fontSize: '0.75rem', fontWeight: 700,
+                    padding: '4px 12px', fontSize: '0.75rem', fontWeight: 700,
                     border: `1.5px solid ${v === '+' ? '#fca5a5' : 'var(--border-color)'}`,
-                    borderRadius: 6, cursor: 'pointer',
-                    background: v === '+' ? '#fee2e2' : 'transparent',
+                    borderRadius: 8, cursor: 'pointer',
+                    background: v === '+' ? '#fee2e2' : '#FDFCFA',
                     color: v === '+' ? '#991b1b' : 'var(--text-muted)',
                     minWidth: 36,
+                    boxShadow: v === '+' ? '0 1px 4px rgba(153,27,27,0.12)' : '0 1px 2px rgba(0,0,0,0.05)',
                   }}
                 >+</button>
                 <button
                   type="button"
                   onClick={() => setSub(st.key, '-')}
                   style={{
-                    padding: '3px 12px', fontSize: '0.75rem', fontWeight: 700,
+                    padding: '4px 12px', fontSize: '0.75rem', fontWeight: 700,
                     border: `1.5px solid ${v === '-' ? '#86efac' : 'var(--border-color)'}`,
-                    borderRadius: 6, cursor: 'pointer',
-                    background: v === '-' ? '#dcfce7' : 'transparent',
+                    borderRadius: 8, cursor: 'pointer',
+                    background: v === '-' ? '#dcfce7' : '#FDFCFA',
                     color: v === '-' ? '#166534' : 'var(--text-muted)',
                     minWidth: 36,
+                    boxShadow: v === '-' ? '0 1px 4px rgba(22,101,52,0.12)' : '0 1px 2px rgba(0,0,0,0.05)',
                   }}
                 >−</button>
               </div>
@@ -233,8 +239,8 @@ export function ClusterLaslettInput({ value, onChange }: { value: string; onChan
           style={{
             marginTop: 8, width: '100%',
             padding: '0.45rem 0.7rem', fontSize: '0.78rem', color: 'var(--text-main)',
-            background: 'var(--secondary)', border: '1px solid var(--border-color)',
-            borderRadius: 8, boxSizing: 'border-box',
+            background: '#FDFCFA', border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-xl)', boxSizing: 'border-box',
           }}
         />
       </div>

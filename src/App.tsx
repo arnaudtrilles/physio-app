@@ -35,13 +35,14 @@ import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
+import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
 import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
-import type { NoteSeanceHandle, NoteSeanceData } from './components/NoteSeance'
+import type { NoteSeanceHandle, NoteSeanceData, ExerciceDomicile } from './components/NoteSeance'
 import { DictableInput, DictableTextarea } from './components/VoiceMic'
 import { PDFPreview } from './components/PDFPreview'
 import { DashboardStats } from './components/DashboardStats'
@@ -88,7 +89,37 @@ class ErrorBoundary extends Component<{ children: ReactNode; onReset?: () => voi
   }
 }
 
-// ── Zone picker : grille compacte 2 colonnes ───────────────────────────────
+// ── Zone picker : liste design avec icônes SVG anatomiques ───────────────
+function ZoneIcon({ zone, size = 22, color = 'currentColor' }: { zone: string; size?: number; color?: string }) {
+  const s = { width: size, height: size, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  switch (zone) {
+    case 'Épaule': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M12 8v4"/><path d="M8 9c-3 1-5 3.5-5 6"/><path d="M16 9c3 1 5 3.5 5 6"/><path d="M8 9l-2 7"/><path d="M16 9l2 7"/></svg>
+    )
+    case 'Genou': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v6"/><ellipse cx="12" cy="11" rx="4" ry="3"/><path d="M12 14v8"/><path d="M9 11c-1.5.5-2 2-1.5 3.5"/><path d="M15 11c1.5.5 2 2 1.5 3.5"/></svg>
+    )
+    case 'Hanche': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 3v5"/><ellipse cx="12" cy="11" rx="6" ry="4"/><path d="M8 14l-3 8"/><path d="M16 14l3 8"/><circle cx="12" cy="11" r="1.5"/></svg>
+    )
+    case 'Cheville': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v12"/><path d="M10 14c-2 1-3 3-3 5h10c0-2-1-4-3-5"/><path d="M7 19c-1 0-2 .5-2 2h14c0-1.5-1-2-2-2"/></svg>
+    )
+    case 'Cervicales': return (
+      <svg viewBox="0 0 24 24" {...s}><circle cx="12" cy="5" r="3"/><path d="M12 8v14"/><path d="M9 10h6"/><path d="M8 13h8"/><path d="M9 16h6"/></svg>
+    )
+    case 'Rachis Lombaire': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v20"/><path d="M8 5h8"/><path d="M7 8h10"/><path d="M6 11h12"/><path d="M7 14h10"/><path d="M8 17h8"/><path d="M9 20h6"/></svg>
+    )
+    case 'Gériatrie': return (
+      <svg viewBox="0 0 24 24" {...s}><circle cx="11" cy="4" r="2.5"/><path d="M11 6.5v6"/><path d="M8 9l-2 5"/><path d="M14 9l2 3"/><path d="M11 12.5l-3 9"/><path d="M11 12.5l2 5"/><path d="M16 12l4 3"/><line x1="20" y1="15" x2="20" y2="22"/></svg>
+    )
+    default: return (
+      <svg viewBox="0 0 24 24" {...s}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>
+    )
+  }
+}
+
 const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
   { zone: 'Épaule',          label: 'Épaule' },
   { zone: 'Genou',           label: 'Genou' },
@@ -102,25 +133,27 @@ const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
 
 interface ZonePickerSheetProps {
   title: string
-  accent: string          // ex: 'var(--primary)', '#92400e', '#5b21b6'
-  accentBg: string        // ex: 'var(--secondary)', '#fff7ed', '#f5f3ff'
-  accentBorder: string    // ex: 'var(--border-color)', '#fed7aa', '#ddd6fe'
+  accent: string
+  accentBg: string
+  accentBorder: string
   selectedZone?: string | null
   onSelect: (zone: string) => void
   onClose: () => void
 }
 
-function ZonePickerSheet({ title, accent, accentBg, accentBorder, selectedZone, onSelect, onClose }: ZonePickerSheetProps) {
+function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerSheetProps) {
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', width: '100%', maxWidth: 430, boxShadow: 'var(--shadow-2xl)', padding: '1rem 1.1rem 1.2rem', maxHeight: '85vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
-          <h3 className="title-section" style={{ margin: 0, fontSize: '0.98rem' }}>{title}</h3>
-          <button onClick={onClose} aria-label="Fermer" style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--secondary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--base-bg)', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 430, boxShadow: '0 -8px 40px rgba(0,0,0,0.15)', padding: '0.5rem 1.1rem 2rem', maxHeight: '85vh', overflow: 'auto', animation: 'slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1)' }}>
+        {/* Handle bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border-color)' }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div style={{ marginBottom: '1.1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.01em' }}>{title}</h3>
+          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Choisissez la zone anatomique du bilan</p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {ZONE_PICKER_ITEMS.map(({ zone, label }) => {
             const active = selectedZone === zone
             return (
@@ -128,22 +161,34 @@ function ZonePickerSheet({ title, accent, accentBg, accentBorder, selectedZone, 
                 key={zone}
                 onClick={() => onSelect(zone)}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0.85rem 0.75rem',
-                  borderRadius: 'var(--radius-lg)',
-                  border: `1.5px solid ${active ? accent : accentBorder}`,
-                  background: active ? accentBg : 'var(--surface)',
-                  color: active ? accent : 'var(--text-main)',
-                  fontWeight: active ? 700 : 600,
-                  fontSize: '0.86rem',
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '0.85rem 1rem',
+                  borderRadius: 14,
+                  border: active ? '2px solid var(--primary)' : '1.5px solid transparent',
+                  background: active ? '#edf4f1' : '#FDFCFA',
+                  color: active ? 'var(--primary-dark)' : 'var(--text-main)',
+                  fontWeight: active ? 600 : 500,
+                  fontSize: '0.88rem',
                   cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.15s',
-                  minHeight: 52,
-                  lineHeight: 1.2,
+                  textAlign: 'left',
+                  transition: 'all 0.18s ease',
+                  boxShadow: active ? '0 2px 10px rgba(45,90,75,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
                 }}
               >
-                {label}
+                <div style={{
+                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                  background: active ? 'var(--primary)' : 'var(--secondary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.18s',
+                }}>
+                  <ZoneIcon zone={zone} size={22} color={active ? 'white' : 'var(--primary)'} />
+                </div>
+                <span style={{ flex: 1 }}>{label}</span>
+                {active && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
               </button>
             )
           })}
@@ -696,6 +741,67 @@ function App() {
       if (ta !== tb) return ta - tb
       return a.id - b.id
     })
+
+  const handleGenerateExercices = useCallback(async (prompt: string): Promise<ExerciceDomicile[]> => {
+    const systemPrompt = `Tu es un kinésithérapeute expert. À partir de la dictée du thérapeute, génère la liste des exercices à domicile structurés en JSON.
+
+Le thérapeute peut dicter :
+- plusieurs exercices d'un coup ("squat mural 3×15, pont fessier 3×12…") → tu renvoies TOUS les exercices
+- un seul exercice décrit librement → tu renvoies un array à 1 élément
+
+Réponds UNIQUEMENT avec un objet JSON valide (pas de markdown, pas de commentaire) avec cette structure exacte :
+{
+  "exercices": [
+    {
+      "nom": "Nom professionnel de l'exercice",
+      "categorie": "Catégorie · Contexte (ex: Renforcement quadriceps · Phase 2 post-LCA)",
+      "protocole": {
+        "series": "3",
+        "tempsOuReps": "15" ou "30 sec",
+        "recuperation": "45 sec",
+        "frequence": "2× par jour"
+      },
+      "description": "Consignes brèves : position de départ, mouvement clé, limite de sécurité. Langage accessible au patient."
+    }
+  ]
+}
+
+Règles :
+- Si le thérapeute donne un dosage explicite (ex: "3×15"), utilise-le tel quel.
+- Si aucun dosage n'est donné, propose un dosage adapté au contexte clinique.
+- Maximum 6 exercices.
+- Sois précis et professionnel.`
+
+    const result = await callGeminiSecure({
+      apiKey,
+      systemPrompt,
+      userPrompt: prompt,
+      maxOutputTokens: 4096,
+      jsonMode: true,
+      preferredModel: 'gemini-2.5-flash',
+      patient: { nom: formData.nom || '', prenom: formData.prenom || '', patientKey: `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim() },
+      category: 'fiche_exercice',
+    })
+
+    const parsed = JSON.parse(result)
+    const list = Array.isArray(parsed?.exercices) ? parsed.exercices : []
+    return list.map((ex: { nom?: string; categorie?: string; protocole?: ExerciceDomicile['protocole']; description?: string }) => ({
+      nom: ex.nom || prompt,
+      fait: false,
+      categorie: ex.categorie || '',
+      protocole: ex.protocole || undefined,
+      description: ex.description || '',
+      source: 'ia' as const,
+    }))
+  }, [apiKey, formData.nom, formData.prenom])
+
+  const handleExportExercicesPDF = useCallback((exercices: ExerciceDomicile[]) => {
+    if (exercices.length === 0) return
+    downloadExercicesPDF(exercices, {
+      patient: { nom: formData.nom, prenom: formData.prenom },
+      zone: noteSeanceZone ?? undefined,
+    })
+  }, [formData.nom, formData.prenom, noteSeanceZone])
 
   const handleSaveNote = () => {
     const data = noteSeanceRef.current?.getData()
@@ -1470,11 +1576,11 @@ STRUCTURE (n'inclure que si données présentes) :
               })()}
 
               {/* Stats */}
-              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
+              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
 
             </div>
             {/* Action buttons — fixed bottom */}
-            <div style={{ position: 'absolute', bottom: '1.2rem', left: 0, right: 0, padding: '0.6rem 0.75rem', background: 'linear-gradient(to top, var(--secondary) 60%, transparent)', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ position: 'absolute', bottom: '1.2rem', left: 0, right: 0, padding: '0.6rem 0.75rem', background: 'linear-gradient(to top, var(--base-bg) 60%, transparent)', display: 'flex', gap: '0.5rem' }}>
               <button
                 onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
@@ -1512,7 +1618,7 @@ STRUCTURE (n'inclure que si données présentes) :
               <button
                 onClick={() => setShowAddPatientChoice(true)}
                 aria-label="Ajouter un patient"
-                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--secondary)', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)' }}>
+                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: '#FDFCFA', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             </header>
@@ -1527,7 +1633,7 @@ STRUCTURE (n'inclure que si données présentes) :
                     </svg>
                     <input type="text" placeholder="Rechercher un nom…"
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: c.surfaceMuted, color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)' }} />
+                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: '#FDFCFA', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
                   </div>
                 </div>
                 {(() => {
@@ -1732,7 +1838,27 @@ STRUCTURE (n'inclure que si données présentes) :
                         initials={`${firstR?.nom[0] || '?'}${firstR?.prenom[0] || '?'}`}
                         avatarBg={firstR?.avatarBg}
                         birthday={isBirthday(firstR?.dateNaissance)}
-                        subtitle={firstR?.dateNaissance ? (firstR.dateNaissance.includes('-') ? firstR.dateNaissance.split('-').reverse().join('/') : firstR.dateNaissance) : undefined}
+                        infoLine={(() => {
+                          const parts: string[] = []
+                          if (firstR?.dateNaissance) {
+                            const age = computeAge(firstR.dateNaissance)
+                            if (age !== null) parts.push(`${age} ans`)
+                          }
+                          return parts.length > 0 ? parts.join(' · ') : undefined
+                        })()}
+                        stats={[
+                          { label: 'Depuis', value: (() => {
+                            const d = firstR?.dateBilan
+                            if (!d) return '—'
+                            const parts = d.includes('-') ? d.split('-') : d.split('/')
+                            const months = ['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.']
+                            const day = d.includes('-') ? parts[2] : parts[0]
+                            const monthIdx = parseInt(d.includes('-') ? parts[1] : parts[1], 10) - 1
+                            return `${parseInt(day, 10)} ${months[monthIdx] ?? ''}`
+                          })() },
+                          { label: 'Bilans', value: String(bilans.length) },
+                          { label: 'Séances', value: String(getPatientNotes(selectedPatient ?? '').length + bilans.length + getPatientIntermediaires(selectedPatient ?? '').length) },
+                        ]}
                         onBack={() => setSelectedPatient(null)}
                       />
                       <PatientHeroCard
@@ -2351,11 +2477,11 @@ STRUCTURE (n'inclure que si données présentes) :
                                   deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
                                 }
                               }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : '#edf4f1' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : '#FDFCFA', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
                               <div
                                 onClick={toggleThisEpisode}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
-                                <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : `${c.primary}12`, color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : 'var(--secondary)', color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {zoneClosed ? (
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                                   ) : (
@@ -2471,7 +2597,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                           if (e.key === 'Escape') { setEditingLabelBilanId(null) }
                                         }}
                                         placeholder="Ex : tendinopathie coiffe des rotateurs"
-                                        style={{ display: 'inline', marginLeft: 4, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'white', width: 'calc(100% - 90px)' }}
+                                        style={{ display: 'inline', marginLeft: 4, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'var(--surface)', width: 'calc(100% - 90px)' }}
                                       />
                                     ) : (
                                       <span
@@ -3023,37 +3149,6 @@ STRUCTURE (n'inclure que si données présentes) :
                                     Rapport d'évolution — {zoneLabel}
                                   </button>
                                 )}
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                  <button
-                                    onClick={() => {
-                                      const firstRec = zoneBilans[0] ?? allPatientRecords[0]
-                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                      const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? ''
-                                      setNoteSeanceZone(z)
-                                      setCurrentNoteSeanceId(null)
-                                      setCurrentNoteSeanceData(null)
-                                      setStep('note_seance')
-                                    }}
-                                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #c4b5fd', background: 'transparent', color: '#6d28d9', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Séance
-                                  </button>
-                                  {!isZoneEmpty && (
-                                    <button
-                                      onClick={() => {
-                                        const firstRec = zoneBilans[0] ?? allPatientRecords[0]
-                                        setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                        const patKey = selectedPatient ?? ''
-                                        const z = zoneBilans[0]?.zone ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType)?.zone ?? DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? ''
-                                        setBilanIntermediaireZone(z)
-                                        setCurrentBilanIntermediaireId(null)
-                                        setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
-                                        setStep('bilan_intermediaire')
-                                      }}
-                                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed #fed7aa', background: 'transparent', color: '#c2410c', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                                      <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Bilan interm.
-                                    </button>
-                                  )}
-                                </div>
                                 {isZoneEmpty ? (
                                   <button
                                     onClick={() => {
@@ -3348,29 +3443,35 @@ STRUCTURE (n'inclure que si données présentes) :
                         </button>
                       ))}
                     </div>
-                    <input
-                      type="text"
-                      className="input-luxe"
-                      value={profileEditDraft.profession}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, profession: e.target.value }))}
-                      placeholder="Ou saisissez une autre profession…"
-                      style={{ fontSize: '0.82rem' }}
-                    />
                   </div>
 
                   {/* Compétences & Équipements */}
+                  {(() => {
+                    const chipStyle = (active: boolean): React.CSSProperties => ({
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: 'var(--radius-full)',
+                      border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
+                      background: active ? '#edf4f1' : 'transparent',
+                      color: active ? 'var(--primary-dark)' : 'var(--text-muted)',
+                      fontWeight: active ? 600 : 400,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s',
+                    })
+                    const sectionTitle: React.CSSProperties = { fontWeight: 700, color: 'var(--primary)', fontSize: '0.95rem', marginBottom: 8 }
+                    return (
                   <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 12 }}>Compétences & Équipements</div>
+                    <div style={sectionTitle}>Compétences & Équipements</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
                       Les propositions de prise en charge seront adaptées en fonction de vos compétences et équipements.
                     </p>
 
                     {/* Spécialités */}
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: 6 }}>Spécialités</label>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={sectionTitle}>Spécialités</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {['Thérapie manuelle', 'McKenzie (MDT)', 'Sport', 'Pédiatrie', 'Neurologie', 'Vestibulaire', 'Périnéologie', 'Respiratoire', 'Rhumatologie', 'Gériatrie', 'Orthopédie'].map(s => (
-                          <button key={s} className={`choix-btn${(profileEditDraft.specialites ?? []).includes(s) ? ' active' : ''}`}
+                          <button key={s} type="button" style={chipStyle((profileEditDraft.specialites ?? []).includes(s))}
                             onClick={() => setProfileEditDraft(p => ({
                               ...p,
                               specialites: (p.specialites ?? []).includes(s)
@@ -3382,11 +3483,11 @@ STRUCTURE (n'inclure que si données présentes) :
                     </div>
 
                     {/* Techniques */}
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: 6 }}>Techniques maîtrisées</label>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={sectionTitle}>Techniques maîtrisées</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {['Dry needling', 'Mulligan', 'Maitland', 'Cupping', 'Taping / K-Tape', 'PNF (Kabat)', 'Chaînes musculaires (GDS/Busquet)', 'Éducation neurosciences douleur', 'Crochetage / IASTM', 'Drainage lymphatique', 'Trigger points', 'Ventouses', 'Stretching global actif'].map(t => (
-                          <button key={t} className={`choix-btn${(profileEditDraft.techniques ?? []).includes(t) ? ' active' : ''}`}
+                          <button key={t} type="button" style={chipStyle((profileEditDraft.techniques ?? []).includes(t))}
                             onClick={() => setProfileEditDraft(p => ({
                               ...p,
                               techniques: (p.techniques ?? []).includes(t)
@@ -3398,11 +3499,11 @@ STRUCTURE (n'inclure que si données présentes) :
                     </div>
 
                     {/* Équipements */}
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: 6 }}>Équipements au cabinet</label>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={sectionTitle}>Équipements au cabinet</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {['Ondes de choc', 'TENS', 'Tecarthérapie (Winback/Indiba)', 'Ultrasons', 'Laser', 'Isocinétisme', 'Plateforme proprioceptive', 'Huber / LPG', 'Pressothérapie', 'Électrostimulation', 'Cryothérapie', 'Traction cervicale/lombaire', 'Vélo / Elliptique', 'Presse'].map(e => (
-                          <button key={e} className={`choix-btn${(profileEditDraft.equipements ?? []).includes(e) ? ' active' : ''}`}
+                          <button key={e} type="button" style={chipStyle((profileEditDraft.equipements ?? []).includes(e))}
                             onClick={() => setProfileEditDraft(p => ({
                               ...p,
                               equipements: (p.equipements ?? []).filter(x => x !== e).length === (p.equipements ?? []).length
@@ -3414,17 +3515,20 @@ STRUCTURE (n'inclure que si données présentes) :
                     </div>
 
                     {/* Autres compétences (texte libre) */}
-                    <div style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: 6 }}>Autres (non listés ci-dessus)</label>
+                    <div>
+                      <div style={sectionTitle}>Autres (non listés ci-dessus)</div>
                       <textarea
                         value={profileEditDraft.autresCompetences ?? ''}
                         onChange={e => setProfileEditDraft(p => ({ ...p, autresCompetences: e.target.value }))}
                         placeholder="Ex : méthode Schroth, rééducation maxillo-faciale, posturologie, biofeedback, Game Ready..."
                         rows={2}
-                        style={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box' }}
+                        className="input-luxe"
+                        style={{ fontSize: '0.82rem', resize: 'vertical' }}
                       />
                     </div>
                   </div>
+                    )
+                  })()}
 
                   {/* En-tête Courriers */}
                   <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
@@ -3504,7 +3608,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           style={{ fontSize: '0.8rem', marginTop: 4 }}
                         />
                         {profileEditDraft.signatureImage && (
-                          <div style={{ marginTop: 8, padding: 8, background: 'white', border: '1px solid var(--border-color)', borderRadius: 6, display: 'inline-block' }}>
+                          <div style={{ marginTop: 8, padding: 8, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 6, display: 'inline-block' }}>
                             <img src={profileEditDraft.signatureImage} alt="Signature" style={{ maxHeight: 50, maxWidth: 180 }} />
                             <button
                               onClick={() => setProfileEditDraft(p => ({ ...p, signatureImage: null }))}
@@ -3529,7 +3633,7 @@ STRUCTURE (n'inclure que si données présentes) :
                       </div>
                       <div style={{
                         fontSize: '0.78rem', color: '#064e3b', lineHeight: 1.55,
-                        background: 'white', padding: '10px 12px', borderRadius: 8,
+                        background: 'var(--surface)', padding: '10px 12px', borderRadius: 8,
                         border: '1px solid #bbf7d0', fontFamily: 'Georgia, serif',
                         whiteSpace: 'pre-line',
                       }}>
@@ -3554,7 +3658,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                             navigator.clipboard.writeText(text).then(() => showToast('Mention copiée', 'success'))
                           }
                         }}
-                        style={{ marginTop: 10, width: '100%', padding: '0.55rem', borderRadius: 8, background: 'white', border: '1px solid #86efac', color: '#065f46', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
+                        style={{ marginTop: 10, width: '100%', padding: '0.55rem', borderRadius: 8, background: 'var(--surface)', border: '1px solid #86efac', color: '#065f46', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
                         Copier le texte
                       </button>
                     </div>
@@ -3599,7 +3703,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                           })
                           showToast('Registre exporté', 'success')
                         }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'white', border: '1px solid #8bc4b0', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
+                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid #8bc4b0', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
                         Exporter le registre (PDF)
                       </button>
                     </div>
@@ -3635,7 +3739,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   </div>
 
                   {/* Dashboard Stats */}
-                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
+                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
 
                   <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.1rem 1.15rem', marginBottom:'1.25rem', border:'1px solid var(--border-color)' }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem' }}>
@@ -3705,7 +3809,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                         Exporter mes données (.json)
                       </button>
                       <button onClick={() => importDataRef.current?.click()}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'white', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
+                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'var(--surface)', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                           <polyline points="17 8 12 3 7 8"/>
@@ -3977,7 +4081,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                     <button
                       key={t}
                       onClick={() => runAction(t)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.85rem 1rem', borderRadius: 12, border: `1.5px solid ${closed ? '#86efac' : 'var(--border-color)'}`, background: closed ? '#f0fdf4' : 'white', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'left' }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.85rem 1rem', borderRadius: 12, border: `1.5px solid ${closed ? '#86efac' : 'var(--border-color)'}`, background: closed ? '#f0fdf4' : 'var(--surface)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'left' }}>
                       <div style={{ width: 4, height: 22, background: closed ? '#16a34a' : 'var(--primary)', borderRadius: 2 }} />
                       <span style={{ flex: 1 }}>{zoneLabelForType(t)}</span>
                       {closed && <span style={{ fontSize: '0.62rem', fontWeight: 700, background: '#16a34a', color: 'white', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase' }}>Terminée</span>}
@@ -4286,10 +4390,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           </header>
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
           <div className="scroll-area">
-            <div style={{ display: 'flex', background: 'var(--secondary)', borderRadius: 'var(--radius-xl)', padding: '0.4rem', marginBottom: '1.5rem', width: '100%' }}>
+            <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '0.4rem', marginBottom: '1.5rem', width: '100%', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.06)' }}>
               {(['new', 'existing'] as const).map(mode => (
                 <button key={mode} onClick={() => setPatientMode(mode)}
-                  style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-lg)', background: patientMode === mode ? 'var(--surface)' : 'transparent', color: patientMode === mode ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: patientMode === mode ? 600 : 400, boxShadow: patientMode === mode ? 'var(--shadow-sm)' : 'none' }}>
+                  style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-lg)', background: patientMode === mode ? '#ffffff' : 'transparent', color: patientMode === mode ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: patientMode === mode ? 600 : 400, boxShadow: patientMode === mode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>
                   {mode === 'new' ? 'Nouveau patient' : 'Patient existant'}
                 </button>
               ))}
@@ -4334,8 +4438,15 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
               <button
                 onClick={() => setShowZonePopup(true)}
-                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: selectedBodyZone ? '1.5px solid var(--primary)' : '1.5px dashed var(--border-color)', background: selectedBodyZone ? 'var(--secondary)' : 'transparent', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span>{selectedBodyZone ?? 'Sélectionner une zone…'}</span>
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? '#edf4f1' : '#FDFCFA', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {selectedBodyZone && (
+                    <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ZoneIcon zone={selectedBodyZone} size={16} color="white" />
+                    </span>
+                  )}
+                  {selectedBodyZone ? ZONE_PICKER_ITEMS.find(z => z.zone === selectedBodyZone)?.label ?? selectedBodyZone : 'Sélectionner une zone…'}
+                </span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
             </div>
@@ -4370,23 +4481,23 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           <div className="scroll-area">
             <div className="form-group">
               <label>Activité professionnelle</label>
-              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Activité physique / sportive</label>
-              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents familiaux</label>
-              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents chirurgicaux</label>
-              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Notes complémentaires</label>
-              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
           </div>
           <div className="fixed-bottom">
@@ -4447,7 +4558,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 onChange={e => setBilanNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Patient stressé, travail physique intensifié ce mois-ci, essai de 3 séances de kiné il y a 6 mois sans succès…"
-                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box' }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -4519,7 +4630,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               ))}
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => setShowDocSourceMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-md)', border: '1.5px dashed var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'none', width: '100%' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: '#FDFCFA', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
@@ -4661,50 +4772,20 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#5b21b6' }}>Note de séance n°{numSeance}</div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)' }}>Note de séance n°{numSeance}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{formData.nom} {formData.prenom} · {ZONE_LABELS[bilanType]}</div>
               </div>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-full)', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe' }}>SOAP</span>
             </header>
 
             <div className="scroll-area" style={{ paddingBottom: '9rem' }}>
-              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} />
+              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} onGenerateExercices={handleGenerateExercices} onExportExercicesPDF={handleExportExercicesPDF} />
             </div>
 
-            <div className="fixed-bottom" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="fixed-bottom">
               <button
-                style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+                style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(45,90,75,0.25)' }}
                 onClick={handleSaveNote}>
                 Enregistrer la note de séance
-              </button>
-              <button
-                style={{ width: '100%', padding: '0.7rem', borderRadius: 'var(--radius-lg)', background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                onClick={() => {
-                  const data = noteSeanceRef.current?.getData()
-                  handleSaveNote()
-                  // Build contexte from la séance en cours
-                  const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-                  const bt = getBilanType(noteSeanceZone ?? '')
-                  const allNotesForZone = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
-                  const allBilansForZone = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
-                  const historiqueStr = [
-                    ...allBilansForZone.map(b => `Bilan ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
-                    ...allNotesForZone.map(n => `Séance n°${n.numSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution}`),
-                  ].join('\n')
-                  const savedNoteId = dbNotes.filter(n => n.patientKey === patKey).sort((a, b) => b.id - a.id)[0]?.id ?? Date.now()
-                  setFicheExerciceContextOverride({
-                    zone: noteSeanceZone ?? '',
-                    bilanData: {},
-                    notesLibres: `SÉANCE DU JOUR\nEVA: ${data?.eva ?? '?'}/10 — ${data?.evolution ?? ''}\nInterventions: ${data?.interventions?.join(', ') ?? ''}\nDosage: ${data?.detailDosage ?? ''}\nTolérance: ${data?.tolerance ?? ''}\nRessenti: ${data?.noteSubjective ?? ''}\n\nHistorique:\n${historiqueStr}`,
-                  })
-                  setFicheExerciceSource({ type: 'note', id: savedNoteId })
-                  setFicheBackStep('database')
-                  setStep('fiche_exercice')
-                }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-                Fiche d'exercices
               </button>
             </div>
           </>

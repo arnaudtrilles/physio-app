@@ -42,9 +42,9 @@ interface BilanSortieProps {
   /** Callback to navigate to letter generator */
   onGenerateLetter?: (type: 'fin_pec' | 'fin_anticipee') => void
   /** Callback to generate synthese via AI */
-  onGenerateSynthese?: () => void
+  onGenerateSynthese?: () => void | Promise<void>
   /** Callback to generate recommandations via AI */
-  onGenerateRecommandations?: () => void
+  onGenerateRecommandations?: () => void | Promise<void>
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -306,6 +306,15 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
   const [suiviUlterieur, setSuiviUlterieur] = useState<boolean>((initialData?.suiviUlterieur as boolean) ?? false)
   const [suiviDetails, setSuiviDetails] = useState<string>((initialData?.suiviDetails as string) ?? '')
   const [infoMedecin, setInfoMedecin] = useState<string>((initialData?.infoMedecin as string) ?? '')
+
+  const [generatingSynthese, setGeneratingSynthese] = useState(false)
+  const [generatingRecommandations, setGeneratingRecommandations] = useState(false)
+
+  const runGenerate = async (fn: (() => void | Promise<void>) | undefined, setLoading: (b: boolean) => void) => {
+    if (!fn) return
+    setLoading(true)
+    try { await Promise.resolve(fn()) } finally { setLoading(false) }
+  }
 
   // ── Handle ─────────────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
@@ -656,15 +665,21 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
 
                   {onGenerateSynthese && (
                     <button
-                      onClick={onGenerateSynthese}
+                      onClick={() => runGenerate(onGenerateSynthese, setGeneratingSynthese)}
+                      disabled={generatingSynthese}
                       style={{
                         marginTop: 4, padding: '0.55rem 1rem', borderRadius: 'var(--radius-md)',
                         background: 'linear-gradient(135deg, #059669, #047857)', border: 'none',
-                        color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer',
+                        color: 'white', fontWeight: 700, fontSize: '0.78rem',
+                        cursor: generatingSynthese ? 'not-allowed' : 'pointer',
+                        opacity: generatingSynthese ? 0.75 : 1,
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                       }}
                     >
-                      Créer la synthèse clinique
+                      {generatingSynthese && (
+                        <span style={{ width: 12, height: 12, border: '1.5px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                      )}
+                      {generatingSynthese ? 'Génération…' : 'Créer la synthèse clinique'}
                     </button>
                   )}
                 </>
@@ -730,15 +745,21 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
 
                   {onGenerateRecommandations && (
                     <button
-                      onClick={onGenerateRecommandations}
+                      onClick={() => runGenerate(onGenerateRecommandations, setGeneratingRecommandations)}
+                      disabled={generatingRecommandations}
                       style={{
                         marginTop: 4, padding: '0.55rem 1rem', borderRadius: 'var(--radius-md)',
                         background: 'linear-gradient(135deg, #b45309, #92400e)', border: 'none',
-                        color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer',
+                        color: 'white', fontWeight: 700, fontSize: '0.78rem',
+                        cursor: generatingRecommandations ? 'not-allowed' : 'pointer',
+                        opacity: generatingRecommandations ? 0.75 : 1,
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                       }}
                     >
-                      Créer les recommandations
+                      {generatingRecommandations && (
+                        <span style={{ width: 12, height: 12, border: '1.5px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                      )}
+                      {generatingRecommandations ? 'Génération…' : 'Créer les recommandations'}
                     </button>
                   )}
                 </>

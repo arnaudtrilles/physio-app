@@ -69,7 +69,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
         width: '100%',
         maxWidth: 430,
         height: '100dvh',
-        background: 'transparent',
+        background: 'rgba(0,0,0,0.25)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
@@ -80,11 +80,11 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: colors.surfaceMuted,
+          background: '#FDFCFA',
           borderRadius: `${radius['3xl']}px ${radius['3xl']}px 0 0`,
           width: '100%',
           maxWidth: 430,
-          boxShadow: shadow.xl,
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.12), 0 -1px 6px rgba(0,0,0,0.06)',
           maxHeight: maxHeight,
           display: 'flex',
           flexDirection: 'column',

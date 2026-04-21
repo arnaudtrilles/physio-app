@@ -49,6 +49,10 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
 
 .slide-in-left  { animation: slideInLeft  0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 .slide-in-right { animation: slideInRight 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
@@ -105,8 +109,16 @@ button {
 
 input, textarea, select {
   font-family: inherit;
-  background: #ffffff !important;
   color: var(--text-main) !important;
+  box-sizing: border-box;
+}
+
+/* Default white rounded for form inputs — overridden by table/inline inputs */
+input:not(.mobility-table input):not([type="range"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  background: #FDFCFA;
+  border-radius: var(--radius-xl);
 }
 
 /* Strict Mobile Container */

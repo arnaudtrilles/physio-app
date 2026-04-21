@@ -68,7 +68,7 @@ function MobInput({ label, value, onChange }: { label: string; value: string; on
           value={limitDetail}
           onChange={e => updateDetail(e.target.value)}
           placeholder="Amplitude approximative (ex: 90° d'élévation)"
-          style={{ marginTop: 6, width: '100%', padding: '0.4rem 0.7rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 6, boxSizing: 'border-box' }}
+          style={{ marginTop: 6, width: '100%', padding: '0.4rem 0.7rem', fontSize: '0.78rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }}
         />
       )}
     </div>
@@ -287,13 +287,13 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   // MNA-SF, Fried, SPPB, Tinetti) → approfondissement.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
-    { id: 'contexte',     title: '1. Contexte de vie & autonomie',         color: 'var(--primary)', priority: 'noyau' },
-    { id: 'chutes',       title: '2. Chutes & Red Flags 🚩',                color: '#dc2626',        priority: 'noyau' },
-    { id: 'douleur',      title: '3. Douleur',                              color: 'var(--primary)', priority: 'noyau' },
+    { id: 'contexte',     title: '1. Contexte de vie & autonomie',         color: '#1A1A1A', priority: 'noyau' },
+    { id: 'chutes',       title: '2. Chutes & Red Flags 🚩',                color: '#991b1b',        priority: 'noyau' },
+    { id: 'douleur',      title: '3. Douleur',                              color: '#1A1A1A', priority: 'noyau' },
     { id: 'yellow',       title: '4. Yellow Flags 🟡 — psycho-social',      color: '#d97706',        priority: 'approfondissement' },
-    { id: 'examClinique', title: '5. Examen clinique & mobilité',           color: 'var(--primary)', priority: 'noyau' },
-    { id: 'tests',        title: '6. Tests fonctionnels',                   color: 'var(--primary)', priority: 'noyau' },
-    { id: 'scores',       title: '7. Scores gériatriques',                  color: 'var(--primary)', priority: 'noyau' },
+    { id: 'examClinique', title: '5. Examen clinique & mobilité',           color: '#1A1A1A', priority: 'noyau' },
+    { id: 'tests',        title: '6. Tests fonctionnels',                   color: '#1A1A1A', priority: 'noyau' },
+    { id: 'scores',       title: '7. Scores gériatriques',                  color: '#1A1A1A', priority: 'noyau' },
     { id: 'contrat',      title: '8. Contrat kiné & objectifs SMART',       color: '#059669',        priority: 'noyau' },
     { id: 'conseils',     title: '9. Conseils & recommandations',           color: '#059669',        priority: 'noyau' },
   ]

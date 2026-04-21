@@ -253,18 +253,18 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
   // tests spécifiques (ALTD + Reverse ALTD), force ciblée, équilibre (appui unipodal), scores (CAIT pour CAI).
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
-    { id: 'ottawa',        title: "Critères d'Ottawa",                color: '#dc2626',        priority: 'noyau' },
-    { id: 'antecedents',   title: "Antécédents d'entorse",            color: 'var(--primary)', priority: 'noyau' },
-    { id: 'douleur',       title: 'Douleur',                          color: 'var(--primary)', priority: 'noyau' },
-    { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#dc2626',        priority: 'noyau' },
+    { id: 'ottawa',        title: "Critères d'Ottawa",                color: '#991b1b',        priority: 'noyau' },
+    { id: 'antecedents',   title: "Antécédents d'entorse",            color: '#1A1A1A', priority: 'noyau' },
+    { id: 'douleur',       title: 'Douleur',                          color: '#1A1A1A', priority: 'noyau' },
+    { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                   color: '#d97706',        priority: 'noyau' },
     { id: 'blueBlackFlags',title: 'Blue / Black Flags',                color: '#7c3aed',        priority: 'approfondissement' },
-    { id: 'examClinique',  title: 'Examen clinique',                   color: 'var(--primary)', priority: 'noyau' },
-    { id: 'testsSpec',     title: 'Tests spécifiques cheville',        color: 'var(--primary)', priority: 'noyau' },
-    { id: 'force',         title: 'Force musculaire',                  color: 'var(--primary)', priority: 'noyau' },
-    { id: 'equilibre',     title: 'Équilibre postural',                color: 'var(--primary)', priority: 'noyau' },
-    { id: 'mvtRep',        title: 'Mouvements répétés',                color: 'var(--primary)', priority: 'approfondissement' },
-    { id: 'scores',        title: 'Scores fonctionnels',               color: 'var(--primary)', priority: 'noyau' },
+    { id: 'examClinique',  title: 'Examen clinique',                   color: '#1A1A1A', priority: 'noyau' },
+    { id: 'testsSpec',     title: 'Tests spécifiques cheville',        color: '#1A1A1A', priority: 'noyau' },
+    { id: 'force',         title: 'Force musculaire',                  color: '#1A1A1A', priority: 'noyau' },
+    { id: 'equilibre',     title: 'Équilibre postural',                color: '#1A1A1A', priority: 'noyau' },
+    { id: 'mvtRep',        title: 'Mouvements répétés',                color: '#1A1A1A', priority: 'approfondissement' },
+    { id: 'scores',        title: 'Scores fonctionnels',               color: '#1A1A1A', priority: 'noyau' },
     { id: 'contrat',       title: 'Contrat kiné',                      color: '#059669',        priority: 'noyau' },
     { id: 'conseils',      title: 'Conseils & recommandations',        color: '#059669',        priority: 'noyau' },
   ]
@@ -285,7 +285,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
       </div>
       {tests[k] && (
         <DictableInput value={tests[k + 'Remarques'] ?? ''} onChange={e => setT(k + 'Remarques', e.target.value)} placeholder="Remarques…"
-          inputStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+          inputStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)' }} />
       )}
     </div>
   )

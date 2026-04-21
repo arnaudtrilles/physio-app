@@ -234,16 +234,16 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
   // tests spécifiques (Thessaly + Noble), scores (PSFS seul), contrat, conseils.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
-    { id: 'douleur',       title: 'Douleur',                          color: 'var(--primary)', priority: 'noyau' },
-    { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#dc2626',        priority: 'noyau' },
+    { id: 'douleur',       title: 'Douleur',                          color: '#1A1A1A', priority: 'noyau' },
+    { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                   color: '#d97706',        priority: 'noyau' },
     { id: 'blueBlackFlags',title: 'Blue / Black Flags',                color: '#7c3aed',        priority: 'approfondissement' },
-    { id: 'examClinique',  title: 'Examen clinique',                   color: 'var(--primary)', priority: 'noyau' },
-    { id: 'force',         title: 'Force musculaire',                  color: 'var(--primary)', priority: 'noyau' },
-    { id: 'ligamentaires', title: 'Tests ligamentaires',               color: 'var(--primary)', priority: 'noyau' },
-    { id: 'neuro',         title: 'Neurologique & mécanosensibilité',  color: 'var(--primary)', priority: 'noyau' },
-    { id: 'testsSpec',     title: 'Tests spécifiques',                 color: 'var(--primary)', priority: 'noyau' },
-    { id: 'scores',        title: 'Scores fonctionnels',               color: 'var(--primary)', priority: 'noyau' },
+    { id: 'examClinique',  title: 'Examen clinique',                   color: '#1A1A1A', priority: 'noyau' },
+    { id: 'force',         title: 'Force musculaire',                  color: '#1A1A1A', priority: 'noyau' },
+    { id: 'ligamentaires', title: 'Tests ligamentaires',               color: '#1A1A1A', priority: 'noyau' },
+    { id: 'neuro',         title: 'Neurologique & mécanosensibilité',  color: '#1A1A1A', priority: 'noyau' },
+    { id: 'testsSpec',     title: 'Tests spécifiques',                 color: '#1A1A1A', priority: 'noyau' },
+    { id: 'scores',        title: 'Scores fonctionnels',               color: '#1A1A1A', priority: 'noyau' },
     { id: 'contrat',       title: 'Contrat kiné',                      color: '#059669',        priority: 'noyau' },
     { id: 'conseils',      title: 'Conseils & recommandations',        color: '#059669',        priority: 'noyau' },
   ]
