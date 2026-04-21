@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, lazy, Suspense, Component } from 'react'
+import { useState, useRef, useCallback, useEffect, lazy, Suspense, Component } from 'react'
 import type { ReactNode, ErrorInfo } from 'react'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useTheme } from './hooks/useTheme'
@@ -385,6 +385,15 @@ function App() {
     dbAICallAudit, setDbAICallAudit, dbPrescriptions, setDbPrescriptions,
     dbClosedTreatments, setDbClosedTreatments, profile, setProfile,
   })
+
+  // Si un profil existe déjà dans le cloud (nom rempli après sync), considérer
+  // l'utilisateur comme onboardé — évite de refaire le wizard quand on se
+  // reconnecte depuis un nouvel appareil ou un nouveau domaine (IndexedDB neuve).
+  useEffect(() => {
+    if (!onboarded && syncStatus === 'done' && profile.nom && profile.nom.trim() !== '') {
+      setOnboarded(true)
+    }
+  }, [onboarded, syncStatus, profile.nom, setOnboarded])
 
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
   const recordAIAudit = useCallback((entry: AICallAuditEntry) => {
