@@ -58,6 +58,8 @@ import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { AuthScreen } from './components/AuthScreen'
 import { OnboardingScreen } from './components/OnboardingScreen'
+import { Tutorial, type TutorialStep } from './components/Tutorial'
+import { SplashScreen } from './components/SplashScreen'
 // ── Design system + patient command center ────────────────────────────────
 import { colors as c } from './design/tokens'
 import { PatientHeader } from './components/patient/PatientHeader'
@@ -311,9 +313,25 @@ function SwipeToDelete({ children, onDelete, disabled = false }: {
   )
 }
 
+const TUTORIAL_STEPS: TutorialStep[] = [
+  { id: 'welcome', emoji: '🏥', title: 'Créons votre premier bilan', description: 'Je vous guide pas à pas dans la création d\'un dossier patient complet. Ça prend 2 minutes !', selector: null, tooltip: 'center' },
+  { id: 'new-patient', emoji: '➕', title: 'Nouveau patient', description: 'Appuyez sur ce bouton pour créer votre premier dossier et démarrer le bilan initial.', selector: '[data-tutorial="new-patient-btn"]', tooltip: 'top', padding: 10 },
+  { id: 'identity', emoji: '👤', title: 'Identité', description: 'À cette étape, renseignez les informations d\'identité de votre patient.', selector: null, tooltip: 'center' },
+  { id: 'general-info', emoji: '📋', title: 'Bilan clinique', description: 'C\'est ici que vous devrez saisir les informations cliniques. Quand vous avez fini, enregistrez votre bilan.', selector: null, tooltip: 'center' },
+  { id: 'bilan', emoji: '🔍', title: 'Bilan clinique 2/2', description: 'Ici vous trouverez votre bilan clinique optimisé pour la zone concernée.', selector: null, tooltip: 'center' },
+  { id: 'done', emoji: '🎉', title: 'Bilan créé avec succès !', description: 'Excellent travail. Que souhaitez-vous faire avec ce bilan ?', selector: null, tooltip: 'center', isActionStep: true },
+]
+
 function App() {
   const { user, loading: authLoading, signOut } = useAuth()
   const [theme, setTheme] = useTheme()
+  const appContainerRef = useRef<HTMLDivElement | null>(null)
+  const [showSplash, setShowSplash] = useState(() => {
+    const last = sessionStorage.getItem('splash_ts')
+    return !last || Date.now() - parseInt(last) > 60000
+  })
+  const [tutorialActive, setTutorialActive] = useState(() => localStorage.getItem('physio_tutorial_done') !== 'true')
+  const [tutorialIdx, setTutorialIdx] = useState(0)
 
   const [step, setStep] = useState<Step>('dashboard')
   // ── iOS-style swipe navigation ──────────────────────────────────────────────
@@ -1539,6 +1557,48 @@ STRUCTURE (n'inclure que si données présentes) :
   const STEP_ORDER: Step[] = ['identity', 'general_info', 'bilan_zone', 'analyse_ia']
   const stepProgress = STEP_ORDER.indexOf(step) >= 0 ? ((STEP_ORDER.indexOf(step) + 1) / STEP_ORDER.length) * 100 : 0
 
+  // ── Tutorial ──────────────────────────────────────────────────────────────────
+  const handleTutorialDone = () => {
+    localStorage.setItem('physio_tutorial_done', 'true')
+    setTutorialActive(false)
+  }
+
+  const handleTutorialNext = () => {
+    const next = tutorialIdx + 1
+    if (next >= TUTORIAL_STEPS.length) { handleTutorialDone(); return }
+    if (tutorialIdx === 0) setStep('dashboard')
+    else if (tutorialIdx === 1) {
+      resetForm()
+      setFormData({ nom: 'DUPONT', prenom: 'Jean', dateNaissance: '15/06/1985', profession: 'Employé de bureau', sport: 'Tennis (2x/semaine)', famille: 'Pas d\'antécédents familiaux connus', chirurgie: 'Appendicectomie (2015)', notes: 'Patient motivé, douleur depuis 3 semaines suite à un effort au sport' })
+      setSelectedBodyZone('Épaule')
+      setCurrentBilanDataOverride({ douleur: { debutSymptomes: 'Il y a 3 semaines, lors d\'un match de tennis', localisationActuelle: 'Face antérieure de l\'épaule droite avec irradiation vers le cou', evnPire: '7', evnMieux: '2', evnMoy: '4', douleurType: 'Mécanique, sharp lors des mouvements', mouvementsEmpirent: 'Élévation du bras au-dessus de la tête, rotation interne', mouvementsSoulagent: 'Repos, antalgiques, application de froid', douleurNocturne: 'oui', douleurNocturneType: 'Douleur en décubitus latéral', insomniante: 'non' } })
+      setPatientMode('new')
+      setStep('identity')
+    }
+    else if (tutorialIdx === 2) setStep('general_info')
+    else if (tutorialIdx === 3) { setBilanZoneBackStep('general_info'); setStep('bilan_zone') }
+    else if (tutorialIdx === 4) setStep('database')
+    setTutorialIdx(next)
+  }
+
+  const handleTutorialIA = () => {
+    const patBilans = selectedPatient ? db.filter(r => `${r.nom.toUpperCase()} ${r.prenom}`.trim() === selectedPatient) : []
+    const last = patBilans[patBilans.length - 1]
+    if (last) { setCurrentBilanId(last.id); setStep('analyse_ia') }
+    handleTutorialDone()
+  }
+
+  const handleTutorialExercices = () => {
+    setFicheBackStep('database')
+    setStep('fiche_exercice')
+    handleTutorialDone()
+  }
+
+  const handleTutorialPDF = () => {
+    setStep('database')
+    handleTutorialDone()
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   // Auth gate: loading → login → app
@@ -1550,11 +1610,13 @@ STRUCTURE (n'inclure que si données présentes) :
     )
   }
 
-  if (!user) {
+  const supabaseConfigured = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+
+  if (supabaseConfigured && !user) {
     return <AuthScreen />
   }
 
-  if (!onboarded && allDataLoaded) {
+  if (supabaseConfigured && !onboarded && allDataLoaded) {
     return (
       <OnboardingScreen
         initialProfile={profile}
@@ -1567,7 +1629,21 @@ STRUCTURE (n'inclure que si données présentes) :
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container" ref={appContainerRef}>
+      {showSplash && <SplashScreen onDone={() => { sessionStorage.setItem('splash_ts', Date.now().toString()); setShowSplash(false) }} />}
+      {tutorialActive && !showSplash && (
+        <Tutorial
+          steps={TUTORIAL_STEPS}
+          currentIdx={tutorialIdx}
+          containerEl={appContainerRef.current}
+          onNext={handleTutorialNext}
+          onSkip={handleTutorialDone}
+          onDone={handleTutorialDone}
+          onActionIA={handleTutorialIA}
+          onActionExercices={handleTutorialExercices}
+          onActionPDF={handleTutorialPDF}
+        />
+      )}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* ── Dashboard ──────────────────────────────────────────────────────────── */}
@@ -1647,6 +1723,7 @@ STRUCTURE (n'inclure que si données présentes) :
                 Mes patients
               </button>
               <button
+                data-tutorial="new-patient-btn"
                 onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(15,23,138,0.15)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
                 onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
@@ -4008,6 +4085,19 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   })}
                 </div>
               </div>
+
+              {/* Tutoriel */}
+              <button
+                onClick={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.1rem' }}>🎓</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Relancer le tutoriel</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Revoir le guide de prise en main</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
 
               {/* Préférences */}
               <button

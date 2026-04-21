@@ -14,7 +14,9 @@
  * Documents (base64) stay local — only metadata is synced. Supabase Storage in v2.
  */
 
-import { supabase } from './supabase'
+import { supabase as _supabase } from './supabase'
+// syncEngine is only called when supabase is configured
+const supabase = _supabase!
 import type {
   BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord,
   SmartObjectif, ExerciceBankEntry, PatientDocument,

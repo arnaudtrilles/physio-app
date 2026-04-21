@@ -16,18 +16,18 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
     session: null,
-    loading: true,
+    loading: supabase !== null,
   })
 
   useEffect(() => {
-    // Get initial session
+    if (!supabase) return
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setState({ user: session?.user ?? null, session, loading: false })
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (_event: string, session: Session | null) => {
         setState({ user: session?.user ?? null, session, loading: false })
       },
     )
@@ -37,6 +37,7 @@ export function useAuth() {
 
   const signUp = useCallback(
     async (email: string, password: string, nom: string, prenom: string): Promise<AuthResult> => {
+      if (!supabase) return { error: null }
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -49,6 +50,7 @@ export function useAuth() {
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {
+      if (!supabase) return { error: null }
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       return { error }
     },
@@ -56,6 +58,7 @@ export function useAuth() {
   )
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
+    if (!supabase) return { error: null }
     const { error } = await supabase.auth.signOut()
     return { error }
   }, [])
