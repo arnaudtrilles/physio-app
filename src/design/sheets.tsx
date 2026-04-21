@@ -119,7 +119,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
             {subtitle && <div style={{ fontSize: typography.meta, color: colors.textMuted, marginTop: 2 }}>{subtitle}</div>}
           </div>
         )}
-        <div style={{ overflowY: 'auto', padding: '0.5rem 1.2rem 2.4rem', flex: 1 }}>{children}</div>
+        <div style={{ overflowY: 'auto', padding: '0.5rem 1.2rem 2.4rem', flex: 1, WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>{children}</div>
         {footer && <div style={{ padding: '0.75rem 1.2rem 1rem', borderTop: `1px solid ${colors.borderSoft}` }}>{footer}</div>}
       </div>
     </div>
