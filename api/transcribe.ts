@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : 'webm'
 
     const form = new FormData()
-    form.append('file', new Blob([audioBuffer], { type: incomingType }), `audio.${ext}`)
+    form.append('file', new Blob([new Uint8Array(audioBuffer)], { type: incomingType }), `audio.${ext}`)
     form.append('model', TRANSCRIBE_MODEL)
     form.append('language', 'fr')
     form.append('prompt', MEDICAL_VOCAB_PROMPT)
