@@ -1,10 +1,11 @@
 import { memo, useMemo } from 'react'
-import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord } from '../types'
+import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, ClosedTreatment } from '../types'
 
 interface DashboardStatsProps {
   bilans: BilanRecord[]
   intermediaires: BilanIntermediaireRecord[]
   notesSeance: NoteSeanceRecord[]
+  closedTreatments?: ClosedTreatment[]
   onSelectPatient?: (key: string) => void
 }
 
@@ -24,7 +25,14 @@ const parseFR = (d: string) => {
   return new Date(`${yy}-${mm}-${dd}`).getTime() || 0
 }
 
-export const DashboardStats = memo(function DashboardStats({ bilans, intermediaires, notesSeance, onSelectPatient }: DashboardStatsProps) {
+export const DashboardStats = memo(function DashboardStats({ bilans, intermediaires, notesSeance, closedTreatments = [], onSelectPatient }: DashboardStatsProps) {
+
+  // Build a set of closed treatment keys (patientKey|bilanType) for fast lookup
+  const closedKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of closedTreatments) set.add(`${c.patientKey}|${c.bilanType}`)
+    return set
+  }, [closedTreatments])
 
   // ── Séances cette semaine ──────────────────────────────────────────────────
   const seancesThisWeek = useMemo(() => {
@@ -59,48 +67,67 @@ export const DashboardStats = memo(function DashboardStats({ bilans, intermediai
     return improvements.reduce((sum, v) => sum + v, 0) / improvements.length
   }, [bilans])
 
-  // ── Scores par patient ─────────────────────────────────────────────────────
+  // ── Scores par patient (traitements actifs uniquement) ──────────────────────
   const patientScores = useMemo(() => {
-    const byPatient = new Map<string, { times: number[]; evns: number[] }>()
+    // Group by patientKey + bilanType to separate treatments
+    const byTreatment = new Map<string, { patientKey: string; times: number[]; evns: number[] }>()
+
+    const getBilanTypeForRecord = (b: BilanRecord) => b.bilanType ?? 'generique'
+
     for (const b of bilans) {
       if (b.evn == null) continue
-      const key = `${(b.nom || '').toUpperCase()} ${b.prenom}`.trim()
-      const entry = byPatient.get(key) ?? { times: [], evns: [] }
+      const patKey = `${(b.nom || '').toUpperCase()} ${b.prenom}`.trim()
+      const bt = getBilanTypeForRecord(b)
+      const treatmentKey = `${patKey}|${bt}`
+      // Skip closed treatments
+      if (closedKeys.has(treatmentKey)) continue
+      const entry = byTreatment.get(treatmentKey) ?? { patientKey: patKey, times: [], evns: [] }
       entry.times.push(parseFR(b.dateBilan))
       entry.evns.push(b.evn)
-      byPatient.set(key, entry)
+      byTreatment.set(treatmentKey, entry)
     }
     for (const r of intermediaires) {
+      const bt = r.bilanType ?? 'generique'
+      const treatmentKey = `${r.patientKey}|${bt}`
+      if (closedKeys.has(treatmentKey)) continue
       const tc = (r.data as Record<string, Record<string, Record<string, unknown>>> | undefined)?.troncCommun
       const v = tc?.evn?.pireActuel
       const n = typeof v === 'number' ? v : typeof v === 'string' && v !== '' ? Number(v) : NaN
       if (isNaN(n)) continue
-      const entry = byPatient.get(r.patientKey) ?? { times: [], evns: [] }
+      const entry = byTreatment.get(treatmentKey) ?? { patientKey: r.patientKey, times: [], evns: [] }
       entry.times.push(parseFR(r.dateBilan))
       entry.evns.push(n)
-      byPatient.set(r.patientKey, entry)
+      byTreatment.set(treatmentKey, entry)
     }
     for (const ns of notesSeance) {
+      const bt = ns.bilanType ?? 'generique'
+      const treatmentKey = `${ns.patientKey}|${bt}`
+      if (closedKeys.has(treatmentKey)) continue
       const v = ns.data?.eva
       const n = typeof v === 'string' && v !== '' ? Number(v) : typeof v === 'number' ? v : NaN
       if (isNaN(n)) continue
-      const entry = byPatient.get(ns.patientKey) ?? { times: [], evns: [] }
+      const entry = byTreatment.get(treatmentKey) ?? { patientKey: ns.patientKey, times: [], evns: [] }
       entry.times.push(parseFR(ns.dateSeance))
       entry.evns.push(n)
-      byPatient.set(ns.patientKey, entry)
+      byTreatment.set(treatmentKey, entry)
     }
 
-    const results: { key: string; score: number }[] = []
-    for (const [key, { times, evns }] of byPatient) {
+    // Aggregate best/worst score per patient (across their active treatments)
+    const byPatient = new Map<string, number>()
+    for (const [, { patientKey, times, evns }] of byTreatment) {
       if (evns.length < 2) continue
       const indices = times.map((_, i) => i).sort((a, b) => times[a] - times[b])
       const first = evns[indices[0]]
       const last = evns[indices[indices.length - 1]]
       if (first === 0) continue
-      results.push({ key, score: Math.round(((first - last) / first) * 100) })
+      const score = Math.round(((first - last) / first) * 100)
+      // Keep the worst score for watchlist purposes
+      const existing = byPatient.get(patientKey)
+      if (existing == null || score < existing) byPatient.set(patientKey, score)
     }
-    return results
-  }, [bilans, intermediaires, notesSeance])
+
+    return Array.from(byPatient, ([key, score]) => ({ key, score }))
+  }, [bilans, intermediaires, notesSeance, closedKeys])
 
   // Meilleure progression
   const bestPatient = useMemo(() => {
@@ -170,7 +197,7 @@ export const DashboardStats = memo(function DashboardStats({ bilans, intermediai
 
       {/* Patients à surveiller */}
       {patientsToWatch.length > 0 && (
-        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid #fecaca', boxShadow: '0 1px 4px rgba(220,38,38,0.06)', padding: '0.8rem 0.9rem' }}>
+        <div style={{ background: 'var(--secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid #fecaca', boxShadow: '0 1px 4px rgba(220,38,38,0.06)', padding: '0.8rem 0.9rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#881337" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#881337' }}>Patients à surveiller</span>

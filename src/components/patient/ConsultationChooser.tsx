@@ -155,11 +155,12 @@ function ChoiceRow({ icon, accent, title, description, onClick }: ChoiceRowProps
         alignItems: 'center',
         gap: spacing.md,
         padding: '0.9rem 1rem',
-        background: colors.surfaceMuted,
+        background: 'white',
         border: `1px solid ${colors.borderSoft}`,
-        borderRadius: radius.lg,
+        borderRadius: radius.xl,
         cursor: 'pointer',
         textAlign: 'left',
+        boxShadow: shadow.xs,
       }}
     >
       <div
@@ -167,7 +168,7 @@ function ChoiceRow({ icon, accent, title, description, onClick }: ChoiceRowProps
           width: 36,
           height: 36,
           borderRadius: radius.md,
-          background: 'white',
+          background: '#ffffff',
           color: accent,
           boxShadow: shadow.xs,
           display: 'flex',

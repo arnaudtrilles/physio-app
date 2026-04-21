@@ -34,7 +34,7 @@ function parseFrDate(s: string | undefined): number {
 }
 
 const COLORS = {
-  bilan:         { fill: '#3b82f6', stroke: '#1d4ed8' },
+  bilan:         { fill: '#4A8C73', stroke: '#2D5A4B' },
   intermediaire: { fill: '#f97316', stroke: '#c2410c' },
   note:          { fill: '#8b5cf6', stroke: '#6d28d9' },
 } as const
@@ -162,8 +162,8 @@ export function EvolutionChart({ points, title, compact, improvementPct }: Evolu
         />
         <defs>
           <linearGradient id="evolGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#1e3a8a" />
-            <stop offset="100%" stopColor="#7c3aed" />
+            <stop offset="0%" stopColor="#2D5A4B" />
+            <stop offset="100%" stopColor="#4A8C73" />
           </linearGradient>
         </defs>
 

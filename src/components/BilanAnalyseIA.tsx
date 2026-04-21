@@ -245,7 +245,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
               Pour accéder à l'analyse clinique, configurez votre clé API Gemini dans votre profil.
             </p>
             <button onClick={onGoToProfile}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #2D5A4B, #4A8C73)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
@@ -266,7 +266,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Erreur de connexion</div>
             <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>{retryCount > 0 ? `Tentative ${retryCount}/2 échouée. ` : ''}{error}</p>
-            <button onClick={() => { setRetryCount(0); runAnalysis(0) }} style={{ marginTop: 8, fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Réessayer</button>
+            <button onClick={() => { setRetryCount(0); runAnalysis(0) }} style={{ marginTop: 8, fontSize: '0.82rem', color: '#2D5A4B', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Réessayer</button>
           </div>
         )}
         {error === 'auth' && (
@@ -324,14 +324,14 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
             {/* Diagnostic */}
             <div className="ai-section-card">
               <div className="ai-section-header">
-                <div className="ai-section-icon" style={{ background: '#eff6ff' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="ai-section-icon" style={{ background: '#edf4f1' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2D5A4B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
                     <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
                     <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
                   </svg>
                 </div>
-                <h4 style={{ color: '#1e3a8a' }}>Diagnostic principal</h4>
+                <h4 style={{ color: '#2D5A4B' }}>Diagnostic principal</h4>
               </div>
               <div className="ai-section-body">
                 <div className="ai-diagnostic-box">
@@ -442,7 +442,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
           <div style={{ marginTop: 4, marginBottom: 8 }}>
             <button
               onClick={() => setShowCorrection(!showCorrection)}
-              style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: showCorrection ? '#eff6ff' : 'var(--secondary)', border: `1.5px solid ${showCorrection ? '#bfdbfe' : 'var(--border-color)'}`, color: showCorrection ? '#1d4ed8' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: showCorrection ? '#edf4f1' : 'var(--secondary)', border: `1.5px solid ${showCorrection ? '#b8d4ca' : 'var(--border-color)'}`, color: showCorrection ? '#2D5A4B' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -483,13 +483,13 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
         {!analyse && !loading && apiKey && !error && (
           <div className="ai-section-card">
             <div className="ai-section-header">
-              <div className="ai-section-icon" style={{ background: '#eff6ff' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="ai-section-icon" style={{ background: '#edf4f1' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2D5A4B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
               </div>
-              <h4 style={{ color: '#1e3a8a' }}>Vos observations cliniques</h4>
+              <h4 style={{ color: '#2D5A4B' }}>Vos observations cliniques</h4>
             </div>
             <div className="ai-section-body">
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>

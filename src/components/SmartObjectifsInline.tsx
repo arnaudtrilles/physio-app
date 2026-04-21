@@ -29,29 +29,44 @@ export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objecti
 
   const removeObj = (id: number) => onChange(objectifs.filter(o => o.id !== id))
 
+  const fieldStyle: React.CSSProperties = {
+    width: '100%', padding: '0.55rem 0.75rem', fontSize: '0.82rem',
+    border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)',
+    marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)',
+    background: '#FDFCFA',
+  }
+
   return (
     <div>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{
+          width: 28, height: 28, borderRadius: 8,
+          background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/>
           </svg>
         </div>
-        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#92400e' }}>Objectifs SMART</div>
+        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Objectifs SMART</div>
       </div>
 
       {/* Liste des objectifs existants */}
       {objectifs.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
           {objectifs.map(obj => (
-            <div key={obj.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.55rem 0.7rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}>
+            <div key={obj.id} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              padding: '0.6rem 0.75rem',
+              background: '#FDFCFA', border: '1px solid var(--border-color)',
+              borderRadius: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}>
                 <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
               </svg>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#92400e' }}>{obj.titre}</div>
-                {obj.cible && <div style={{ fontSize: '0.75rem', color: '#b45309' }}>{obj.cible}</div>}
+                <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--primary-dark)' }}>{obj.titre}</div>
+                {obj.cible && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{obj.cible}</div>}
                 {obj.dateCible && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>Cible : {obj.dateCible}</div>}
               </div>
               <button onClick={() => removeObj(obj.id)}
@@ -65,29 +80,43 @@ export const SmartObjectifsInline = memo(function SmartObjectifsInline({ objecti
 
       {/* Formulaire d'ajout */}
       {showAdd ? (
-        <div style={{ background: 'var(--surface)', border: '1.5px solid #fde68a', borderRadius: 10, padding: '0.7rem', marginBottom: 6 }}>
+        <div style={{ background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.75rem', marginBottom: 6, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <input value={titre} onChange={e => setTitre(e.target.value)}
             placeholder="Objectif (ex: Récupérer la flexion complète)"
-            style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
+            style={fieldStyle} />
           <input value={cible} onChange={e => setCible(e.target.value)}
             placeholder="Cible mesurable (ex: Flexion > 120° à J30)"
-            style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
+            style={fieldStyle} />
           <input type="date" value={dateCible} onChange={e => setDateCible(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.82rem', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 8, boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--secondary)' }} />
+            style={{ ...fieldStyle, marginBottom: 8 }} />
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={handleAdd} disabled={!titre.trim()}
-              style={{ flex: 1, padding: '0.5rem', borderRadius: 8, background: titre.trim() ? 'linear-gradient(135deg, #d97706, #b45309)' : 'var(--secondary)', border: 'none', color: titre.trim() ? 'white' : 'var(--text-muted)', fontWeight: 700, fontSize: '0.82rem', cursor: titre.trim() ? 'pointer' : 'not-allowed' }}>
+              style={{
+                flex: 1, padding: '0.5rem', borderRadius: 10, border: 'none',
+                background: titre.trim() ? 'var(--primary)' : 'var(--secondary)',
+                color: titre.trim() ? 'white' : 'var(--text-muted)',
+                fontWeight: 700, fontSize: '0.82rem',
+                cursor: titre.trim() ? 'pointer' : 'not-allowed',
+                boxShadow: titre.trim() ? '0 2px 6px rgba(45,90,75,0.2)' : 'none',
+              }}>
               Ajouter
             </button>
             <button onClick={() => setShowAdd(false)}
-              style={{ padding: '0.5rem 0.85rem', borderRadius: 8, background: 'var(--secondary)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
+              style={{ padding: '0.5rem 0.85rem', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
               Annuler
             </button>
           </div>
         </div>
       ) : (
         <button onClick={() => setShowAdd(true)}
-          style={{ width: '100%', padding: '0.5rem', borderRadius: 8, border: '1.5px dashed #fde68a', background: 'transparent', color: '#d97706', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          style={{
+            width: '100%', padding: '0.55rem', borderRadius: 10,
+            border: '1.5px solid var(--border-color)',
+            background: '#FDFCFA', color: 'var(--primary)',
+            fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}>
           <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> Ajouter un objectif
         </button>
       )}

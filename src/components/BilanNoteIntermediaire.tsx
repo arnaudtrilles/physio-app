@@ -173,7 +173,7 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
               Configurez votre clé API Gemini dans votre profil pour accéder à cette fonctionnalité.
             </p>
             <button onClick={onGoToProfile}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #2D5A4B, #4A8C73)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer dans le Profil
             </button>
           </div>
@@ -199,7 +199,7 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Erreur</div>
             <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>{retryCount > 0 ? `Tentative ${retryCount}/2 échouée. ` : ''}{error}</p>
-            <button onClick={() => { setRetryCount(0); run(0) }} style={{ marginTop: 8, fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Réessayer</button>
+            <button onClick={() => { setRetryCount(0); run(0) }} style={{ marginTop: 8, fontSize: '0.82rem', color: '#2D5A4B', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Réessayer</button>
           </div>
         )}
 

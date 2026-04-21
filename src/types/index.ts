@@ -141,9 +141,27 @@ export interface NoteSeanceRecord {
     toleranceDetail: string
     prochaineEtape: string[]
     notePlan: string
+    exercicesDomicile?: {
+      nom: string
+      fait: boolean
+      categorie?: string
+      protocole?: { series?: string; tempsOuReps?: string; recuperation?: string; frequence?: string }
+      description?: string
+      source?: 'manuel' | 'ia'
+    }[]
   }
   analyseIA?: AnalyseSeanceMini
   ficheExercice?: FicheExercice
+}
+
+export interface BanqueExerciceEntry {
+  id: string
+  name: string
+  zone: string
+  markdown: string
+  source: 'ia' | 'manuel'
+  usageCount: number
+  createdAt: string
 }
 
 export interface ExerciceBankEntry {

@@ -148,8 +148,8 @@ function BilanCard({ item }: { item: BilanItem }) {
   return (
     <div style={cardStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 700, fontSize: 14, color: '#1e3a8a' }}>Bilan initial</span>
-        {hasIA && <Badge label="Analysé" bg="#dbeafe" fg="#1e3a8a" />}
+        <span style={{ fontWeight: 700, fontSize: 14, color: '#2D5A4B' }}>Bilan initial</span>
+        {hasIA && <Badge label="Analysé" bg="#c8e0d8" fg="#2D5A4B" />}
         {incomplet && <Badge label="Incomplet" bg="#fef3c7" fg="#92400e" />}
       </div>
       <div style={metaRowStyle}>
@@ -283,9 +283,9 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
               width: '100%',
               padding: '0.4rem 0.7rem',
               borderRadius: analyseOpen ? '8px 8px 0 0' : 8,
-              background: '#eff6ff',
-              border: '1px solid #bfdbfe',
-              color: '#1d4ed8',
+              background: '#edf4f1',
+              border: '1px solid #b8d4ca',
+              color: '#2D5A4B',
               fontWeight: 600,
               fontSize: '0.72rem',
               cursor: 'pointer',
@@ -299,7 +299,7 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
             </svg>
           </button>
           {analyseOpen && (
-            <div style={{ background: '#eff6ff', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#1e3a8a', lineHeight: 1.5, borderLeft: '3px solid #2563eb', borderTop: 'none' }}>
+            <div style={{ background: '#edf4f1', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#2D5A4B', lineHeight: 1.5, borderLeft: '3px solid #4A8C73', borderTop: 'none' }}>
               <div style={{ marginBottom: 3 }}>{item.analyseIA.resume}</div>
               <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{item.analyseIA.evolution}</div>
               {item.analyseIA.vigilance.length > 0 && (
@@ -355,7 +355,7 @@ const chipStyle: React.CSSProperties = {
 }
 
 const DOT_COLORS: Record<TimelineEvent['kind'], string> = {
-  bilan: '#1e3a8a',
+  bilan: '#2D5A4B',
   intermediaire: '#ea580c',
   note: '#6d28d9',
 }

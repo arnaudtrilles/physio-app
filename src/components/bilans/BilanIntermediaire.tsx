@@ -98,8 +98,8 @@ export const BilanIntermediaire = forwardRef<
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem',
-    color: 'var(--text-main)', background: 'var(--secondary)',
-    border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
+    color: 'var(--text-main)', background: '#FDFCFA',
+    border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', marginBottom: 8,
   }
   const taStyle: React.CSSProperties = {
     ...inputStyle, resize: 'vertical', minHeight: 72,
@@ -375,15 +375,15 @@ export const BilanIntermediaire = forwardRef<
     cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
   }
 
-  const evnInStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid transparent', borderRadius: 'var(--radius-md)', textAlign: 'center' }
+  const evnInStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', textAlign: 'center' }
   const lblStyle: React.CSSProperties = { fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }
 
   const sections = [
-    { id: 'infosGenerales',   title: 'Informations générales',          color: 'var(--primary)' },
-    { id: 'evolutionDouleur', title: 'Évolution de la douleur',         color: '#dc2626' },
+    { id: 'infosGenerales',   title: 'Informations générales',          color: '#1A1A1A' },
+    { id: 'evolutionDouleur', title: 'Évolution de la douleur',         color: '#991b1b' },
     { id: 'vigilanceFlags',   title: 'Vigilance & Drapeaux (Flags)',    color: '#d97706' },
     { id: 'suiviTraitement',  title: 'Suivi du traitement et observance', color: '#7c3aed' },
-    { id: 'moduleSpecifique', title: `Module spécifique : ${sectionLabel[bilanType]}`, color: 'var(--primary)' },
+    { id: 'moduleSpecifique', title: `Module spécifique : ${sectionLabel[bilanType]}`, color: '#1A1A1A' },
     { id: 'synthese',         title: 'Synthèse et objectifs',           color: '#059669' },
   ]
 

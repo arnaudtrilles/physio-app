@@ -32,7 +32,7 @@ export function PatientHeroCard({
   return (
     <div
       style={{
-        background: 'linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)',
+        background: 'linear-gradient(180deg, #F0EBE1 0%, #E8E3D9 100%)',
         borderRadius: radius['2xl'],
         padding: `${spacing.lg}px`,
         marginBottom: spacing.lg,

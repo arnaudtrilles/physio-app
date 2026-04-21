@@ -7,18 +7,18 @@ import { DictableInput, DictableTextarea } from '../VoiceMic'
 // ─── Common styles ─────────────────────────────────────────────────────────
 export const inputStyle: React.CSSProperties = {
   width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.92rem',
-  color: 'var(--text-main)', background: 'var(--secondary)',
-  border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
+  color: 'var(--text-main)', background: '#FDFCFA',
+  border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', marginBottom: 8,
 }
 export const lblStyle: React.CSSProperties = {
-  fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4,
+  fontSize: '0.82rem', color: '#2A2A2A', fontWeight: 600, display: 'block', marginBottom: 4,
 }
 export const sectionTitleStyle: React.CSSProperties = {
-  fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)',
+  fontSize: '0.75rem', fontWeight: 700, color: '#2A2A2A',
   textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8,
 }
 export const subTitleStyle: React.CSSProperties = {
-  fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-dark)',
+  fontSize: '0.82rem', fontWeight: 600, color: '#1A1A1A',
   display: 'block', margin: '12px 0 6px',
 }
 
@@ -563,14 +563,20 @@ export function ContratKineSection({ state, onChange }: {
   onChange: (patch: Partial<ContratState>) => void
 }) {
   return (
-    <>
+    <div style={{
+      background: '#FDFCFA', borderRadius: 14,
+      border: '1px solid var(--border-color)',
+      padding: '1rem', boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
+    }}>
       <SmartObjectifsInline objectifs={state.objectifs} onChange={obj => onChange({ objectifs: obj })} />
-      <OuiNon label="S'engage à faire l'auto-rééducation" value={state.autoReeducation} onChange={v => onChange({ autoReeducation: v })} />
+      <div style={{ marginTop: 12 }}>
+        <OuiNon label="S'engage à faire l'auto-rééducation" value={state.autoReeducation} onChange={v => onChange({ autoReeducation: v })} />
+      </div>
       {state.autoReeducation === 'oui' && (
         <DictableInput value={state.frequenceDuree} onChange={e => onChange({ frequenceDuree: e.target.value })}
           placeholder="Fréquence / Durée… Ex: 3x/semaine, 20 min" inputStyle={{ ...inputStyle, marginTop: 6 }} />
       )}
-    </>
+    </div>
   )
 }
 
@@ -616,12 +622,12 @@ export function PSFSCards({ items, onChange }: { items: PsfsItem[]; onChange: (i
         const scoreNum = item.score === '' ? null : Math.max(0, Math.min(10, Number(item.score)))
         const accent = scoreNum === null ? 'var(--text-muted)' : scoreNum >= 7 ? '#059669' : scoreNum >= 4 ? '#d97706' : '#dc2626'
         return (
-          <div key={i} style={{ background: 'var(--secondary)', borderRadius: 'var(--radius-lg)', padding: '0.9rem 1rem', marginBottom: 10 }}>
+          <div key={i} style={{ background: '#FDFCFA', borderRadius: 'var(--radius-xl)', padding: '0.9rem 1rem', marginBottom: 10, border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', flexShrink: 0 }}>0{i + 1}</span>
               <input value={item.label} onChange={e => update(i, { label: e.target.value })}
                 placeholder={`Activité ${i + 1} — ex: monter les escaliers, courir 10 min…`}
-                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-main)', outline: 'none', padding: 0 }} />
+                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-main)', outline: 'none', padding: 0, borderRadius: 0 }} />
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 1, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                 <span style={{ fontSize: '0.95rem', fontWeight: 600, color: accent, lineHeight: 1, minWidth: 18, textAlign: 'right' }}>{scoreNum ?? '—'}</span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>
@@ -744,7 +750,7 @@ export function MvtsRepetesTable({ rows, onChange }: {
           </tbody>
         </table>
       </div>
-      <button onClick={addRow} style={{ marginTop: 6, fontSize: '0.75rem', color: 'var(--primary)', background: 'transparent', border: '1px dashed var(--border-color)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>+ Ajouter une ligne</button>
+      <button onClick={addRow} style={{ marginTop: 8, fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', background: 'var(--surface)', border: '1.5px solid var(--border-color)', borderRadius: 10, padding: '0.45rem 0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>+ Ajouter une ligne</button>
     </div>
   )
 }

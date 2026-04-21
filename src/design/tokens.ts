@@ -3,22 +3,22 @@
 
 export const colors = {
   // Brand
-  primary: '#1e3a8a',
-  primaryDark: '#0f172a',
-  primaryLight: '#3b82f6',
-  accent: '#2563eb',
+  primary: '#2D5A4B',
+  primaryDark: '#1A3830',
+  primaryLight: '#4A8C73',
+  accent: '#4A8C73',
 
   // Surfaces
-  surface: '#ffffff',
-  surfaceMuted: '#f8fafc',
-  base: '#e2e8f0',
-  border: '#cbd5e1',
-  borderSoft: '#e2e8f0',
+  surface: '#FAFAF7',
+  surfaceMuted: '#F0EBE1',
+  base: '#EDE8DC',
+  border: '#DDD8CE',
+  borderSoft: '#E8E3D9',
 
   // Text
-  text: '#0f172a',
-  textMuted: '#64748b',
-  textFaint: '#94a3b8',
+  text: '#1A1A1A',
+  textMuted: '#7A7A6E',
+  textFaint: '#A8A89C',
 
   // Semantic
   success: '#166534',
@@ -30,17 +30,17 @@ export const colors = {
   danger: '#881337',
   dangerBg: '#fee2e2',
   dangerSoft: '#fef2f2',
-  info: '#2563eb',
-  infoBg: '#dbeafe',
-  infoSoft: '#eff6ff',
+  info: '#2D5A4B',
+  infoBg: '#c8e0d8',
+  infoSoft: '#edf4f1',
 
   // Entity colors (séance/bilan/interm)
   seance: '#7c3aed',
   seanceBg: '#ede9fe',
   seanceSoft: '#f5f3ff',
-  bilan: '#1e3a8a',
-  bilanBg: '#dbeafe',
-  bilanSoft: '#eff6ff',
+  bilan: '#2D5A4B',
+  bilanBg: '#c8e0d8',
+  bilanSoft: '#edf4f1',
   interm: '#c2410c',
   intermBg: '#ffedd5',
   intermSoft: '#fff7ed',
@@ -94,8 +94,8 @@ export const shadow = {
   md: '0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.05)',
   lg: '0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.06)',
   xl: '0 20px 40px -12px rgba(15, 23, 42, 0.18)',
-  primary: '0 4px 14px 0 rgba(30, 58, 138, 0.22)',
-  primaryStrong: '0 12px 24px -10px rgba(30, 58, 138, 0.25)',
+  primary: '0 4px 14px 0 rgba(45, 90, 75, 0.22)',
+  primaryStrong: '0 12px 24px -10px rgba(45, 90, 75, 0.25)',
 } as const
 
 export const motion = {
