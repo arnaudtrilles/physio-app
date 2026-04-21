@@ -586,8 +586,14 @@ export function LetterGenerator(props: LetterGeneratorProps) {
                 fontWeight: 700,
                 fontSize: '0.9rem',
                 cursor: generating || missingApiKey ? 'not-allowed' : 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}>
-              {generating ? 'Génération…' : 'Générer avec IA'}
+              {generating ? (
+                <>
+                  <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: 'currentColor', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                  Génération…
+                </>
+              ) : 'Générer avec IA'}
             </button>
           </div>
         </div>
