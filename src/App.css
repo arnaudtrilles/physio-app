@@ -458,7 +458,7 @@
 
 /* ── AI Module ────────────────────────────────────────────────── */
 .ai-hero {
-  background: linear-gradient(135deg, #2D5A4B 0%, #4A8C73 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   border-radius: var(--radius-xl);
   padding: 20px;
   display: flex;
@@ -479,14 +479,14 @@
 .ai-section-card {
   background: var(--surface);
   border-radius: 14px;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--border-color);
   overflow: hidden;
   margin-bottom: 12px;
 }
 .ai-section-header {
   padding: 12px 16px;
   display: flex; align-items: center; gap: 10px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-soft);
 }
 .ai-section-icon {
   width: 30px; height: 30px;
@@ -501,14 +501,14 @@
 .ai-section-body { padding: 14px 16px; }
 
 .ai-diagnostic-box {
-  background: #edf4f1;
+  background: var(--info-soft);
   border-radius: 10px;
   padding: 14px;
-  border: 1.5px solid #b8d4ca;
+  border: 1.5px solid var(--border-soft);
 }
-.ai-diagnostic-box .label { font-size: 10px; font-weight: 700; color: #2D5A4B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.ai-diagnostic-box .value { font-size: 15px; font-weight: 700; color: #1A3830; margin: 0 0 8px; }
-.ai-diagnostic-box .desc  { font-size: 12px; color: #4A8C73; line-height: 1.5; margin: 0; }
+.ai-diagnostic-box .label { font-size: 10px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.ai-diagnostic-box .value { font-size: 15px; font-weight: 700; color: var(--primary-dark); margin: 0 0 8px; }
+.ai-diagnostic-box .desc  { font-size: 12px; color: var(--primary-light); line-height: 1.5; margin: 0; }
 
 .hypo-item {
   display: flex; align-items: flex-start; gap: 12px;
@@ -538,7 +538,7 @@
 .treatment-item:last-child { border-bottom: none; padding-bottom: 0; }
 .treatment-num {
   width: 22px; height: 22px;
-  background: #2D5A4B; color: white;
+  background: var(--primary); color: white;
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px;

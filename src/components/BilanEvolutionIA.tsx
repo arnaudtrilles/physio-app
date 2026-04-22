@@ -118,7 +118,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
           <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{patientLabel}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>Analysé</div>
+          <div style={{ background: 'var(--info-soft)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: '4px 10px', fontSize: 10, fontWeight: 700, color: 'var(--primary)' }}>Analysé</div>
           {onClose && (
             <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -150,7 +150,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
             <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Clé API Gemini requise</div>
             <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Configurez votre clé API Gemini dans votre profil.</p>
             <button onClick={onGoToProfile}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer dans le Profil
             </button>
           </div>
@@ -168,7 +168,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Clé API Gemini invalide</div>
             <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Renseignez une clé valide (AIza...) dans votre profil.</p>
             <button onClick={onGoToProfile}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer ma clé Gemini
             </button>
           </div>
@@ -177,7 +177,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Erreur de connexion</div>
             <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>{retryCount > 0 ? `Tentative ${retryCount}/2 échouée. ` : ''}{error}</p>
-            <button onClick={() => { setRetryCount(0); runAnalysis(0) }} style={{ marginTop: 8, fontSize: '0.82rem', color: '#7c3aed', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Réessayer</button>
+            <button onClick={() => { setRetryCount(0); runAnalysis(0) }} style={{ marginTop: 8, fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Réessayer</button>
           </div>
         )}
 
@@ -368,12 +368,12 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         {/* CTA */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {!evolution && !loading && apiKey && !error && (
-            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)' }} onClick={() => runAnalysis(0)}>
+            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))' }} onClick={() => runAnalysis(0)}>
               Générer le rapport d'évolution
             </button>
           )}
           {loading && (
-            <button className="btn-primary-luxe" disabled style={{ marginBottom: 0, opacity: 0.7, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <button className="btn-primary-luxe" disabled style={{ marginBottom: 0, opacity: 0.7, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <div className="spinner" />
               Analyse en cours…
             </button>
