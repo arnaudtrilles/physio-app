@@ -107,12 +107,11 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   display: flex;
-  justify-content: center; /* Center the mobile app on desktop */
+  justify-content: center;
   width: 100%;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  padding-top: env(safe-area-inset-top);
 }
 
 button {
@@ -136,12 +135,12 @@ input, textarea, select {
 
 .app-container {
   width: 100%;
-  max-width: 430px; /* iPhone Pro Max approximate width */
+  max-width: 430px;
   margin: 0 auto;
   height: 100%;
   background-color: var(--secondary);
   box-shadow: none;
-  padding: 0.75rem 0.75rem 0.75rem;
+  padding: env(safe-area-inset-top) 0.75rem env(safe-area-inset-bottom) 0.75rem;
   position: relative;
   display: flex;
   flex-direction: column;

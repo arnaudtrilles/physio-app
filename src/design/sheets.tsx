@@ -91,7 +91,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
           animation: dragY || closing ? 'none' : `sheet-slide-up ${motion.normal}`,
           transform: closing ? 'translateY(100%)' : dragY ? `translateY(${dragY}px)` : undefined,
           transition: closing ? 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)' : dragY ? 'none' : `transform ${motion.normal}`,
-          overflow: 'hidden',
+          overflow: 'clip',
         }}
       >
         <div
@@ -119,7 +119,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
             {subtitle && <div style={{ fontSize: typography.meta, color: colors.textMuted, marginTop: 2 }}>{subtitle}</div>}
           </div>
         )}
-        <div style={{ overflowY: 'auto', padding: '0.5rem 1.2rem 2.4rem', flex: 1, WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>{children}</div>
+        <div style={{ overflowY: 'auto', padding: '0.5rem 1.2rem 2.4rem', flex: 1, minHeight: 0, WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>{children}</div>
         {footer && <div style={{ padding: '0.75rem 1.2rem 1rem', borderTop: `1px solid ${colors.borderSoft}` }}>{footer}</div>}
       </div>
     </div>
