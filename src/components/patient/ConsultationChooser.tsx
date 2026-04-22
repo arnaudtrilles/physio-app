@@ -37,7 +37,7 @@ export function ConsultationChooser({
     count > 1 ? `${count} PEC actives — choisir la zone` : fallback
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Consultation du jour" subtitle="Que souhaitez-vous faire ?" maxHeight="88vh">
+    <BottomSheet open={open} onClose={onClose} title="Consultation du jour" subtitle="Que souhaitez-vous faire ?" maxHeight="min(92dvh, 92vh)">
       <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
         {/* Section: Séance de suivi */}
         {zones.length > 0 && (
