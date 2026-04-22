@@ -1711,7 +1711,7 @@ STRUCTURE (n'inclure que si données présentes) :
 
             </div>
             {/* Action buttons — fixed bottom */}
-            <div style={{ position: 'absolute', bottom: '1.2rem', left: 0, right: 0, padding: '0.6rem 0.75rem', background: 'linear-gradient(to top, var(--base-bg) 60%, transparent)', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0.6rem 0.75rem', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--base-bg) 70%, transparent)', display: 'flex', gap: '0.5rem' }}>
               <button
                 onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}

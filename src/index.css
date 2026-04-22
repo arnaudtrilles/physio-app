@@ -140,7 +140,7 @@ input, textarea, select {
   height: 100dvh;
   background-color: var(--secondary);
   box-shadow: none;
-  padding: env(safe-area-inset-top) 0.75rem env(safe-area-inset-bottom) 0.75rem;
+  padding: env(safe-area-inset-top) 0.75rem 0 0.75rem;
   position: relative;
   display: flex;
   flex-direction: column;
