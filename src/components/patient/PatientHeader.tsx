@@ -34,7 +34,7 @@ export function PatientHeader({ name, initials, birthday, infoLine, stats, onBac
           aria-label="Retour"
           style={{
             width: 38, height: 38, borderRadius: radius.md,
-            background: '#FDFCFA', border: `1px solid ${colors.borderSoft}`,
+            background: 'var(--input-bg)', border: `1px solid ${colors.borderSoft}`,
             color: colors.text, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -51,7 +51,7 @@ export function PatientHeader({ name, initials, birthday, infoLine, stats, onBac
             aria-label="Options patient"
             style={{
               width: 38, height: 38, borderRadius: radius.md,
-              background: '#FDFCFA', border: `1px solid ${colors.borderSoft}`,
+              background: 'var(--input-bg)', border: `1px solid ${colors.borderSoft}`,
               color: colors.textMuted, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -108,7 +108,7 @@ export function PatientHeader({ name, initials, birthday, infoLine, stats, onBac
       {stats && stats.length > 0 && (
         <div style={{
           display: 'flex', gap: 0,
-          background: '#FDFCFA', borderRadius: 14,
+          background: 'var(--input-bg)', borderRadius: 14,
           border: `1px solid ${colors.borderSoft}`,
           boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
           overflow: 'hidden',

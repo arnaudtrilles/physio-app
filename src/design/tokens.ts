@@ -1,26 +1,27 @@
 // Design tokens — source of truth for colors, spacing, typography.
-// Mirrors CSS variables in index.css so we can use them from both JS and CSS.
+// Colors reference CSS variables (see index.css) so they track the active
+// [data-theme="soft"|"medical"] attribute on <html>.
 
 export const colors = {
   // Brand
-  primary: '#2D5A4B',
-  primaryDark: '#1A3830',
-  primaryLight: '#4A8C73',
-  accent: '#4A8C73',
+  primary: 'var(--primary)',
+  primaryDark: 'var(--primary-dark)',
+  primaryLight: 'var(--primary-light)',
+  accent: 'var(--accent)',
 
   // Surfaces
-  surface: '#FAFAF7',
-  surfaceMuted: '#F0EBE1',
-  base: '#EDE8DC',
-  border: '#DDD8CE',
-  borderSoft: '#E8E3D9',
+  surface: 'var(--surface)',
+  surfaceMuted: 'var(--secondary)',
+  base: 'var(--base-bg)',
+  border: 'var(--border-color)',
+  borderSoft: 'var(--border-soft)',
 
   // Text
-  text: '#1A1A1A',
-  textMuted: '#7A7A6E',
-  textFaint: '#A8A89C',
+  text: 'var(--text-main)',
+  textMuted: 'var(--text-muted)',
+  textFaint: 'var(--text-faint)',
 
-  // Semantic
+  // Semantic — fixed across themes (status indicators)
   success: '#166534',
   successBg: '#dcfce7',
   successSoft: '#f0fdf4',
@@ -30,17 +31,17 @@ export const colors = {
   danger: '#881337',
   dangerBg: '#fee2e2',
   dangerSoft: '#fef2f2',
-  info: '#2D5A4B',
-  infoBg: '#c8e0d8',
-  infoSoft: '#edf4f1',
+  info: 'var(--info)',
+  infoBg: 'var(--info-bg)',
+  infoSoft: 'var(--info-soft)',
 
-  // Entity colors (séance/bilan/interm)
+  // Entity colors (séance/bilan/interm) — bilan tracks brand, others fixed
   seance: '#7c3aed',
   seanceBg: '#ede9fe',
   seanceSoft: '#f5f3ff',
-  bilan: '#2D5A4B',
-  bilanBg: '#c8e0d8',
-  bilanSoft: '#edf4f1',
+  bilan: 'var(--bilan)',
+  bilanBg: 'var(--bilan-bg)',
+  bilanSoft: 'var(--bilan-soft)',
   interm: '#c2410c',
   intermBg: '#ffedd5',
   intermSoft: '#fff7ed',
@@ -94,8 +95,8 @@ export const shadow = {
   md: '0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.05)',
   lg: '0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.06)',
   xl: '0 20px 40px -12px rgba(15, 23, 42, 0.18)',
-  primary: '0 4px 14px 0 rgba(45, 90, 75, 0.22)',
-  primaryStrong: '0 12px 24px -10px rgba(45, 90, 75, 0.25)',
+  primary: 'var(--shadow-primary)',
+  primaryStrong: 'var(--shadow-primary-strong)',
 } as const
 
 export const motion = {

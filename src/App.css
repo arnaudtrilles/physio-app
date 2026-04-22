@@ -146,14 +146,14 @@
 .input-with-mic {
   display: flex;
   align-items: center;
-  background-color: #FDFCFA;
+  background-color: var(--input-bg);
   border-radius: var(--radius-xl);
   transition: all 0.2s;
   padding-right: 0.5rem;
 }
 
 .input-with-mic:focus-within {
-  background-color: #FDFCFA;
+  background-color: var(--input-bg);
   border-color: var(--primary);
   box-shadow: 0 0 0 4px rgba(45, 90, 75, 0.1);
 }
@@ -201,7 +201,7 @@
   padding: 1rem 1.25rem;
   font-size: 1rem;
   color: var(--text-main);
-  background-color: #FDFCFA;
+  background-color: var(--input-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   transition: all 0.2s;
@@ -209,7 +209,7 @@
 }
 
 .input-luxe:focus {
-  background-color: #FDFCFA;
+  background-color: var(--input-bg);
   border-color: var(--primary);
   box-shadow: 0 0 0 4px rgba(45, 90, 75, 0.1);
   outline: none;
@@ -377,7 +377,7 @@
   padding: 0.45rem 0.75rem;
   border-radius: var(--radius-full);
   border: 1.5px solid var(--border-color);
-  background: #FDFCFA;
+  background: var(--input-bg);
   color: var(--text-muted);
   font-size: 0.78rem;
   font-weight: 400;
@@ -391,7 +391,7 @@
 }
 
 .oui-non-btn.active {
-  background: #edf4f1;
+  background: var(--info-soft);
   border: 2px solid var(--primary);
   color: var(--primary-dark);
   font-weight: 600;
@@ -402,7 +402,7 @@
   padding: 0.45rem 0.75rem;
   border-radius: var(--radius-full);
   border: 1.5px solid var(--border-color);
-  background: #FDFCFA;
+  background: var(--input-bg);
   color: var(--text-muted);
   font-size: 0.78rem;
   font-weight: 400;
@@ -416,7 +416,7 @@
 }
 
 .choix-btn.active {
-  background: #edf4f1;
+  background: var(--info-soft);
   border: 2px solid var(--primary);
   color: var(--primary-dark);
   font-weight: 600;
@@ -458,7 +458,7 @@
 
 /* ── AI Module ────────────────────────────────────────────────── */
 .ai-hero {
-  background: linear-gradient(135deg, #2D5A4B 0%, #4A8C73 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   border-radius: var(--radius-xl);
   padding: 20px;
   display: flex;
@@ -501,14 +501,14 @@
 .ai-section-body { padding: 14px 16px; }
 
 .ai-diagnostic-box {
-  background: #edf4f1;
+  background: var(--info-soft);
   border-radius: 10px;
   padding: 14px;
-  border: 1.5px solid #b8d4ca;
+  border: 1.5px solid var(--info-border);
 }
-.ai-diagnostic-box .label { font-size: 10px; font-weight: 700; color: #2D5A4B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.ai-diagnostic-box .value { font-size: 15px; font-weight: 700; color: #1A3830; margin: 0 0 8px; }
-.ai-diagnostic-box .desc  { font-size: 12px; color: #4A8C73; line-height: 1.5; margin: 0; }
+.ai-diagnostic-box .label { font-size: 10px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.ai-diagnostic-box .value { font-size: 15px; font-weight: 700; color: var(--primary-dark); margin: 0 0 8px; }
+.ai-diagnostic-box .desc  { font-size: 12px; color: var(--primary-light); line-height: 1.5; margin: 0; }
 
 .hypo-item {
   display: flex; align-items: flex-start; gap: 12px;
@@ -538,7 +538,7 @@
 .treatment-item:last-child { border-bottom: none; padding-bottom: 0; }
 .treatment-num {
   width: 22px; height: 22px;
-  background: #2D5A4B; color: white;
+  background: var(--primary); color: white;
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px;

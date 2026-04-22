@@ -25,9 +25,21 @@
   --surface: #FAFAF7;        /* Blanc cassé — cartes */
   --text-main: #1A1A1A;      /* Presque noir */
   --text-muted: #7A7A6E;     /* Gris chaud */
+  --text-faint: #A8A89C;     /* Gris très clair */
   --border-color: #DDD8CE;   /* Bordure beige */
+  --border-soft: #E8E3D9;    /* Bordure beige douce */
   --accent: #4A8C73;         /* Vert accent */
   --input-bg: #FDFCFA;       /* Fond inputs / cards beige clair */
+  --info: #2D5A4B;
+  --info-bg: #c8e0d8;
+  --info-soft: #edf4f1;
+  --info-border: #b8d4ca;
+  --info-border-strong: #8bc4b0;
+  --bilan: #2D5A4B;
+  --bilan-bg: #c8e0d8;
+  --bilan-soft: #edf4f1;
+  --shadow-primary: 0 4px 14px 0 rgba(45, 90, 75, 0.22);
+  --shadow-primary-strong: 0 12px 24px -10px rgba(45, 90, 75, 0.25);
 }
 
 /* ── Thème "Médical" — Bleu profond + Blanc clinique ───────────── */
@@ -40,9 +52,21 @@
   --surface: #ffffff;
   --text-main: #0f172a;
   --text-muted: #64748b;
+  --text-faint: #94a3b8;
   --border-color: #cbd5e1;
+  --border-soft: #e2e8f0;
   --accent: #2563eb;
   --input-bg: #ffffff;
+  --info: #1e3a8a;
+  --info-bg: #dbeafe;
+  --info-soft: #eff6ff;
+  --info-border: #bfdbfe;
+  --info-border-strong: #60a5fa;
+  --bilan: #1e3a8a;
+  --bilan-bg: #dbeafe;
+  --bilan-soft: #eff6ff;
+  --shadow-primary: 0 4px 14px 0 rgba(30, 58, 138, 0.22);
+  --shadow-primary-strong: 0 12px 24px -10px rgba(30, 58, 138, 0.25);
 }
 
 /* ── Screen transitions ──────────────────────────────────────── */

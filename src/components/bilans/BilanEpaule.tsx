@@ -608,7 +608,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
               )}
 
               {sec.id === 'contrat' && (
-                <div style={{ background: '#FDFCFA', borderRadius: 14, border: '1px solid var(--border-color)', padding: '1rem', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+                <div style={{ background: 'var(--input-bg)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '1rem', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
                   <SmartObjectifsInline objectifs={objectifsSMART} onChange={setObjectifsSMART} />
                   <div style={{ marginTop: 12 }}>
                     <OuiNon label="S'engage à faire l'auto-rééducation" value={autoReeducation} onChange={setAutoReeducation} />

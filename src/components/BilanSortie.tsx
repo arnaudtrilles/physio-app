@@ -774,20 +774,20 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
       {onGenerateLetter && (
         <div style={{ marginBottom: 14, marginTop: 8 }}>
           <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2D5A4B', display: 'inline-block', marginRight: 6 }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block', marginRight: 6 }} />
             Courrier
           </div>
-          <p style={{ fontSize: '0.75rem', color: '#2D5A4B', margin: '0 0 10px', lineHeight: 1.5 }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--primary)', margin: '0 0 10px', lineHeight: 1.5 }}>
             Les informations de ce bilan de sortie seront reprises automatiquement dans le courrier.
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={() => onGenerateLetter('fin_pec')}
-              style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 'var(--radius-md)', background: '#2D5A4B', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 'var(--radius-md)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
               Courrier fin de PEC
             </button>
             <button type="button" onClick={() => onGenerateLetter('fin_anticipee')}
-              style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--info-border)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
               Fin anticipée
             </button>

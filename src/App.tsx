@@ -170,7 +170,7 @@ function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerS
                   padding: '0.85rem 1rem',
                   borderRadius: 14,
                   border: active ? '2px solid var(--primary)' : '1.5px solid transparent',
-                  background: active ? '#edf4f1' : '#FDFCFA',
+                  background: active ? 'var(--info-soft)' : 'var(--input-bg)',
                   color: active ? 'var(--primary-dark)' : 'var(--text-main)',
                   fontWeight: active ? 600 : 500,
                   fontSize: '0.88rem',
@@ -204,11 +204,11 @@ function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerS
 }
 
 const DEMO_DB: BilanRecord[] = [
-  { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:2,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'29/10/2025', zoneCount:1, evn:7, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:3,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'12/11/2025', zoneCount:1, evn:5, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:4,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'26/11/2025', zoneCount:1, evn:4, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:5,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'10/12/2025', zoneCount:1, evn:3, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
+  { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:2,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'29/10/2025', zoneCount:1, evn:7, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:3,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'12/11/2025', zoneCount:1, evn:5, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:4,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'26/11/2025', zoneCount:1, evn:4, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:5,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'10/12/2025', zoneCount:1, evn:3, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
   { id:6,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'01/10/2025', zoneCount:1, evn:7, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
   { id:7,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'15/10/2025', zoneCount:1, evn:5, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
   { id:8,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'29/10/2025', zoneCount:1, evn:6, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
@@ -1207,7 +1207,7 @@ Règles :
         zoneCount: 1,
         zone: selectedBodyZone ?? undefined,
         pathologie: bilanData ? '' : undefined,
-        avatarBg: '#4A8C73',
+        avatarBg: 'var(--primary-light)',
         status,
         bilanType,
         bilanData: bilanData ?? undefined,
@@ -1673,7 +1673,7 @@ STRUCTURE (n'inclure que si données présentes) :
               <button
                 onClick={() => setShowAddPatientChoice(true)}
                 aria-label="Ajouter un patient"
-                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: '#FDFCFA', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
+                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--input-bg)', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             </header>
@@ -1688,7 +1688,7 @@ STRUCTURE (n'inclure que si données présentes) :
                     </svg>
                     <input type="text" placeholder="Rechercher un nom…"
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: '#FDFCFA', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
+                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: 'var(--input-bg)', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
                   </div>
                 </div>
                 {(() => {
@@ -2532,7 +2532,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                   deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
                                 }
                               }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : '#FDFCFA', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : 'var(--input-bg)', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
                               <div
                                 onClick={toggleThisEpisode}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
@@ -2627,7 +2627,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           const bilanKey = `bilan-${record.id}`
                           const bilanOpen = openTimelineKey === bilanKey
                           return (
-                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? '#8bc4b0' : '#c8e0d8'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
+                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? 'var(--info-border-strong)' : 'var(--info-bg)'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
                               <div
                                 role="button"
                                 onClick={() => toggleTimeline(bilanKey)}
@@ -2635,7 +2635,7 @@ STRUCTURE (n'inclure que si données présentes) :
                               >
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: '0.88rem', lineHeight: 1.35 }}>
-                                    <span style={{ fontWeight: 700, color: '#2D5A4B' }}>Bilan n°{index + 1}</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Bilan n°{index + 1}</span>
                                     {editingLabelBilanId === record.id ? (
                                       <input
                                         autoFocus
@@ -2669,7 +2669,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '0.72rem', color: '#4A8C73', marginTop: 1 }}>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--primary-light)', marginTop: 1 }}>
                                     {record.dateBilan}{currEvn != null ? ` · EVN ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
                                   </div>
                                 </div>
@@ -2688,7 +2688,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       {Math.abs(delta)}%
                                     </span>
                                   ) : null}
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8bc4b0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--info-border-strong)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
                                 </div>
                               </div>
                               {bilanOpen && (incomplet ? (
@@ -2721,7 +2721,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
                                   {record.analyseIA && (
                                     <div style={{ marginBottom: 2 }}>
-                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: '#edf4f1', color: '#2D5A4B', border: '1px solid #b8d4ca' }}>Analysé</span>
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: 'var(--info-soft)', color: 'var(--primary)', border: '1px solid var(--info-border)' }}>Analysé</span>
                                     </div>
                                   )}
                                   {/* Rangée 1 : Bilan PDF + Analyse */}
@@ -2735,7 +2735,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       Bilan PDF
                                     </button>
                                     <button
-                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: '#edf4f1', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: 'var(--info-soft)', border: '1.5px solid var(--info-border)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                       onClick={() => {
                                         setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
                                         setSelectedBodyZone(record.zone ?? null)
@@ -2772,7 +2772,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
                                     <button
                                       onClick={() => setResumeBilan({ record, bilanNum: index + 1 })}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#2D5A4B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                       Résumé
                                     </button>
@@ -2886,12 +2886,12 @@ STRUCTURE (n'inclure que si données présentes) :
                                                 <div style={{ marginBottom: 8 }}>
                                                   <button
                                                     onClick={() => setOpenAnalyseNoteIds(prev => { const next = new Set(prev); if (next.has(note.id)) next.delete(note.id); else next.add(note.id); return next })}
-                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: '#edf4f1', border: '1px solid #b8d4ca', color: '#2D5A4B', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: 'var(--info-soft)', border: '1px solid var(--info-border)', color: 'var(--primary)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <span>Analyse</span>
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="6 9 12 15 18 9"/></svg>
                                                   </button>
                                                   {isOpen && (
-                                                    <div style={{ background: '#edf4f1', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#2D5A4B', lineHeight: 1.5, borderLeft: '3px solid #4A8C73', borderTop: 'none' }}>
+                                                    <div style={{ background: 'var(--info-soft)', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: 'var(--primary)', lineHeight: 1.5, borderLeft: '3px solid var(--primary-light)', borderTop: 'none' }}>
                                                       <div style={{ marginBottom: 3 }}>{note.analyseIA.resume}</div>
                                                       <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{note.analyseIA.evolution}</div>
                                                       {note.analyseIA.vigilance.length > 0 && (<div style={{ color: '#dc2626', fontSize: '0.72rem', marginBottom: 3 }}>Vigilance : {note.analyseIA.vigilance.join(' / ')}</div>)}
@@ -2905,7 +2905,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                               <div style={{ display: 'flex', gap: 6 }}>
                                                 <button
-                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: '#edf4f1', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: 'var(--info-soft)', border: '1.5px solid var(--info-border)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                                                   onClick={async () => {
                                                     if (!apiKey) { showToast('Clé API requise', 'error'); return }
                                                     showToast('Analyse en cours...', 'success')
@@ -3484,7 +3484,7 @@ STRUCTURE (n'inclure que si données présentes) :
                             padding: '0.65rem 0.75rem',
                             borderRadius: 'var(--radius-md)',
                             border: profileEditDraft.profession === opt ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                            background: profileEditDraft.profession === opt ? '#edf4f1' : 'var(--surface)',
+                            background: profileEditDraft.profession === opt ? 'var(--info-soft)' : 'var(--surface)',
                             color: profileEditDraft.profession === opt ? 'var(--primary-dark)' : 'var(--text-main)',
                             fontWeight: profileEditDraft.profession === opt ? 700 : 500,
                             fontSize: '0.85rem',
@@ -3506,7 +3506,7 @@ STRUCTURE (n'inclure que si données présentes) :
                       padding: '0.45rem 0.75rem',
                       borderRadius: 'var(--radius-full)',
                       border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                      background: active ? '#edf4f1' : 'transparent',
+                      background: active ? 'var(--info-soft)' : 'transparent',
                       color: active ? 'var(--primary-dark)' : 'var(--text-muted)',
                       fontWeight: active ? 600 : 400,
                       fontSize: '0.78rem',
@@ -3718,8 +3718,8 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                       </button>
                     </div>
 
-                    <div style={{ background: '#edf4f1', border: '1px solid #8bc4b0', borderRadius: 12, padding: 14, marginTop: 10 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#2D5A4B', marginBottom: 4 }}>
+                    <div style={{ background: 'var(--info-soft)', border: '1px solid var(--info-border-strong)', borderRadius: 12, padding: 14, marginTop: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>
                         Registre des traitements
                       </div>
                       {(() => {
@@ -3727,10 +3727,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                         const suspiciousCount = dbAICallAudit.filter(e => e.scrubReplacements > 0).length
                         const withDocsCount = dbAICallAudit.filter(e => e.hasDocuments).length
                         if (totalCount === 0) {
-                          return <p style={{ fontSize: '0.75rem', color: '#2D5A4B', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
+                          return <p style={{ fontSize: '0.75rem', color: 'var(--primary)', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
                         }
                         return (
-                          <div style={{ fontSize: '0.75rem', color: '#2D5A4B', marginBottom: 10, lineHeight: 1.5 }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginBottom: 10, lineHeight: 1.5 }}>
                             <div>• <strong>{dbLetterAudit.length}</strong> courrier{dbLetterAudit.length > 1 ? 's' : ''} généré{dbLetterAudit.length > 1 ? 's' : ''}</div>
                             <div>• <strong>{dbAICallAudit.length}</strong> autre{dbAICallAudit.length > 1 ? 's' : ''} analyse{dbAICallAudit.length > 1 ? 's' : ''} (bilans, fiches exos…)</div>
                             {withDocsCount > 0 && (
@@ -3758,7 +3758,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                           })
                           showToast('Registre exporté', 'success')
                         }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid #8bc4b0', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
+                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid var(--info-border-strong)', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : 'var(--primary)', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
                         Exporter le registre (PDF)
                       </button>
                     </div>
@@ -4362,7 +4362,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         <ZonePickerSheet
           title="Zone du bilan"
           accent="var(--primary)"
-          accentBg="#edf4f1"
+          accentBg="var(--info-soft)"
           accentBorder="var(--border-color)"
           selectedZone={selectedBodyZone}
           onSelect={(zone) => { setSelectedBodyZone(zone); setShowZonePopup(false) }}
@@ -4487,7 +4487,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             <button
               disabled={!quickAddData.nom.trim() || !quickAddData.prenom.trim() || !quickAddData.zone}
               onClick={() => {
-                const AVATAR_COLORS = ['#4A8C73', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
+                const AVATAR_COLORS = ['var(--primary-light)', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
                 const avatarBg = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
                 const newId = Math.max(0, ...db.map(r => r.id)) + 1
                 const record: BilanRecord = {
@@ -4580,7 +4580,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
               <button
                 onClick={() => setShowZonePopup(true)}
-                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? '#edf4f1' : '#FDFCFA', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? 'var(--info-soft)' : 'var(--input-bg)', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {selectedBodyZone && (
                     <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -4623,23 +4623,23 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           <div className="scroll-area">
             <div className="form-group">
               <label>Activité professionnelle</label>
-              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Activité physique / sportive</label>
-              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents familiaux</label>
-              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents chirurgicaux</label>
-              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Notes complémentaires</label>
-              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
           </div>
           <div className="fixed-bottom">
@@ -4700,7 +4700,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 onChange={e => setBilanNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Patient stressé, travail physique intensifié ce mois-ci, essai de 3 séances de kiné il y a 6 mois sans succès…"
-                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -4772,7 +4772,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               ))}
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => setShowDocSourceMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: '#FDFCFA', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'var(--input-bg)', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
@@ -4806,7 +4806,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
             {/* ── Actions (fin de page) ── */}
             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #2D5A4B, #4A8C73)' }}
+            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, var(--primary), var(--primary-light))' }}
               onClick={handleSaveAndAnalyse}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -5209,7 +5209,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   </div>
                 </div>
               ))}
-              <div style={{ marginTop: 12, padding: '0.7rem 0.85rem', background: '#edf4f1', border: '1px solid #8bc4b0', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: '#2D5A4B', lineHeight: 1.5 }}>
+              <div style={{ marginTop: 12, padding: '0.7rem 0.85rem', background: 'var(--info-soft)', border: '1px solid var(--info-border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: 'var(--primary)', lineHeight: 1.5 }}>
                 <strong>Conseil :</strong> annulez cet envoi, retournez à l'étape précédente et retirez les documents ou remplacez-les par des versions masquées (gommer noms, dates de naissance, adresses avec l'outil de masquage).
               </div>
             </div>

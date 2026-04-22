@@ -285,7 +285,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
       </div>
       {tests[k] && (
         <DictableInput value={tests[k + 'Remarques'] ?? ''} onChange={e => setT(k + 'Remarques', e.target.value)} placeholder="Remarques…"
-          inputStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)' }} />
+          inputStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)' }} />
       )}
     </div>
   )

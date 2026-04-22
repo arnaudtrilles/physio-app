@@ -206,7 +206,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
                   </div>
 
                   {isEditing && (
-                    <div style={{ borderTop: '1px solid var(--border-color)', padding: '0.75rem 0.9rem', background: '#FDFCFA', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ borderTop: '1px solid var(--border-color)', padding: '0.75rem 0.9rem', background: 'var(--input-bg)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div>
                         <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Nom</label>
                         <input value={ex.nom} onChange={e => update({ nom: e.target.value })} style={editInputStyle} />
@@ -260,7 +260,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
               placeholder="Dictez les exercices (ex : squat 3×15, pont fessier 3×12)..."
               textareaStyle={{
                 width: '100%', padding: '0.4rem 0.75rem', fontSize: '0.8rem',
-                color: 'var(--text-main)', background: '#FDFCFA',
+                color: 'var(--text-main)', background: 'var(--input-bg)',
                 border: '1px solid var(--border-color)', borderRadius: 8,
                 boxSizing: 'border-box', lineHeight: 1.4,
               }}
@@ -400,7 +400,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
                   style={{
                     flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem',
                     border: '1px solid var(--border-color)', borderRadius: 10,
-                    background: '#FDFCFA', color: 'var(--text-main)', boxSizing: 'border-box',
+                    background: 'var(--input-bg)', color: 'var(--text-main)', boxSizing: 'border-box',
                   }}
                 />
                 <button
@@ -434,7 +434,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
               rows={4}
               textareaStyle={{
                 width: '100%', padding: '0.7rem 0.9rem', fontSize: '0.88rem',
-                color: 'var(--text-main)', background: '#FDFCFA',
+                color: 'var(--text-main)', background: 'var(--input-bg)',
                 border: '1px solid var(--border-color)', borderRadius: 14,
                 resize: 'vertical', boxSizing: 'border-box',
               }}
@@ -451,7 +451,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
     const lblStyle: React.CSSProperties = { fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }
     const inputStyle: React.CSSProperties = {
       width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem',
-      color: 'var(--text-main)', background: '#FDFCFA',
+      color: 'var(--text-main)', background: 'var(--input-bg)',
       border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', marginBottom: 8, boxSizing: 'border-box',
     }
 
@@ -542,7 +542,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
                             style={{
                               flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem',
                               border: '1px solid var(--border-color)', borderRadius: 10,
-                              background: '#FDFCFA', color: 'var(--text-main)', boxSizing: 'border-box',
+                              background: 'var(--input-bg)', color: 'var(--text-main)', boxSizing: 'border-box',
                             }}
                           />
                           <button
