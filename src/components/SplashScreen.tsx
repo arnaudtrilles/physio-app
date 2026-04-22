@@ -14,7 +14,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 99999,
+      position: 'fixed', inset: 0, zIndex: 99999,
       background: '#2D5A4B',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       opacity: leaving ? 0 : 1,
