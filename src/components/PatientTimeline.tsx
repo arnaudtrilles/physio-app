@@ -284,7 +284,7 @@ function NoteCard({ item }: { item: NoteSeanceItem }) {
               padding: '0.4rem 0.7rem',
               borderRadius: analyseOpen ? '8px 8px 0 0' : 8,
               background: 'var(--info-soft)',
-              border: '1px solid #b8d4ca',
+              border: '1px solid var(--border-soft)',
               color: 'var(--primary)',
               fontWeight: 600,
               fontSize: '0.72rem',

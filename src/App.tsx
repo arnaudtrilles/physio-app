@@ -2704,7 +2704,7 @@ STRUCTURE (n'inclure que si données présentes) :
                           const bilanKey = `bilan-${record.id}`
                           const bilanOpen = openTimelineKey === bilanKey
                           return (
-                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? '#8bc4b0' : '#c8e0d8'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
+                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? 'var(--border-soft)' : 'var(--info-bg)'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
                               <div
                                 role="button"
                                 onClick={() => toggleTimeline(bilanKey)}
@@ -2968,7 +2968,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="6 9 12 15 18 9"/></svg>
                                                   </button>
                                                   {isOpen && (
-                                                    <div style={{ background: 'var(--info-soft)', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: 'var(--primary)', lineHeight: 1.5, borderLeft: '3px solid #4A8C73', borderTop: 'none' }}>
+                                                    <div style={{ background: 'var(--info-soft)', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: 'var(--primary)', lineHeight: 1.5, borderLeft: '3px solid var(--primary-light)', borderTop: 'none' }}>
                                                       <div style={{ marginBottom: 3 }}>{note.analyseIA.resume}</div>
                                                       <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{note.analyseIA.evolution}</div>
                                                       {note.analyseIA.vigilance.length > 0 && (<div style={{ color: '#dc2626', fontSize: '0.72rem', marginBottom: 3 }}>Vigilance : {note.analyseIA.vigilance.join(' / ')}</div>)}
