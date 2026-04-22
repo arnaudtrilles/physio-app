@@ -30,3 +30,4 @@ dist-ssr
 *-credentials*.json
 gcp-*.json
 .env*.local
+.env
