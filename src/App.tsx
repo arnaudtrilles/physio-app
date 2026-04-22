@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, lazy, Suspense, Component } f
 import type { ReactNode, ErrorInfo } from 'react'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useTheme } from './hooks/useTheme'
+import { useLocalStorage } from './hooks/useLocalStorage'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
 import { BilanEpaule } from './components/bilans/BilanEpaule'
@@ -325,6 +326,9 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 function App() {
   const { user, loading: authLoading, signOut } = useAuth()
   const [theme, setTheme] = useTheme()
+  const [language, setLanguage] = useLocalStorage<'fr' | 'de' | 'en'>('physio_lang', 'fr')
+  const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage<boolean>('physio_notif', true)
+  const [billingType] = useLocalStorage<'monthly' | 'annual'>('physio_billing', 'monthly')
   const appContainerRef = useRef<HTMLDivElement | null>(null)
   const [showSplash, setShowSplash] = useState(() => {
     const last = sessionStorage.getItem('splash_ts')
@@ -4100,32 +4104,162 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               </button>
 
               {/* Préférences */}
-              <button
-                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', opacity: 0.6 }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Préférences</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Langue, notifications, thème</div>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Préférences</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mode sombre, langue, notifications</div>
-                </div>
-                <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '0.15rem 0.45rem', borderRadius: 'var(--radius-full)' }}>Bientôt</span>
-              </button>
 
-              {/* Plan */}
-              <button
-                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', opacity: 0.6 }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                {/* Langue */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Langue</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                    {([
+                      { id: 'fr' as const, flag: '🇫🇷', label: 'Français' },
+                      { id: 'de' as const, flag: '🇩🇪', label: 'Deutsch' },
+                      { id: 'en' as const, flag: '🇬🇧', label: 'English' },
+                    ]).map(lang => {
+                      const active = language === lang.id
+                      return (
+                        <button
+                          key={lang.id}
+                          onClick={() => setLanguage(lang.id)}
+                          style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                            padding: '0.6rem 0.4rem',
+                            borderRadius: 'var(--radius-md)',
+                            border: active ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                            background: active ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--secondary)',
+                            cursor: 'pointer',
+                            transition: 'border-color 0.15s, background 0.15s',
+                          }}
+                        >
+                          <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>{lang.flag}</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: active ? 700 : 500, color: active ? 'var(--primary)' : 'var(--text-muted)' }}>{lang.label}</span>
+                          {active && <span style={{ fontSize: '0.6rem', color: 'var(--primary)', fontWeight: 700 }}>✓</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement et facturation</div>
+
+                {/* Notifications */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0', borderTop: '1px solid var(--border-color)' }}>
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Notifications</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                      {notificationsEnabled ? 'Activées — rappels et alertes patients' : 'Désactivées'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                    style={{
+                      width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
+                      background: notificationsEnabled ? 'var(--primary)' : 'var(--border-color)',
+                      position: 'relative', flexShrink: 0,
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: 3,
+                      left: notificationsEnabled ? 23 : 3,
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: 'white',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
                 </div>
-                <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--secondary)', padding: '0.15rem 0.45rem', borderRadius: 'var(--radius-full)' }}>Bientôt</span>
-              </button>
+              </div>
+
+              {/* Plan & Facturation */}
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan & Facturation</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement actuel et options</div>
+                  </div>
+                </div>
+
+                {/* Abonnement actuel */}
+                <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', marginBottom: '1rem', color: 'white' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Plan actuel</div>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(255,255,255,0.2)', padding: '0.15rem 0.5rem', borderRadius: 99, border: '1px solid rgba(255,255,255,0.3)' }}>
+                      ✓ Actif
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 2 }}>Basique</div>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.85, marginBottom: 8 }}>
+                    {billingType === 'annual'
+                      ? '290 CHF / an · soit 24.15 CHF/mois'
+                      : '29 CHF / mois'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
+                    <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
+                      Facturation {billingType === 'annual' ? 'annuelle' : 'mensuelle'} · Renouvellement le 22 mai 2026
+                    </span>
+                  </div>
+                </div>
+
+                {/* Inclus dans Basique */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Inclus dans votre plan</div>
+                  {[
+                    'Bilans illimités (toutes zones)',
+                    'Analyse IA par bilan (Gemini)',
+                    'Génération PDF & courriers',
+                    'Stockage local sécurisé',
+                    'Fiche d\'exercices IA',
+                  ].map((feature, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.3rem 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                      <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>✓</span>
+                      {feature}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Plans disponibles */}
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.6rem' }}>Changer de plan</div>
+                  {([
+                    { name: 'Pro', price: '49', desc: 'IA vocale ElevenLabs + sync cloud + statistiques avancées', highlight: false },
+                    { name: 'Équipe', price: '79', desc: 'Multi-praticiens, dashboard cabinet, accès collaborateur', highlight: true },
+                  ]).map(plan => (
+                    <div key={plan.name} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${plan.highlight ? 'var(--primary)' : 'var(--border-color)'}`,
+                      background: plan.highlight ? 'color-mix(in srgb, var(--primary) 5%, var(--surface))' : 'var(--secondary)',
+                      marginBottom: 8, cursor: 'pointer',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{plan.name}</span>
+                          {plan.highlight && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>Populaire</span>}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>{plan.desc}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>{plan.price} CHF</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>/mois</div>
+                      </div>
+                    </div>
+                  ))}
+                  <p style={{ fontSize: '0.68rem', color: 'var(--text-faint)', textAlign: 'center', marginTop: '0.4rem', lineHeight: 1.4 }}>
+                    Mise à niveau disponible après intégration Supabase
+                  </p>
+                </div>
+              </div>
 
               {/* Synchronisation cloud */}
               {(() => {
