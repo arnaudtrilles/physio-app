@@ -35,9 +35,9 @@ import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
-import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
+import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
 import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
-import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
+import { analyseSeanceMiniSchema } from './utils/validation'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
@@ -508,7 +508,6 @@ function App() {
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
   const [resumeBilan, setResumeBilan] = useState<{ record: BilanRecord; bilanNum: number } | null>(null)
-  const [editingProfile, setEditingProfile] = useState(false)
   // testingApiKey / apiKeyStatus removed — Vertex AI, no client key needed
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -576,7 +575,6 @@ function App() {
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
   const photoInputRef         = useRef<HTMLInputElement>(null)
-  const importDataRef    = useRef<HTMLInputElement>(null)
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const updateField = useCallback((field: keyof typeof formData, value: string) =>
@@ -1162,14 +1160,6 @@ Règles :
     return improvDelta(first, last)
   }
 
-  const allPatientKeys = Array.from(new Set(db.map(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim())))
-
-  const globalScore = (() => {
-    const scores = allPatientKeys.map(k => patientGeneralScore(k)).filter((s): s is number => s !== null)
-    if (scores.length === 0) return 0
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-  })()
-
   const getBilanData = (): Record<string, unknown> | null => {
     const zone = selectedBodyZone ?? ''
     const t = getBilanType(zone)
@@ -1460,67 +1450,6 @@ STRUCTURE (n'inclure que si données présentes) :
         entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
         undefined, record.notes || undefined)
     }
-  }
-
-  const handleExportExerciceBank = () => {
-    if (dbExerciceBank.length === 0) {
-      showToast('Aucun exercice dans la banque', 'info')
-      return
-    }
-    const csv = exportBankAsCSV(dbExerciceBank)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `banque-exercices-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast(`${dbExerciceBank.length} exercices exportés`, 'success')
-  }
-
-  const handleExportData = () => {
-    if (!allDataLoaded) { showToast('Chargement en cours, réessayez dans un instant', 'error'); return }
-    const payload = JSON.stringify({ db, dbIntermediaires, dbNotes, dbObjectifs, dbExerciceBank, dbPatientDocs, dbPrescriptions, profile, exportedAt: new Date().toISOString() }, null, 2)
-    const blob = new Blob([payload], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `physio-backup-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast('Données exportées', 'success')
-  }
-
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const raw = JSON.parse(ev.target?.result as string)
-        const parsed = backupSchema.parse(raw)
-        setDb(parsed.db)
-        if (parsed.dbIntermediaires) setDbIntermediaires(parsed.dbIntermediaires as unknown as BilanIntermediaireRecord[])
-        if (parsed.dbNotes) setDbNotes(parsed.dbNotes as unknown as NoteSeanceRecord[])
-        if (parsed.dbObjectifs) setDbObjectifs(parsed.dbObjectifs as unknown as SmartObjectif[])
-        if (parsed.dbExerciceBank) setDbExerciceBank(parsed.dbExerciceBank as unknown as ExerciceBankEntry[])
-        if (parsed.dbPatientDocs) setDbPatientDocs(parsed.dbPatientDocs as unknown as PatientDocument[])
-        if (parsed.dbPrescriptions) setDbPrescriptions(parsed.dbPrescriptions as unknown as PatientPrescription[])
-        if (parsed.profile) setProfile(parsed.profile as unknown as ProfileData)
-        const noteKeys = (parsed.dbNotes as Array<{ patientKey: string }> | undefined)?.map(n => n.patientKey) ?? []
-        const uniqueNoteKeys = [...new Set(noteKeys)]
-        const counts = [
-          `${parsed.db.length} bilans`,
-          parsed.dbIntermediaires?.length ? `${parsed.dbIntermediaires.length} intermédiaires` : '',
-          parsed.dbNotes?.length ? `${parsed.dbNotes.length} séances [${uniqueNoteKeys.join(', ')}]` : '⚠️ 0 séances dans le fichier',
-        ].filter(Boolean).join(', ')
-        showToast(`Importé : ${counts}`, 'success')
-      } catch {
-        showToast('Fichier invalide', 'error')
-      }
-    }
-    reader.readAsText(file)
-    e.target.value = ''
   }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3419,35 +3348,19 @@ STRUCTURE (n'inclure que si données présentes) :
         </div>
       )}
 
-      {/* ── Profile / Dashboard Tab ─────────────────────────────────────────────── */}
-      {step === 'profile' && (() => {
-        const r = 52, circ = 2 * Math.PI * r
-        const total     = allPatientKeys.length
-        const forte     = allPatientKeys.filter(k => (patientGeneralScore(k) ?? 0) > 50).length
-        const moderee   = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s > 0 && s <= 50 }).length
-        const regressN  = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s <= 0 }).length
-        const sansScore = Math.max(total - forte - moderee - regressN, 0)
-        const slot = (n: number) => total > 0 ? (n / total) * circ : 0
-        const seg  = (n: number) => Math.max(slot(n) - 6, 0)
-        const startOff = -circ / 4
-        const gsColor = globalScore >= 50 ? '#166534' : globalScore >= 20 ? '#f97316' : '#881337'
-        const incompletCount = db.filter(r => r.status === 'incomplet').length
-        return (
+      {/* ── Profile Tab ─────────────────────────────────────────────── */}
+      {step === 'profile' && (
           <div className="general-info-screen fade-in">
             <header className="screen-header">
-              <button className="btn-back" onClick={() => editingProfile ? setStep('settings') : setStep('settings')}>
+              <button className="btn-back" onClick={() => setStep('settings')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <h2 className="title-section">{editingProfile ? 'Modifier le profil' : 'Tableau de bord'}</h2>
-              <button onClick={() => { setEditingProfile(v => !v); setProfileEditDraft(profile) }}
-                style={{ fontSize:'0.85rem', fontWeight:600, color:'var(--primary)', background:'none', border:'none', cursor:'pointer' }}>
-                {editingProfile ? 'Annuler' : 'Modifier'}
-              </button>
+              <h2 className="title-section">Modifier le profil</h2>
+              <div style={{ width: 24 }} />
             </header>
             <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
 
-              {editingProfile ? (
-                <div className="fade-in">
+              <div className="fade-in">
                   {/* Photo */}
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.75rem', marginBottom:'2rem' }}>
                     <div onClick={() => photoInputRef.current?.click()}
@@ -3767,170 +3680,15 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
                     onClick={() => {
                       setProfile(profileEditDraft)
-                      setEditingProfile(false)
                       showToast('Profil enregistré', 'success')
+                      setStep('settings')
                     }}>
                     Enregistrer
                   </button>
                 </div>
-              ) : (
-                <>
-                  <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.5rem', padding:'1rem', background:'var(--secondary)', borderRadius:'var(--radius-lg)' }}>
-                    <div style={{ width:52, height:52, borderRadius:'50%', overflow:'hidden', flexShrink:0, boxShadow:'var(--shadow-md)', background: profile.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      {profile.photo
-                        ? <img src={profile.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
-                        : <span style={{ fontSize:'1.4rem', fontWeight:700, color:'white' }}>{(profile.nom || profile.prenom || 'W')[0]}</span>}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:'1.1rem', color:'var(--primary-dark)' }}>{profile.nom}</div>
-                      <div style={{ fontSize:'0.85rem', color:'var(--text-muted)' }}>{profile.profession}</div>
-                      {apiKey && <div style={{ fontSize:'0.75rem', color:'#16a34a', fontWeight:600, marginTop:2 }}>Analyse active</div>}
-                    </div>
-                    {!isOnline && (
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
-                        Hors-ligne
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Dashboard Stats */}
-                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
-
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.1rem 1.15rem', marginBottom:'1.25rem', border:'1px solid var(--border-color)' }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem' }}>
-                      <div style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--primary-dark)', letterSpacing:'0.01em' }}>Mes Patients</div>
-                      <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', fontWeight:500 }}>Répartition par évolution</div>
-                    </div>
-
-                    {/* Donut + breakdown patients */}
-                    <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
-                      <svg viewBox="0 0 150 150" width="112" height="112" style={{ flexShrink:0 }}>
-                        <circle cx="75" cy="75" r={r} fill="none" stroke="#f1f5f9" strokeWidth="10"/>
-                        {forte   > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#22c55e" strokeWidth="10" strokeDasharray={`${seg(forte)} ${circ}`}   strokeDashoffset={startOff} strokeLinecap="round"/>}
-                        {moderee > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#f97316" strokeWidth="10" strokeDasharray={`${seg(moderee)} ${circ}`} strokeDashoffset={startOff - slot(forte)} strokeLinecap="round"/>}
-                        {regressN> 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#ef4444" strokeWidth="10" strokeDasharray={`${seg(regressN)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee)} strokeLinecap="round"/>}
-                        {sansScore > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#cbd5e1" strokeWidth="10" strokeDasharray={`${seg(sansScore)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee) - slot(regressN)} strokeLinecap="round"/>}
-                        <text x="75" y="72" textAnchor="middle" fill="var(--primary-dark)" fontSize="28" fontWeight="700" letterSpacing="-0.02em">{total}</text>
-                        <text x="75" y="90" textAnchor="middle" fill="#94a3b8" fontSize="10" letterSpacing="0.04em">PATIENTS</text>
-                      </svg>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-                        {[
-                          { c:'#22c55e', label:'Forte amélioration', hint:'>50%',  n: forte },
-                          { c:'#f97316', label:'Modérée',            hint:'1–50%', n: moderee },
-                          { c:'#ef4444', label:'Régression',         hint:'EVN ↑', n: regressN },
-                          { c:'#cbd5e1', label:'Sans score',         hint:'< 2 bilans', n: sansScore },
-                        ].map(s => (
-                          <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <span style={{ width:8, height:8, borderRadius:'50%', background:s.c, flexShrink:0 }} />
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:'0.78rem', color:'var(--text-main)', fontWeight:600, lineHeight:1.2 }}>{s.label}</div>
-                              <div style={{ fontSize:'0.66rem', color:'var(--text-muted)', lineHeight:1.2 }}>{s.hint}</div>
-                            </div>
-                            <div style={{ fontSize:'0.95rem', fontWeight:700, color:'var(--primary-dark)', minWidth:20, textAlign:'right' }}>{s.n}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Métriques complémentaires (pas liées au donut) */}
-                    <div style={{ display:'flex', gap:0, marginTop:'0.9rem', paddingTop:'0.75rem', borderTop:'1px solid #f1f5f9' }}>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
-                        <div style={{ fontSize:'1.05rem', fontWeight:700, color:'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{db.length}</div>
-                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Bilans</div>
-                      </div>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
-                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: gsColor, lineHeight:1, letterSpacing:'-0.01em' }}>{globalScore}%</div>
-                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Score global</div>
-                      </div>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: incompletCount > 0 ? '#d97706' : 'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{incompletCount}</div>
-                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Incomplets</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Export / Import */}
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Synchronisation multi-appareils</div>
-                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>Exporte tes données depuis ce navigateur, puis importe le fichier sur un autre appareil (téléphone, tablette…).</p>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <button onClick={handleExportData}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', border:'none', color:'white', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="7 10 12 15 17 10"/>
-                          <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        Exporter mes données (.json)
-                      </button>
-                      <button onClick={() => importDataRef.current?.click()}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'var(--surface)', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="17 8 12 3 7 8"/>
-                          <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Importer un fichier de sauvegarde
-                      </button>
-                      <input ref={importDataRef} type="file" accept=".json" style={{ display:'none' }} onChange={handleImportData} />
-                    </div>
-                  </div>
-
-                  {/* Banque d'exercices */}
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.5rem' }}>
-                      <div style={{ fontWeight:700, color:'var(--primary-dark)', fontSize:'0.92rem' }}>Banque d'exercices</div>
-                      <span style={{ fontSize:'0.75rem', fontWeight:700, padding:'0.15rem 0.55rem', borderRadius:'var(--radius-full)', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0' }}>
-                        {dbExerciceBank.length} {dbExerciceBank.length > 1 ? 'exercices' : 'exercice'}
-                      </span>
-                    </div>
-                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>
-                      Tous les exercices uniques générés sont collectés ici automatiquement. Exporte-les en CSV pour construire ta banque personnelle.
-                    </p>
-                    <button onClick={handleExportExerciceBank} disabled={dbExerciceBank.length === 0}
-                      style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background: dbExerciceBank.length === 0 ? 'var(--secondary)' : 'linear-gradient(135deg, #059669, #047857)', border: dbExerciceBank.length === 0 ? '1px solid var(--border-color)' : 'none', color: dbExerciceBank.length === 0 ? 'var(--text-muted)' : 'white', fontWeight:700, fontSize:'0.88rem', cursor: dbExerciceBank.length === 0 ? 'not-allowed' : 'pointer' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                      </svg>
-                      Exporter en CSV (.csv)
-                    </button>
-                  </div>
-
-                  <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Aperçu des patients</div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem' }}>
-                    {allPatientKeys.map(key => {
-                      const bilans = getPatientBilans(key)
-                      const firstRec = bilans[0]
-                      const score = patientGeneralScore(key)
-                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : '#881337'
-                      const sBg    = score === null ? '#f1f5f9' : score > 0 ? '#dcfce7' : '#fee2e2'
-                      const initials = `${(firstRec?.nom[0] || '?')}${(firstRec?.prenom[0] || '?')}`
-                      return (
-                        <div key={key} onClick={() => { setSelectedPatient(key); setStep('database') }}
-                          style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:'0.9rem 1rem', border:'1px solid var(--border-color)', display:'flex', alignItems:'center', gap:'0.85rem', boxShadow:'var(--shadow-sm)', cursor:'pointer' }}>
-                          <div style={{ width:42, height:42, borderRadius:'50%', background: firstRec?.avatarBg || 'var(--primary)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:700, fontSize:'0.9rem' }}>{initials}</div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontWeight:600, color:'var(--primary-dark)', fontSize:'0.95rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{key}</div>
-                            <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{firstRec?.pathologie || ''}</div>
-                          </div>
-                          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.2rem', flexShrink:0 }}>
-                            {score !== null && (
-                              <span style={{ fontWeight:700, fontSize:'0.85rem', color: sColor, background: sBg, padding:'0.2rem 0.6rem', borderRadius:'var(--radius-full)' }}>
-                                {score > 0 ? '+' : ''}{score}%
-                              </span>
-                            )}
-                            <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>{bilans.length} bilan(s)</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
             </div>
           </div>
-        )
-      })()}
+      )}
 
       {/* ── Settings ──────────────────────────────────────────────────────────── */}
       {step === 'settings' && (
@@ -3946,7 +3704,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {/* Profil */}
               <button
-                onClick={() => { setEditingProfile(true); setProfileEditDraft(profile); setStep('profile') }}
+                onClick={() => { setProfileEditDraft(profile); setStep('profile') }}
                 style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
               >
                 <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -4890,7 +4648,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             onAudit={recordAIAudit}
             onBack={() => { setEvolutionZoneType(null); setStep('database') }}
             onClose={() => { setEvolutionZoneType(null); setStep('database') }}
-            onGoToProfile={() => setStep('profile')}
+            onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
           />
           </Suspense>
         )
@@ -5034,7 +4792,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             showToast('Note diagnostique générée', 'success')
           }}
           onBack={() => setStep('database')}
-          onGoToProfile={() => setStep('profile')}
+          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
           onFicheExercice={() => {
             setFicheBackStep('database')
             setStep('fiche_exercice')
@@ -5099,7 +4857,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             goToPatientRecord()
           }}
           onExport={handleExportPDF}
-          onGoToProfile={() => setStep('profile')}
+          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
           onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
         />
         </Suspense>
@@ -5168,7 +4926,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           }}
           onBack={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setStep(ficheBackStep) }}
           onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}
-          onGoToProfile={() => setStep('profile')}
+          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
         />
         </Suspense>
       )}
