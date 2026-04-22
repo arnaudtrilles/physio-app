@@ -68,7 +68,7 @@ export function AmplitudeInput({ value, onChange }: { value: string; onChange: (
         style={{
           padding: '3px 9px', fontSize: '0.65rem', fontWeight: editing ? 600 : 400, cursor: 'pointer', lineHeight: '18px',
           transition: 'all 0.18s', borderRadius: 'var(--radius-full)', flexShrink: 0, alignSelf: 'flex-start',
-          background: editing ? '#edf4f1' : '#FDFCFA',
+          background: editing ? 'var(--info-soft)' : 'var(--input-bg)',
           color: editing ? 'var(--primary-dark)' : 'var(--text-muted)',
           boxShadow: editing ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
           border: editing ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
@@ -81,7 +81,7 @@ export function AmplitudeInput({ value, onChange }: { value: string; onChange: (
           value={value === 'complet' ? '' : value}
           onChange={e => onChange(e.target.value)}
           placeholder="ex: 45°"
-          style={{ width: '100%', maxWidth: 100, fontSize: '0.78rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: '4px 8px', outline: 'none' }}
+          style={{ width: '100%', maxWidth: 100, fontSize: '0.78rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: '4px 8px', outline: 'none' }}
           autoFocus
         />
       )}
@@ -105,7 +105,7 @@ export function OuiNon({ label, value, onChange, detail, onDetailChange }: { lab
       </div>
       {value === 'oui' && onDetailChange && (
         <DictableTextarea value={detail ?? ''} onChange={e => onDetailChange(e.target.value)} placeholder="Préciser…" rows={2}
-          textareaStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }} />
+          textareaStyle={{ marginTop: 6, width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.82rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }} />
       )}
     </div>
   )
@@ -265,7 +265,7 @@ export function EVASlider({
   const display = num == null || isNaN(num) ? '—' : String(num)
   const color = num == null || isNaN(num) ? 'var(--text-muted)'
     : num === 0 ? '#166534'
-    : num <= 3 ? '#2D5A4B'
+    : num <= 3 ? 'var(--primary)'
     : num <= 5 ? '#ca8a04'
     : num <= 7 ? '#ea580c'
     : '#881337'
@@ -287,7 +287,7 @@ export function EVASlider({
         </div>
       )}
       <div style={{
-        background: '#FDFCFA', borderRadius: compact ? 10 : 14,
+        background: 'var(--input-bg)', borderRadius: compact ? 10 : 14,
         border: '1px solid var(--border-color)',
         padding: `${cardPadY} ${cardPadX} ${cardPadB}`,
         textAlign: 'center', position: 'relative',
@@ -347,7 +347,7 @@ export function ForceInput({ value, onChange }: { value: string; onChange: (v: s
         style={{
           padding: '3px 9px', fontSize: '0.65rem', fontWeight: editing ? 600 : 400, cursor: 'pointer', lineHeight: '18px',
           transition: 'all 0.18s', borderRadius: 'var(--radius-full)', flexShrink: 0, alignSelf: 'flex-start',
-          background: editing ? '#edf4f1' : '#FDFCFA',
+          background: editing ? 'var(--info-soft)' : 'var(--input-bg)',
           color: editing ? 'var(--primary-dark)' : 'var(--text-muted)',
           boxShadow: editing ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
           border: editing ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
@@ -359,7 +359,7 @@ export function ForceInput({ value, onChange }: { value: string; onChange: (v: s
         <select
           value={value === 'complet' ? '' : value}
           onChange={e => onChange(e.target.value)}
-          style={{ fontSize: '0.78rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: '4px 8px', outline: 'none', cursor: 'pointer', maxWidth: 100 }}
+          style={{ fontSize: '0.78rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: '4px 8px', outline: 'none', cursor: 'pointer', maxWidth: 100 }}
           autoFocus
         >
           <option value="">—</option>

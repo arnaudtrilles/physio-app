@@ -12,7 +12,7 @@ const fieldStyle: React.CSSProperties = {
   width: '100%', padding: '0.5rem 0.7rem', fontSize: '0.85rem',
   border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)',
   marginBottom: 6, boxSizing: 'border-box', color: 'var(--text-main)',
-  background: '#FDFCFA',
+  background: 'var(--input-bg)',
 }
 
 export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientKey, onUpdate, maxObjectifs }: SmartObjectifsProps) {
@@ -75,7 +75,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
           style={{
             width: '100%', padding: '0.7rem', borderRadius: 12,
             border: '1.5px solid var(--border-color)',
-            background: '#FDFCFA', color: 'var(--primary-dark)',
+            background: 'var(--input-bg)', color: 'var(--primary-dark)',
             fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
@@ -93,7 +93,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
           {enCours.map(obj => (
             <div key={obj.id} style={{
-              background: '#FDFCFA', border: '1px solid var(--border-color)',
+              background: 'var(--input-bg)', border: '1px solid var(--border-color)',
               borderRadius: 12, padding: '0.7rem',
               boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
             }}>
@@ -176,7 +176,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
 
       {/* Add form */}
       {showAdd ? (
-        <div style={{ background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.75rem', marginBottom: 6, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.75rem', marginBottom: 6, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <input value={titre} onChange={e => setTitre(e.target.value)} placeholder="Titre de l'objectif (ex: Récupérer la flexion complète)"
             style={fieldStyle} />
           <input value={cible} onChange={e => setCible(e.target.value)} placeholder="Cible mesurable (ex: Flexion genou > 120° à J30)"
@@ -213,7 +213,7 @@ export const SmartObjectifs = memo(function SmartObjectifs({ objectifs, patientK
           style={{
             width: '100%', padding: '0.55rem', borderRadius: 10,
             border: '1.5px solid var(--border-color)',
-            background: '#FDFCFA', color: 'var(--primary-dark)',
+            background: 'var(--input-bg)', color: 'var(--primary-dark)',
             fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer',
             boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
           }}>

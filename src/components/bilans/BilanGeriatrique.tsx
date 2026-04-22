@@ -68,7 +68,7 @@ function MobInput({ label, value, onChange }: { label: string; value: string; on
           value={limitDetail}
           onChange={e => updateDetail(e.target.value)}
           placeholder="Amplitude approximative (ex: 90° d'élévation)"
-          style={{ marginTop: 6, width: '100%', padding: '0.4rem 0.7rem', fontSize: '0.78rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }}
+          style={{ marginTop: 6, width: '100%', padding: '0.4rem 0.7rem', fontSize: '0.78rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }}
         />
       )}
     </div>

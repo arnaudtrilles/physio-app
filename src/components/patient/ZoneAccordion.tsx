@@ -17,7 +17,7 @@ export function ZoneAccordion({ label, accent, open, closed, counts, onToggle, o
   return (
     <div
       style={{
-        background: '#edf4f1',
+        background: 'var(--info-soft)',
         border: `1px solid ${colors.borderSoft}`,
         borderLeft: `3px solid ${closed ? colors.textFaint : accent}`,
         borderRadius: radius.xl,

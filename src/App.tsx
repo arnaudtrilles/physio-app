@@ -36,7 +36,7 @@ import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
-import { parseExercicesFromMarkdown, addExercicesToBank, exportBankAsCSV } from './utils/parseExercices'
+import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
 import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
 import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
@@ -173,7 +173,7 @@ function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerS
                   padding: '0.85rem 1rem',
                   borderRadius: 14,
                   border: active ? '2px solid var(--primary)' : '1.5px solid transparent',
-                  background: active ? '#edf4f1' : '#FDFCFA',
+                  background: active ? 'var(--info-soft)' : 'var(--input-bg)',
                   color: active ? 'var(--primary-dark)' : 'var(--text-main)',
                   fontWeight: active ? 600 : 500,
                   fontSize: '0.88rem',
@@ -207,11 +207,11 @@ function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerS
 }
 
 const DEMO_DB: BilanRecord[] = [
-  { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:2,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'29/10/2025', zoneCount:1, evn:7, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:3,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'12/11/2025', zoneCount:1, evn:5, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:4,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'26/11/2025', zoneCount:1, evn:4, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
-  { id:5,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'10/12/2025', zoneCount:1, evn:3, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'#4A8C73', bilanType:'epaule', status:'complet' },
+  { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:2,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'29/10/2025', zoneCount:1, evn:7, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:3,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'12/11/2025', zoneCount:1, evn:5, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:4,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'26/11/2025', zoneCount:1, evn:4, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
+  { id:5,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'10/12/2025', zoneCount:1, evn:3, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
   { id:6,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'01/10/2025', zoneCount:1, evn:7, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
   { id:7,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'15/10/2025', zoneCount:1, evn:5, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
   { id:8,  nom:'MARCHAND', prenom:'Sophie', dateNaissance:'03/08/1990', dateBilan:'29/10/2025', zoneCount:1, evn:6, zone:'Genou Droit',   pathologie:'Syndrome fémoro-patellaire',           avatarBg:'#8b5cf6', bilanType:'genou',  status:'complet' },
@@ -530,7 +530,6 @@ function App() {
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
   const [resumeBilan, setResumeBilan] = useState<{ record: BilanRecord; bilanNum: number } | null>(null)
-  const [editingProfile, setEditingProfile] = useState(false)
   // testingApiKey / apiKeyStatus removed — Vertex AI, no client key needed
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -598,7 +597,7 @@ function App() {
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
   const photoInputRef         = useRef<HTMLInputElement>(null)
-  const importDataRef    = useRef<HTMLInputElement>(null)
+  const importDataRef         = useRef<HTMLInputElement>(null)
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const updateField = useCallback((field: keyof typeof formData, value: string) =>
@@ -1184,14 +1183,6 @@ Règles :
     return improvDelta(first, last)
   }
 
-  const allPatientKeys = Array.from(new Set(db.map(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim())))
-
-  const globalScore = (() => {
-    const scores = allPatientKeys.map(k => patientGeneralScore(k)).filter((s): s is number => s !== null)
-    if (scores.length === 0) return 0
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-  })()
-
   const getBilanData = (): Record<string, unknown> | null => {
     const zone = selectedBodyZone ?? ''
     const t = getBilanType(zone)
@@ -1229,7 +1220,7 @@ Règles :
         zoneCount: 1,
         zone: selectedBodyZone ?? undefined,
         pathologie: bilanData ? '' : undefined,
-        avatarBg: '#4A8C73',
+        avatarBg: 'var(--primary-light)',
         status,
         bilanType,
         bilanData: bilanData ?? undefined,
@@ -1482,22 +1473,6 @@ STRUCTURE (n'inclure que si données présentes) :
         entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
         undefined, record.notes || undefined)
     }
-  }
-
-  const handleExportExerciceBank = () => {
-    if (dbExerciceBank.length === 0) {
-      showToast('Aucun exercice dans la banque', 'info')
-      return
-    }
-    const csv = exportBankAsCSV(dbExerciceBank)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `banque-exercices-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast(`${dbExerciceBank.length} exercices exportés`, 'success')
   }
 
   const handleExportData = () => {
@@ -1754,7 +1729,7 @@ STRUCTURE (n'inclure que si données présentes) :
               <button
                 onClick={() => setShowAddPatientChoice(true)}
                 aria-label="Ajouter un patient"
-                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: '#FDFCFA', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
+                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--input-bg)', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             </header>
@@ -1769,7 +1744,7 @@ STRUCTURE (n'inclure que si données présentes) :
                     </svg>
                     <input type="text" placeholder="Rechercher un nom…"
                       value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: '#FDFCFA', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
+                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: 'var(--input-bg)', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
                   </div>
                 </div>
                 {(() => {
@@ -2613,7 +2588,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                   deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
                                 }
                               }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : '#FDFCFA', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : 'var(--input-bg)', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
                               <div
                                 onClick={toggleThisEpisode}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
@@ -2769,7 +2744,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       {Math.abs(delta)}%
                                     </span>
                                   ) : null}
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8bc4b0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--info-border-strong)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
                                 </div>
                               </div>
                               {bilanOpen && (incomplet ? (
@@ -3500,35 +3475,19 @@ STRUCTURE (n'inclure que si données présentes) :
         </div>
       )}
 
-      {/* ── Profile / Dashboard Tab ─────────────────────────────────────────────── */}
-      {step === 'profile' && (() => {
-        const r = 52, circ = 2 * Math.PI * r
-        const total     = allPatientKeys.length
-        const forte     = allPatientKeys.filter(k => (patientGeneralScore(k) ?? 0) > 50).length
-        const moderee   = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s > 0 && s <= 50 }).length
-        const regressN  = allPatientKeys.filter(k => { const s = patientGeneralScore(k); return s !== null && s <= 0 }).length
-        const sansScore = Math.max(total - forte - moderee - regressN, 0)
-        const slot = (n: number) => total > 0 ? (n / total) * circ : 0
-        const seg  = (n: number) => Math.max(slot(n) - 6, 0)
-        const startOff = -circ / 4
-        const gsColor = globalScore >= 50 ? '#166534' : globalScore >= 20 ? '#f97316' : '#881337'
-        const incompletCount = db.filter(r => r.status === 'incomplet').length
-        return (
+      {/* ── Profile Tab ─────────────────────────────────────────────── */}
+      {step === 'profile' && (
           <div className="general-info-screen fade-in">
             <header className="screen-header">
-              <button className="btn-back" onClick={() => editingProfile ? setStep('settings') : setStep('settings')}>
+              <button className="btn-back" onClick={() => setStep('settings')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <h2 className="title-section">{editingProfile ? 'Modifier le profil' : 'Tableau de bord'}</h2>
-              <button onClick={() => { setEditingProfile(v => !v); setProfileEditDraft(profile) }}
-                style={{ fontSize:'0.85rem', fontWeight:600, color:'var(--primary)', background:'none', border:'none', cursor:'pointer' }}>
-                {editingProfile ? 'Annuler' : 'Modifier'}
-              </button>
+              <h2 className="title-section">Modifier le profil</h2>
+              <div style={{ width: 24 }} />
             </header>
             <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
 
-              {editingProfile ? (
-                <div className="fade-in">
+              <div className="fade-in">
                   {/* Photo */}
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.75rem', marginBottom:'2rem' }}>
                     <div onClick={() => photoInputRef.current?.click()}
@@ -3565,7 +3524,7 @@ STRUCTURE (n'inclure que si données présentes) :
                             padding: '0.65rem 0.75rem',
                             borderRadius: 'var(--radius-md)',
                             border: profileEditDraft.profession === opt ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                            background: profileEditDraft.profession === opt ? '#edf4f1' : 'var(--surface)',
+                            background: profileEditDraft.profession === opt ? 'var(--info-soft)' : 'var(--surface)',
                             color: profileEditDraft.profession === opt ? 'var(--primary-dark)' : 'var(--text-main)',
                             fontWeight: profileEditDraft.profession === opt ? 700 : 500,
                             fontSize: '0.85rem',
@@ -3587,7 +3546,7 @@ STRUCTURE (n'inclure que si données présentes) :
                       padding: '0.45rem 0.75rem',
                       borderRadius: 'var(--radius-full)',
                       border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                      background: active ? '#edf4f1' : 'transparent',
+                      background: active ? 'var(--info-soft)' : 'transparent',
                       color: active ? 'var(--primary-dark)' : 'var(--text-muted)',
                       fontWeight: active ? 600 : 400,
                       fontSize: '0.78rem',
@@ -3839,103 +3798,18 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                           })
                           showToast('Registre exporté', 'success')
                         }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid var(--border-soft)', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
+                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid var(--border-soft)', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : 'var(--primary)', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
                         Exporter le registre (PDF)
                       </button>
                     </div>
                   </div>
 
-                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
-                    onClick={() => {
-                      setProfile(profileEditDraft)
-                      setEditingProfile(false)
-                      showToast('Profil enregistré', 'success')
-                    }}>
-                    Enregistrer
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.5rem', padding:'1rem', background:'var(--secondary)', borderRadius:'var(--radius-lg)' }}>
-                    <div style={{ width:52, height:52, borderRadius:'50%', overflow:'hidden', flexShrink:0, boxShadow:'var(--shadow-md)', background: profile.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      {profile.photo
-                        ? <img src={profile.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
-                        : <span style={{ fontSize:'1.4rem', fontWeight:700, color:'white' }}>{(profile.nom || profile.prenom || 'W')[0]}</span>}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:'1.1rem', color:'var(--primary-dark)' }}>{profile.nom}</div>
-                      <div style={{ fontSize:'0.85rem', color:'var(--text-muted)' }}>{profile.profession}</div>
-                      {apiKey && <div style={{ fontSize:'0.75rem', color:'#16a34a', fontWeight:600, marginTop:2 }}>Analyse active</div>}
-                    </div>
-                    {!isOnline && (
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-full)', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
-                        Hors-ligne
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Dashboard Stats */}
-                  <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
-
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.1rem 1.15rem', marginBottom:'1.25rem', border:'1px solid var(--border-color)' }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.9rem' }}>
-                      <div style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--primary-dark)', letterSpacing:'0.01em' }}>Mes Patients</div>
-                      <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', fontWeight:500 }}>Répartition par évolution</div>
-                    </div>
-
-                    {/* Donut + breakdown patients */}
-                    <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
-                      <svg viewBox="0 0 150 150" width="112" height="112" style={{ flexShrink:0 }}>
-                        <circle cx="75" cy="75" r={r} fill="none" stroke="#f1f5f9" strokeWidth="10"/>
-                        {forte   > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#22c55e" strokeWidth="10" strokeDasharray={`${seg(forte)} ${circ}`}   strokeDashoffset={startOff} strokeLinecap="round"/>}
-                        {moderee > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#f97316" strokeWidth="10" strokeDasharray={`${seg(moderee)} ${circ}`} strokeDashoffset={startOff - slot(forte)} strokeLinecap="round"/>}
-                        {regressN> 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#ef4444" strokeWidth="10" strokeDasharray={`${seg(regressN)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee)} strokeLinecap="round"/>}
-                        {sansScore > 0 && <circle cx="75" cy="75" r={r} fill="none" stroke="#cbd5e1" strokeWidth="10" strokeDasharray={`${seg(sansScore)} ${circ}`} strokeDashoffset={startOff - slot(forte) - slot(moderee) - slot(regressN)} strokeLinecap="round"/>}
-                        <text x="75" y="72" textAnchor="middle" fill="var(--primary-dark)" fontSize="28" fontWeight="700" letterSpacing="-0.02em">{total}</text>
-                        <text x="75" y="90" textAnchor="middle" fill="#94a3b8" fontSize="10" letterSpacing="0.04em">PATIENTS</text>
-                      </svg>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-                        {[
-                          { c:'#22c55e', label:'Forte amélioration', hint:'>50%',  n: forte },
-                          { c:'#f97316', label:'Modérée',            hint:'1–50%', n: moderee },
-                          { c:'#ef4444', label:'Régression',         hint:'EVN ↑', n: regressN },
-                          { c:'#cbd5e1', label:'Sans score',         hint:'< 2 bilans', n: sansScore },
-                        ].map(s => (
-                          <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <span style={{ width:8, height:8, borderRadius:'50%', background:s.c, flexShrink:0 }} />
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:'0.78rem', color:'var(--text-main)', fontWeight:600, lineHeight:1.2 }}>{s.label}</div>
-                              <div style={{ fontSize:'0.66rem', color:'var(--text-muted)', lineHeight:1.2 }}>{s.hint}</div>
-                            </div>
-                            <div style={{ fontSize:'0.95rem', fontWeight:700, color:'var(--primary-dark)', minWidth:20, textAlign:'right' }}>{s.n}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Métriques complémentaires (pas liées au donut) */}
-                    <div style={{ display:'flex', gap:0, marginTop:'0.9rem', paddingTop:'0.75rem', borderTop:'1px solid #f1f5f9' }}>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
-                        <div style={{ fontSize:'1.05rem', fontWeight:700, color:'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{db.length}</div>
-                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Bilans</div>
-                      </div>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, borderRight:'1px solid #f1f5f9' }}>
-                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: gsColor, lineHeight:1, letterSpacing:'-0.01em' }}>{globalScore}%</div>
-                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Score global</div>
-                      </div>
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                        <div style={{ fontSize:'1.05rem', fontWeight:700, color: incompletCount > 0 ? '#d97706' : 'var(--primary-dark)', lineHeight:1, letterSpacing:'-0.01em' }}>{incompletCount}</div>
-                        <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', fontWeight:500 }}>Incomplets</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Export / Import */}
+                  {/* Sauvegarde multi-appareils */}
                   <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Synchronisation multi-appareils</div>
+                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.5rem', fontSize:'0.92rem' }}>Sauvegarde multi-appareils</div>
                     <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>Exporte tes données depuis ce navigateur, puis importe le fichier sur un autre appareil (téléphone, tablette…).</p>
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <button onClick={handleExportData}
+                      <button type="button" onClick={handleExportData}
                         style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', border:'none', color:'white', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -3944,7 +3818,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                         </svg>
                         Exporter mes données (.json)
                       </button>
-                      <button onClick={() => importDataRef.current?.click()}
+                      <button type="button" onClick={() => importDataRef.current?.click()}
                         style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'var(--surface)', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -3957,61 +3831,18 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                     </div>
                   </div>
 
-                  {/* Banque d'exercices */}
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.5rem' }}>
-                      <div style={{ fontWeight:700, color:'var(--primary-dark)', fontSize:'0.92rem' }}>Banque d'exercices</div>
-                      <span style={{ fontSize:'0.75rem', fontWeight:700, padding:'0.15rem 0.55rem', borderRadius:'var(--radius-full)', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0' }}>
-                        {dbExerciceBank.length} {dbExerciceBank.length > 1 ? 'exercices' : 'exercice'}
-                      </span>
-                    </div>
-                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>
-                      Tous les exercices uniques générés sont collectés ici automatiquement. Exporte-les en CSV pour construire ta banque personnelle.
-                    </p>
-                    <button onClick={handleExportExerciceBank} disabled={dbExerciceBank.length === 0}
-                      style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background: dbExerciceBank.length === 0 ? 'var(--secondary)' : 'linear-gradient(135deg, #059669, #047857)', border: dbExerciceBank.length === 0 ? '1px solid var(--border-color)' : 'none', color: dbExerciceBank.length === 0 ? 'var(--text-muted)' : 'white', fontWeight:700, fontSize:'0.88rem', cursor: dbExerciceBank.length === 0 ? 'not-allowed' : 'pointer' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                      </svg>
-                      Exporter en CSV (.csv)
-                    </button>
-                  </div>
-
-                  <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.75rem', fontSize:'0.92rem' }}>Aperçu des patients</div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem' }}>
-                    {allPatientKeys.map(key => {
-                      const bilans = getPatientBilans(key)
-                      const firstRec = bilans[0]
-                      const score = patientGeneralScore(key)
-                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : '#881337'
-                      const sBg    = score === null ? '#f1f5f9' : score > 0 ? '#dcfce7' : '#fee2e2'
-                      const initials = `${(firstRec?.nom[0] || '?')}${(firstRec?.prenom[0] || '?')}`
-                      return (
-                        <div key={key} onClick={() => { setSelectedPatient(key); setStep('database') }}
-                          style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:'0.9rem 1rem', border:'1px solid var(--border-color)', display:'flex', alignItems:'center', gap:'0.85rem', boxShadow:'var(--shadow-sm)', cursor:'pointer' }}>
-                          <div style={{ width:42, height:42, borderRadius:'50%', background: firstRec?.avatarBg || 'var(--primary)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:700, fontSize:'0.9rem' }}>{initials}</div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontWeight:600, color:'var(--primary-dark)', fontSize:'0.95rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{key}</div>
-                            <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{firstRec?.pathologie || ''}</div>
-                          </div>
-                          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.2rem', flexShrink:0 }}>
-                            {score !== null && (
-                              <span style={{ fontWeight:700, fontSize:'0.85rem', color: sColor, background: sBg, padding:'0.2rem 0.6rem', borderRadius:'var(--radius-full)' }}>
-                                {score > 0 ? '+' : ''}{score}%
-                              </span>
-                            )}
-                            <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>{bilans.length} bilan(s)</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
+                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
+                    onClick={() => {
+                      setProfile(profileEditDraft)
+                      showToast('Profil enregistré', 'success')
+                      setStep('settings')
+                    }}>
+                    Enregistrer
+                  </button>
+                </div>
             </div>
           </div>
-        )
-      })()}
+      )}
 
       {/* ── Settings ──────────────────────────────────────────────────────────── */}
       {step === 'settings' && (
@@ -4027,7 +3858,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {/* Profil */}
               <button
-                onClick={() => { setEditingProfile(true); setProfileEditDraft(profile); setStep('profile') }}
+                onClick={() => { setProfileEditDraft(profile); setStep('profile') }}
                 style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
               >
                 <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -4586,7 +4417,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         <ZonePickerSheet
           title="Zone du bilan"
           accent="var(--primary)"
-          accentBg="#edf4f1"
+          accentBg="var(--info-soft)"
           accentBorder="var(--border-color)"
           selectedZone={selectedBodyZone}
           onSelect={(zone) => { setSelectedBodyZone(zone); setShowZonePopup(false) }}
@@ -4711,7 +4542,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             <button
               disabled={!quickAddData.nom.trim() || !quickAddData.prenom.trim() || !quickAddData.zone}
               onClick={() => {
-                const AVATAR_COLORS = ['#4A8C73', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
+                const AVATAR_COLORS = ['var(--primary-light)', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
                 const avatarBg = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
                 const newId = Math.max(0, ...db.map(r => r.id)) + 1
                 const record: BilanRecord = {
@@ -4804,7 +4635,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
               <button
                 onClick={() => setShowZonePopup(true)}
-                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? '#edf4f1' : '#FDFCFA', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? 'var(--info-soft)' : 'var(--input-bg)', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {selectedBodyZone && (
                     <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -4847,23 +4678,23 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           <div className="scroll-area">
             <div className="form-group">
               <label>Activité professionnelle</label>
-              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Activité physique / sportive</label>
-              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents familiaux</label>
-              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Antécédents chirurgicaux</label>
-              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
             <div className="form-group">
               <label>Notes complémentaires</label>
-              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
+              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
             </div>
           </div>
           <div className="fixed-bottom">
@@ -4924,7 +4755,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 onChange={e => setBilanNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Patient stressé, travail physique intensifié ce mois-ci, essai de 3 séances de kiné il y a 6 mois sans succès…"
-                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: '#FDFCFA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -4996,7 +4827,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               ))}
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => setShowDocSourceMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: '#FDFCFA', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'var(--input-bg)', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
@@ -5114,7 +4945,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             onAudit={recordAIAudit}
             onBack={() => { setEvolutionZoneType(null); setStep('database') }}
             onClose={() => { setEvolutionZoneType(null); setStep('database') }}
-            onGoToProfile={() => setStep('profile')}
+            onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
           />
           </Suspense>
         )
@@ -5258,7 +5089,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             showToast('Note diagnostique générée', 'success')
           }}
           onBack={() => setStep('database')}
-          onGoToProfile={() => setStep('profile')}
+          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
           onFicheExercice={() => {
             setFicheBackStep('database')
             setStep('fiche_exercice')
@@ -5323,7 +5154,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             goToPatientRecord()
           }}
           onExport={handleExportPDF}
-          onGoToProfile={() => setStep('profile')}
+          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
           onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
         />
         </Suspense>
@@ -5392,7 +5223,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           }}
           onBack={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setStep(ficheBackStep) }}
           onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}
-          onGoToProfile={() => setStep('profile')}
+          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
         />
         </Suspense>
       )}
