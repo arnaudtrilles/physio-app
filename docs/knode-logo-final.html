@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>KNODE — Logo Final</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #EDE8DC;
+      min-height: 100vh;
+      padding: 64px 40px 80px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .header .eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #2D5A4B;
+      margin-bottom: 10px;
+    }
+    .header h1 {
+      font-size: 13px;
+      font-weight: 400;
+      color: #8A8A7A;
+      letter-spacing: 0.04em;
+    }
+
+    .previews {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 40px rgba(0,0,0,0.10);
+    }
+
+    .panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 48px;
+      min-height: 240px;
+      position: relative;
+    }
+    .panel.light { background: #FAFAF7; }
+    .panel.dark  { background: #080D0B; }
+    .panel.cream { background: #EDE8DC; }
+
+    .label {
+      position: absolute;
+      top: 16px; left: 20px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .panel.light .label, .panel.cream .label { color: rgba(0,0,0,0.2); }
+    .panel.dark .label  { color: rgba(255,255,255,0.15); }
+
+    .row-label {
+      grid-column: 1 / -1;
+      background: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid #F0EDE6;
+    }
+    .row-label span:first-child {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase; color: #2D5A4B;
+    }
+    .row-label span:last-child {
+      font-size: 11px; color: #8A8A7A; font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="eyebrow">Direction finale</div>
+    <h1>Combinaison — Icon · Wordmark · Editorial</h1>
+  </div>
+
+  <div class="previews">
+
+    <!-- ── Full logo : Icon HTML + Wordmark SVG ── -->
+    <div class="row">
+      <div class="panel light">
+        <span class="label">Fond blanc</span>
+        <div style="display:flex;align-items:center;gap:28px;">
+          <!-- Icon -->
+          <div style="width:100px;height:100px;background:#2D5A4B;border-radius:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:68px;color:white;line-height:1;user-select:none;">K</span>
+          </div>
+          <!-- Wordmark -->
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="height:2px;background:#2D5A4B;border-radius:1px;"></div>
+            <div style="display:flex;align-items:baseline;gap:0px;padding:4px 0;">
+              <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:52px;color:#2D5A4B;line-height:1;letter-spacing:-2px;">K</span>
+              <span style="font-family:'Inter',sans-serif;font-weight:400;font-size:52px;color:#2D5A4B;line-height:1;letter-spacing:-1px;">NODE</span>
+            </div>
+            <div style="height:2px;background:#2D5A4B;border-radius:1px;"></div>
+            <div style="font-family:'Inter',sans-serif;font-weight:500;font-size:11px;color:#2D5A4B;letter-spacing:4px;padding-top:4px;">PHYSIOTHERAPY PLATFORM</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel dark">
+        <span class="label">Fond sombre</span>
+        <div style="display:flex;align-items:center;gap:28px;">
+          <div style="width:100px;height:100px;background:#1A3830;border-radius:20px;border:1.5px solid #4A8C73;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:68px;color:#FAFAF7;line-height:1;user-select:none;">K</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="height:2px;background:#4A8C73;border-radius:1px;"></div>
+            <div style="display:flex;align-items:baseline;gap:0px;padding:4px 0;">
+              <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:52px;color:#FAFAF7;line-height:1;letter-spacing:-2px;">K</span>
+              <span style="font-family:'Inter',sans-serif;font-weight:400;font-size:52px;color:#FAFAF7;line-height:1;letter-spacing:-1px;">NODE</span>
+            </div>
+            <div style="height:2px;background:#4A8C73;border-radius:1px;"></div>
+            <div style="font-family:'Inter',sans-serif;font-weight:500;font-size:11px;color:#4A8C73;letter-spacing:4px;padding-top:4px;">PHYSIOTHERAPY PLATFORM</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row-label">
+        <span>Full logo — Icon + Wordmark</span>
+        <span>Usage principal : app, site, documents</span>
+      </div>
+    </div>
+
+    <!-- ── Icon standalone ── -->
+    <div class="row">
+      <div class="panel light">
+        <span class="label">Icon seul — Fond blanc</span>
+        <div style="width:120px;height:120px;background:#2D5A4B;border-radius:26px;display:flex;align-items:center;justify-content:center;">
+          <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:80px;color:white;line-height:1;user-select:none;">K</span>
+        </div>
+      </div>
+
+      <div class="panel dark">
+        <span class="label">Icon seul — Fond sombre</span>
+        <div style="width:120px;height:120px;background:#1A3830;border-radius:26px;border:1.5px solid #4A8C73;display:flex;align-items:center;justify-content:center;">
+          <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:80px;color:#FAFAF7;line-height:1;user-select:none;">K</span>
+        </div>
+      </div>
+
+      <div class="row-label">
+        <span>Icon standalone</span>
+        <span>App icon iOS/Android, favicon, avatar</span>
+      </div>
+    </div>
+
+    <!-- ── Wordmark seul ── -->
+    <div class="row">
+      <div class="panel cream">
+        <span class="label">Wordmark — Fond beige app</span>
+        <svg width="280" height="80" viewBox="0 0 280 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="8" width="280" height="1.5" rx="1" fill="#2D5A4B"/>
+          <text x="0" y="54" font-family="Inter" font-weight="900" font-size="44" fill="#1A1A1A" letter-spacing="-1.5">K</text>
+          <circle cx="34" cy="36" r="4" fill="#2D5A4B"/>
+          <text x="44" y="54" font-family="Inter" font-weight="200" font-size="44" fill="#2D5A4B" letter-spacing="-1">NODE</text>
+          <text x="1" y="70" font-family="Inter" font-weight="400" font-size="9" fill="#8A8A7A" letter-spacing="3">PHYSIOTHERAPY PLATFORM</text>
+          <rect x="0" y="78" width="280" height="1.5" rx="1" fill="#D6D0C4"/>
+        </svg>
+      </div>
+
+      <div class="panel dark">
+        <span class="label">Wordmark — Fond sombre</span>
+        <svg width="280" height="80" viewBox="0 0 280 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="8" width="280" height="1.5" rx="1" fill="#4A8C73"/>
+          <text x="0" y="54" font-family="Inter" font-weight="900" font-size="44" fill="#FAFAF7" letter-spacing="-1.5">K</text>
+          <circle cx="34" cy="36" r="4" fill="#4A8C73"/>
+          <text x="44" y="54" font-family="Inter" font-weight="200" font-size="44" fill="#4A8C73" letter-spacing="-1">NODE</text>
+          <text x="1" y="70" font-family="Inter" font-weight="400" font-size="9" fill="#3D5A4A" letter-spacing="3">PHYSIOTHERAPY PLATFORM</text>
+          <rect x="0" y="78" width="280" height="1.5" rx="1" fill="#0F1F18"/>
+        </svg>
+      </div>
+
+      <div class="row-label">
+        <span>Wordmark seul</span>
+        <span>Header app, documents, signature email</span>
+      </div>
+    </div>
+
+  </div>
+
+  <p style="text-align:center; margin-top: 56px; font-size: 11px; color: #A09C90; letter-spacing: 0.08em;">
+    KNODE · Identité visuelle · Tous formats SVG vectoriels
+  </p>
+
+</body>
+</html>

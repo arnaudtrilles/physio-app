@@ -112,7 +112,7 @@ export function Tutorial({
         left: PAD, right: PAD,
         top: cardTop,
         bottom: cardBottom,
-        background: '#FAFAF7',
+        background: 'var(--surface)',
         borderRadius: 16,
         padding: step.isActionStep ? '1.4rem 1.2rem 1.2rem' : !spotlight ? '0.85rem 1rem 0.8rem' : '1.1rem 1.2rem 1rem',
         boxShadow: spotlight ? '0 16px 48px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.10)' : 'none',
@@ -130,21 +130,21 @@ export function Tutorial({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-              <button onClick={onActionIA} style={actionBtnStyle('#2D5A4B')}>
+              <button onClick={onActionIA} style={actionBtnStyle('var(--primary)')}>
                 <span style={{ fontSize: '1.1rem' }}>🤖</span>
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Générer l'analyse IA</div>
                   <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Synthèse clinique automatique</div>
                 </div>
               </button>
-              <button onClick={onActionExercices} style={actionBtnStyle('#1A3830')}>
+              <button onClick={onActionExercices} style={actionBtnStyle('var(--primary-dark)')}>
                 <span style={{ fontSize: '1.1rem' }}>💪</span>
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Créer la fiche d'exercices</div>
                   <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Programme personnalisé</div>
                 </div>
               </button>
-              <button onClick={onActionPDF} style={actionBtnStyle('#4A8C73')}>
+              <button onClick={onActionPDF} style={actionBtnStyle('var(--primary-light)')}>
                 <span style={{ fontSize: '1.1rem' }}>📄</span>
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Exporter en PDF</div>
@@ -155,8 +155,8 @@ export function Tutorial({
 
             <button onClick={onDone} style={{
               width: '100%', padding: '0.6rem', borderRadius: 12,
-              border: '1px solid #DDD8CE', background: 'transparent',
-              color: '#7A7A6E', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer',
+              border: `1px solid var(--border-color)`, background: 'transparent',
+              color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer',
             }}>
               Terminer le tutoriel
             </button>
@@ -180,7 +180,7 @@ export function Tutorial({
               {steps.map((_, i) => (
                 <div key={i} style={{
                   width: i === currentIdx ? 18 : 6, height: 6, borderRadius: 3,
-                  background: i === currentIdx ? '#2D5A4B' : i < currentIdx ? '#4A8C7366' : '#DDD8CE',
+                  background: i === currentIdx ? 'var(--primary)' : i < currentIdx ? 'var(--primary-light)' : 'var(--border-color)',
                   transition: 'all 0.25s ease',
                 }} />
               ))}
@@ -196,7 +196,7 @@ export function Tutorial({
               </button>
               <button onClick={onNext} style={{
                 flex: 1, padding: '0.6rem', borderRadius: 12, border: 'none',
-                background: 'linear-gradient(135deg, #2D5A4B, #1A3830)',
+                background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
                 color: 'white', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer',
               }}>
                 {isFirst ? 'Commencer →' : 'Suivant →'}

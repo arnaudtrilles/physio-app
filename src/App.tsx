@@ -2712,7 +2712,7 @@ STRUCTURE (n'inclure que si données présentes) :
                               >
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: '0.88rem', lineHeight: 1.35 }}>
-                                    <span style={{ fontWeight: 700, color: '#2D5A4B' }}>Bilan n°{index + 1}</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Bilan n°{index + 1}</span>
                                     {editingLabelBilanId === record.id ? (
                                       <input
                                         autoFocus
@@ -2746,7 +2746,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '0.72rem', color: '#4A8C73', marginTop: 1 }}>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--primary-light)', marginTop: 1 }}>
                                     {record.dateBilan}{currEvn != null ? ` · EVN ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
                                   </div>
                                 </div>
@@ -2798,7 +2798,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
                                   {record.analyseIA && (
                                     <div style={{ marginBottom: 2 }}>
-                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: '#edf4f1', color: '#2D5A4B', border: '1px solid #b8d4ca' }}>Analysé</span>
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: 'var(--info-soft)', color: 'var(--primary)', border: '1px solid var(--border-soft)' }}>Analysé</span>
                                     </div>
                                   )}
                                   {/* Rangée 1 : Bilan PDF + Analyse */}
@@ -2812,7 +2812,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                       Bilan PDF
                                     </button>
                                     <button
-                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: '#edf4f1', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: 'var(--info-soft)', border: '1.5px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                       onClick={() => {
                                         setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
                                         setSelectedBodyZone(record.zone ?? null)
@@ -2849,7 +2849,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                   <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
                                     <button
                                       onClick={() => setResumeBilan({ record, bilanNum: index + 1 })}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#2D5A4B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                       Résumé
                                     </button>
@@ -2963,12 +2963,12 @@ STRUCTURE (n'inclure que si données présentes) :
                                                 <div style={{ marginBottom: 8 }}>
                                                   <button
                                                     onClick={() => setOpenAnalyseNoteIds(prev => { const next = new Set(prev); if (next.has(note.id)) next.delete(note.id); else next.add(note.id); return next })}
-                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: '#edf4f1', border: '1px solid #b8d4ca', color: '#2D5A4B', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: 'var(--info-soft)', border: '1px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <span>Analyse</span>
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="6 9 12 15 18 9"/></svg>
                                                   </button>
                                                   {isOpen && (
-                                                    <div style={{ background: '#edf4f1', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#2D5A4B', lineHeight: 1.5, borderLeft: '3px solid #4A8C73', borderTop: 'none' }}>
+                                                    <div style={{ background: 'var(--info-soft)', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: 'var(--primary)', lineHeight: 1.5, borderLeft: '3px solid #4A8C73', borderTop: 'none' }}>
                                                       <div style={{ marginBottom: 3 }}>{note.analyseIA.resume}</div>
                                                       <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{note.analyseIA.evolution}</div>
                                                       {note.analyseIA.vigilance.length > 0 && (<div style={{ color: '#dc2626', fontSize: '0.72rem', marginBottom: 3 }}>Vigilance : {note.analyseIA.vigilance.join(' / ')}</div>)}
@@ -2982,7 +2982,7 @@ STRUCTURE (n'inclure que si données présentes) :
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                               <div style={{ display: 'flex', gap: 6 }}>
                                                 <button
-                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: '#edf4f1', border: '1.5px solid #b8d4ca', color: '#2D5A4B', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: 'var(--info-soft)', border: '1.5px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                                                   onClick={async () => {
                                                     if (!apiKey) { showToast('Clé API requise', 'error'); return }
                                                     showToast('Analyse en cours...', 'success')
@@ -3795,8 +3795,8 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                       </button>
                     </div>
 
-                    <div style={{ background: '#edf4f1', border: '1px solid #8bc4b0', borderRadius: 12, padding: 14, marginTop: 10 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#2D5A4B', marginBottom: 4 }}>
+                    <div style={{ background: 'var(--info-soft)', border: '1px solid var(--border-soft)', borderRadius: 12, padding: 14, marginTop: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>
                         Registre des traitements
                       </div>
                       {(() => {
@@ -3804,10 +3804,10 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                         const suspiciousCount = dbAICallAudit.filter(e => e.scrubReplacements > 0).length
                         const withDocsCount = dbAICallAudit.filter(e => e.hasDocuments).length
                         if (totalCount === 0) {
-                          return <p style={{ fontSize: '0.75rem', color: '#2D5A4B', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
+                          return <p style={{ fontSize: '0.75rem', color: 'var(--primary)', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
                         }
                         return (
-                          <div style={{ fontSize: '0.75rem', color: '#2D5A4B', marginBottom: 10, lineHeight: 1.5 }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginBottom: 10, lineHeight: 1.5 }}>
                             <div>• <strong>{dbLetterAudit.length}</strong> courrier{dbLetterAudit.length > 1 ? 's' : ''} généré{dbLetterAudit.length > 1 ? 's' : ''}</div>
                             <div>• <strong>{dbAICallAudit.length}</strong> autre{dbAICallAudit.length > 1 ? 's' : ''} analyse{dbAICallAudit.length > 1 ? 's' : ''} (bilans, fiches exos…)</div>
                             {withDocsCount > 0 && (
@@ -3835,7 +3835,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                           })
                           showToast('Registre exporté', 'success')
                         }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid #8bc4b0', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
+                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid var(--border-soft)', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : '#2D5A4B', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
                         Exporter le registre (PDF)
                       </button>
                     </div>
@@ -4896,7 +4896,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
             {/* ── Actions (fin de page) ── */}
             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #2D5A4B, #4A8C73)' }}
+            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, var(--primary), var(--primary-light))' }}
               onClick={handleSaveAndAnalyse}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -5299,7 +5299,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   </div>
                 </div>
               ))}
-              <div style={{ marginTop: 12, padding: '0.7rem 0.85rem', background: '#edf4f1', border: '1px solid #8bc4b0', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: '#2D5A4B', lineHeight: 1.5 }}>
+              <div style={{ marginTop: 12, padding: '0.7rem 0.85rem', background: 'var(--info-soft)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: 'var(--primary)', lineHeight: 1.5 }}>
                 <strong>Conseil :</strong> annulez cet envoi, retournez à l'étape précédente et retirez les documents ou remplacez-les par des versions masquées (gommer noms, dates de naissance, adresses avec l'outil de masquage).
               </div>
             </div>

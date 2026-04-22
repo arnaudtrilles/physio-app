@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KNODE — Conditions App Store & Google Play</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #2D5A4B;
+      --primary-light: #4A8C73;
+      --accent: #1A3830;
+      --text: #1A1A1A;
+      --text-muted: #5A5A52;
+      --text-light: #8A8A82;
+      --border: #E2DDD6;
+      --bg-light: #F7F4EF;
+      --bg-green: #edf4f1;
+      --warning-bg: #FFF8ED;
+      --warning-border: #F59E0B;
+      --warning-text: #92400E;
+      --success-bg: #edf4f1;
+      --success-border: #4A8C73;
+      --danger-bg: #FEF2F2;
+      --danger-border: #EF4444;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: #fff;
+      font-size: 10.5pt;
+      line-height: 1.6;
+    }
+
+    /* ── Page layout ── */
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 48px 56px;
+    }
+
+    @media print {
+      .page { padding: 32px 48px; }
+      body { font-size: 10pt; }
+      .no-break { page-break-inside: avoid; }
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 36px;
+      padding-bottom: 28px;
+      border-bottom: 2px solid var(--primary);
+    }
+
+    .logo-block .logo {
+      font-size: 24pt;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.03em;
+    }
+
+    .logo-block .tagline {
+      font-size: 8.5pt;
+      color: var(--text-muted);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .meta {
+      text-align: right;
+      font-size: 8.5pt;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .meta .doc-title {
+      font-size: 10pt;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    /* ── Title block ── */
+    .title-block {
+      margin-bottom: 32px;
+    }
+
+    .title-block h1 {
+      font-size: 18pt;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+
+    .title-block .subtitle {
+      font-size: 10.5pt;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ── Sections ── */
+    h2 {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      margin: 28px 0 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 {
+      font-size: 10.5pt;
+      font-weight: 600;
+      color: var(--text);
+      margin: 18px 0 8px;
+    }
+
+    p {
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 9.5pt;
+    }
+
+    th {
+      background: var(--primary);
+      color: white;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 9pt;
+      letter-spacing: 0.02em;
+    }
+
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td {
+      background: var(--bg-light);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .check { color: #4A8C73; font-weight: 700; }
+    .warn  { color: #F59E0B; font-weight: 700; }
+    .cross { color: #EF4444; font-weight: 700; }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      font-size: 9.5pt;
+    }
+
+    .callout.warning {
+      background: var(--warning-bg);
+      border-left: 4px solid var(--warning-border);
+    }
+
+    .callout.success {
+      background: var(--success-bg);
+      border-left: 4px solid var(--success-border);
+    }
+
+    .callout.danger {
+      background: var(--danger-bg);
+      border-left: 4px solid var(--danger-border);
+    }
+
+    .callout .callout-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      font-size: 9.5pt;
+    }
+
+    .callout.warning .callout-title { color: var(--warning-text); }
+    .callout.success .callout-title { color: var(--primary); }
+    .callout.danger  .callout-title { color: #991B1B; }
+
+    /* ── Quote block ── */
+    blockquote {
+      border-left: 3px solid var(--primary-light);
+      padding: 10px 16px;
+      margin: 14px 0;
+      background: var(--bg-green);
+      border-radius: 0 6px 6px 0;
+      font-style: italic;
+      color: var(--text-muted);
+      font-size: 9.5pt;
+    }
+
+    /* ── Phase roadmap ── */
+    .phases {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .phase {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .phase-badge {
+      background: var(--primary);
+      color: white;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+      margin-top: 2px;
+      letter-spacing: 0.03em;
+    }
+
+    .phase-content .phase-title {
+      font-weight: 600;
+      font-size: 9.5pt;
+      margin-bottom: 3px;
+    }
+
+    .phase-content .phase-desc {
+      font-size: 9pt;
+      color: var(--text-muted);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 44px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 8pt;
+      color: var(--text-light);
+    }
+
+    .footer-logo {
+      font-weight: 700;
+      color: var(--primary);
+      font-size: 9pt;
+    }
+
+    ul {
+      padding-left: 18px;
+      margin: 8px 0 12px;
+    }
+
+    li {
+      margin-bottom: 5px;
+      font-size: 9.5pt;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-block">
+      <div class="logo">KNODE</div>
+      <div class="tagline">Plateforme de rééducation intelligente</div>
+    </div>
+    <div class="meta">
+      <div class="doc-title">Note stratégique — Distribution digitale</div>
+      <div>Version 1.0 — Avril 2026</div>
+      <div>Confidentiel · Usage interne</div>
+    </div>
+  </div>
+
+  <!-- Title block -->
+  <div class="title-block">
+    <h1>Conditions de publication<br/>App Store & Google Play</h1>
+    <div class="subtitle">Analyse des exigences réglementaires et stratégie de mise en marché pour KNODE</div>
+  </div>
+
+  <!-- 1. General requirements -->
+  <h2>1. Exigences générales</h2>
+  <p>La publication sur les deux principales plateformes de distribution nécessite les éléments suivants :</p>
+
+  <table class="no-break">
+    <thead>
+      <tr>
+        <th>Élément</th>
+        <th>Apple App Store</th>
+        <th>Google Play</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Compte développeur</strong></td>
+        <td>99 USD / an</td>
+        <td>25 USD (unique)</td>
+      </tr>
+      <tr>
+        <td><strong>Revue manuelle</strong></td>
+        <td>Oui — stricte (1–7 jours)</td>
+        <td>Oui — moins stricte (quelques heures–3 jours)</td>
+      </tr>
+      <tr>
+        <td><strong>Politique de confidentialité</strong></td>
+        <td>Obligatoire</td>
+        <td>Obligatoire</td>
+      </tr>
+      <tr>
+        <td><strong>Conversion PWA → natif</strong></td>
+        <td>Obligatoire (via Capacitor)</td>
+        <td>Obligatoire (via Capacitor)</td>
+      </tr>
+      <tr>
+        <td><strong>Catégorie recommandée</strong></td>
+        <td>Business / Productivity</td>
+        <td>Business / Medical (professionnel)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 2. Critical question -->
+  <h2>2. La question critique : dispositif médical ?</h2>
+  <p>C'est le point réglementaire le plus important. En Europe (UE + Suisse), le <strong>Règlement MDR 2017/745</strong> classe les logiciels comme dispositifs médicaux s'ils :</p>
+
+  <blockquote>
+    « influencent la prise de décision clinique ou fournissent une analyse sur des données patient à des fins de diagnostic, prévention, surveillance ou traitement. »
+  </blockquote>
+
+  <div class="callout warning no-break">
+    <div class="callout-title">⚠️ Points d'attention pour KNODE</div>
+    <ul>
+      <li>Analyse IA des données cliniques → potentiellement <strong>MDR Class IIa</strong></li>
+      <li>Scores EVN, tests cliniques, objectifs SMART → documentation + aide à la décision</li>
+      <li>Fiche d'exercices générée par IA → prescription indirecte</li>
+    </ul>
+  </div>
+
+  <h3>Ce qu'impliquerait une classification MDR</h3>
+  <ul>
+    <li>Certification par un <strong>organisme notifié</strong> (coûts estimés : 20 000–100 000 CHF)</li>
+    <li>Mise en place d'un système de management qualité (<strong>ISO 13485</strong>)</li>
+    <li>Constitution d'un dossier technique complet</li>
+    <li>Système de vigilance post-marché</li>
+  </ul>
+
+  <!-- 3. Strategy to avoid -->
+  <h2>3. Stratégie de positionnement pour éviter la classification MDR</h2>
+  <p>Le positionnement choisi est déterminant. En cadrant KNODE comme un <strong>outil de documentation professionnelle</strong> plutôt que comme un outil de décision clinique, la classification MDR peut être évitée dans un premier temps.</p>
+
+  <div class="callout success no-break">
+    <div class="callout-title">✅ Déclaration officielle recommandée</div>
+    <p>
+      « KNODE est un outil de documentation clinique à usage professionnel. Il n'effectue aucun diagnostic et ne remplace pas le jugement clinique du thérapeute. »
+    </p>
+  </div>
+
+  <h3>Modifications concrètes à apporter dans l'app</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Élément actuel</th>
+        <th>Formulation recommandée</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>« Analyse IA »</td>
+        <td>« Aide à la rédaction / Synthèse clinique »</td>
+      </tr>
+      <tr>
+        <td>Résultat IA sans avertissement</td>
+        <td>Disclaimer visible : <em>« Généré par IA — à valider par le professionnel »</em></td>
+      </tr>
+      <tr>
+        <td>Catégorie store : Medical</td>
+        <td>Catégorie store : Business / Productivity</td>
+      </tr>
+      <tr>
+        <td>Termes : « prescrit », « recommande »</td>
+        <td>Termes : « suggère », « propose à titre indicatif »</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 4. Current situation -->
+  <h2>4. État des lieux KNODE</h2>
+
+  <table class="no-break">
+    <thead>
+      <tr>
+        <th>Condition réglementaire</th>
+        <th>Statut</th>
+        <th>Commentaire</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Stockage 100 % local (IndexedDB)</td>
+        <td><span class="check">✓ Actif</span></td>
+        <td>Favorable nLPD/RGPD</td>
+      </tr>
+      <tr>
+        <td>Zéro partage de données tiers</td>
+        <td><span class="check">✓ Actif</span></td>
+        <td>Architecture locale</td>
+      </tr>
+      <tr>
+        <td>Transit HTTPS chiffré</td>
+        <td><span class="check">✓ Actif</span></td>
+        <td>Via Vercel</td>
+      </tr>
+      <tr>
+        <td>Absence de HealthKit (Apple)</td>
+        <td><span class="check">✓ Actif</span></td>
+        <td>Pas de contrainte supplémentaire Apple</td>
+      </tr>
+      <tr>
+        <td>Disclaimer IA visible</td>
+        <td><span class="warn">⚠ À ajouter</span></td>
+        <td>Requis avant soumission store</td>
+      </tr>
+      <tr>
+        <td>Politique de confidentialité</td>
+        <td><span class="warn">⚠ À rédiger</span></td>
+        <td>Obligatoire pour les deux stores</td>
+      </tr>
+      <tr>
+        <td>Conversion Capacitor (natif)</td>
+        <td><span class="warn">⚠ À faire</span></td>
+        <td>Prévu en Phase 2 roadmap</td>
+      </tr>
+      <tr>
+        <td>Évaluation MDR</td>
+        <td><span class="warn">⚠ Phase 3</span></td>
+        <td>Uniquement si vente aux institutions</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 5. Roadmap -->
+  <h2>5. Roadmap de distribution recommandée</h2>
+
+  <div class="phases">
+    <div class="phase no-break">
+      <div class="phase-badge">Phase 1 — Maintenant</div>
+      <div class="phase-content">
+        <div class="phase-title">PWA + marketing direct</div>
+        <div class="phase-desc">Rester sur physioscan.vercel.app. Aucune contrainte store, aucun frais de publication. Distribution directe aux physios indépendants via lien. <strong>Idéal pour la phase de validation avec les testeurs.</strong></div>
+      </div>
+    </div>
+
+    <div class="phase no-break">
+      <div class="phase-badge">Phase 2 — 50 utilisateurs payants</div>
+      <div class="phase-content">
+        <div class="phase-title">Google Play (Business tool)</div>
+        <div class="phase-desc">Conversion via Capacitor + soumission sur Google Play en catégorie "Business". Processus le plus accessible (25 USD, revue moins stricte). Disclaimer IA requis. Rédiger la politique de confidentialité.</div>
+      </div>
+    </div>
+
+    <div class="phase no-break">
+      <div class="phase-badge">Phase 3 — Croissance</div>
+      <div class="phase-content">
+        <div class="phase-title">App Store + évaluation MDR</div>
+        <div class="phase-desc">Publication Apple App Store (99 USD/an). Si vente à des institutions (hôpitaux, cliniques) : évaluation MDR avec consultant réglementaire. Pour les physios indépendants, le positionnement "documentation" reste valide.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout success no-break">
+    <div class="callout-title">✅ Avantage concurrentiel</div>
+    <p>Le stockage 100 % local de KNODE est un argument de conformité nLPD/RGPD fort face aux concurrents cloud. À valoriser dans les CGU et la communication commerciale.</p>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-logo">KNODE · Confidentiel</div>
+    <div>Document préparé en avril 2026 · À usage interne uniquement</div>
+  </div>
+
+</div>
+</body>
+</html>

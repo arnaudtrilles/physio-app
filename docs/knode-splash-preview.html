@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KNODE — Splash Screen Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #1A1A1A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Simulation d'un écran mobile */
+    .phone {
+      width: 390px;
+      height: 844px;
+      border-radius: 48px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
+    }
+
+    /* ── Splash screen ── */
+    .splash {
+      position: absolute;
+      inset: 0;
+      background: #2D5A4B;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      z-index: 10;
+      animation: splashAnim 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes splashAnim {
+      0%   { opacity: 0; }
+      25%  { opacity: 1; }
+      75%  { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+
+    .splash-logo {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      animation: logoIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+    }
+
+    @keyframes logoIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .splash-icon {
+      width: 72px;
+      height: 72px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+    }
+
+    .splash-icon span {
+      font-weight: 900;
+      font-size: 48px;
+      color: white;
+      line-height: 1;
+    }
+
+    .splash-wordmark {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .splash-lines-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .splash-line {
+      height: 1.5px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 1px;
+    }
+
+    .splash-name {
+      display: flex;
+      align-items: baseline;
+      padding: 2px 0;
+    }
+
+    .splash-name .k {
+      font-weight: 900;
+      font-size: 42px;
+      color: white;
+      line-height: 1;
+      letter-spacing: -1.5px;
+    }
+
+    .splash-name .node {
+      font-weight: 200;
+      font-size: 42px;
+      color: rgba(255,255,255,0.85);
+      line-height: 1;
+      letter-spacing: -1px;
+    }
+
+    .splash-tagline {
+      font-size: 9px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 3.5px;
+      padding-top: 3px;
+    }
+
+
+    /* ── App derrière le splash ── */
+    .app {
+      position: absolute;
+      inset: 0;
+      background: #EDE8DC;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .app-placeholder {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      background: #D6D0C4;
+    }
+
+    .app-line {
+      width: 160px;
+      height: 12px;
+      border-radius: 6px;
+      background: #D6D0C4;
+    }
+
+    .app-line.short {
+      width: 100px;
+      height: 8px;
+    }
+
+    /* Bouton replay */
+    .replay-btn {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 10px 24px;
+      border-radius: 20px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+
+    .replay-btn:hover { background: rgba(255,255,255,0.18); }
+  </style>
+</head>
+<body>
+
+  <div class="phone">
+
+    <!-- App en fond -->
+    <div class="app">
+      <div class="app-placeholder"></div>
+      <div class="app-line"></div>
+      <div class="app-line short"></div>
+    </div>
+
+    <!-- Splash par-dessus -->
+    <div class="splash" id="splash">
+      <div class="splash-logo">
+
+        <!-- Icône -->
+        <div class="splash-icon">
+          <span>K</span>
+        </div>
+
+        <!-- Wordmark -->
+        <div class="splash-wordmark">
+          <div class="splash-lines-wrap">
+            <div class="splash-line"></div>
+            <div class="splash-name">
+              <span class="k">K</span>
+              <span class="node">NODE</span>
+            </div>
+            <div class="splash-line"></div>
+          </div>
+          <div class="splash-tagline">PHYSIOTHERAPY PLATFORM</div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <button class="replay-btn" onclick="replay()">↺ &nbsp;Rejouer</button>
+
+  <script>
+    function replay() {
+      const splash = document.getElementById('splash')
+      splash.style.animation = 'none'
+      splash.offsetHeight
+      splash.style.animation = 'splashAnim 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards'
+    }
+  </script>
+
+</body>
+</html>
