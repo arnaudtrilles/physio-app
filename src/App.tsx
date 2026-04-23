@@ -3831,18 +3831,13 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                     </div>
                   </div>
 
-                  <button className="btn-primary-luxe" style={{ marginBottom:'0.5rem', marginTop:'1.5rem' }}
+                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
                     onClick={() => {
                       setProfile(profileEditDraft)
                       showToast('Profil enregistré', 'success')
                       setStep('settings')
                     }}>
                     Enregistrer
-                  </button>
-                  <button
-                    onClick={() => { setProfileEditDraft(profile); setStep('settings') }}
-                    style={{ width:'100%', padding:'0.75rem', borderRadius:'var(--radius-xl)', background:'var(--secondary)', border:'1.5px solid var(--border-color)', color:'var(--text-muted)', fontWeight:600, fontSize:'0.9rem', cursor:'pointer', marginBottom:'1rem' }}>
-                    Annuler
                   </button>
                 </div>
             </div>
