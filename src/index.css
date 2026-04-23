@@ -143,10 +143,8 @@ input, textarea, select {
   position: fixed;
   top: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 430px;
+  left: max(0px, calc(50vw - 215px));
+  width: min(100vw, 430px);
   background-color: var(--base-bg);
   padding: env(safe-area-inset-top) 0.75rem 0 0.75rem;
   display: flex;
@@ -157,9 +155,8 @@ input, textarea, select {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Ombre latérale sur desktop pour délimiter l'app */
 @media (min-width: 431px) {
   .app-container {
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 24px 80px rgba(0,0,0,0.6);
+    box-shadow: 0 0 60px rgba(0,0,0,0.4);
   }
 }
