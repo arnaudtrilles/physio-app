@@ -88,6 +88,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children, maxHeigh
           maxHeight: maxHeight,
           display: 'flex',
           flexDirection: 'column',
+          paddingBottom: 'env(safe-area-inset-bottom)',
           animation: dragY || closing ? 'none' : `sheet-slide-up ${motion.normal}`,
           transform: closing ? 'translateY(100%)' : dragY ? `translateY(${dragY}px)` : undefined,
           transition: closing ? 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)' : dragY ? 'none' : `transform ${motion.normal}`,
