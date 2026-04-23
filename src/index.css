@@ -107,13 +107,13 @@
 }
 
 html {
-  background-color: var(--base-bg);
+  background-color: #0f172a;
   color-scheme: light;
 }
 
 body {
   font-family: 'Inter', -apple-system, sans-serif;
-  background-color: var(--base-bg);
+  background-color: #0f172a;
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -138,14 +138,16 @@ input, textarea, select {
   display: contents;
 }
 
-/* App container couvre exactement le viewport — garantit zéro bande */
+/* App container — mobile-first, centré sur desktop */
 .app-container {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
   bottom: 0;
-  background-color: var(--secondary);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  background-color: var(--base-bg);
   padding: env(safe-area-inset-top) 0.75rem 0 0.75rem;
   display: flex;
   flex-direction: column;
@@ -153,4 +155,11 @@ input, textarea, select {
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Ombre latérale sur desktop pour délimiter l'app */
+@media (min-width: 431px) {
+  .app-container {
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 24px 80px rgba(0,0,0,0.6);
+  }
 }
