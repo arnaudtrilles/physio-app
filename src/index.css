@@ -107,19 +107,23 @@
 }
 
 html {
-  background-color: #0f172a;
+  background-color: var(--base-bg);
   color-scheme: light;
 }
 
 body {
   font-family: 'Inter', -apple-system, sans-serif;
-  background-color: #0f172a;
+  background-color: var(--base-bg);
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
   margin: 0;
   padding: 0;
+}
+
+@media (min-width: 431px) {
+  html, body { background-color: #0f172a; }
 }
 
 button {
