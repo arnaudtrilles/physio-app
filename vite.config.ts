@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import type { Plugin } from 'vite'
 import crypto from 'node:crypto'
+import Anthropic from '@anthropic-ai/sdk'
 
 function transcribeDevProxy(): Plugin {
   let openaiKey = ''
@@ -210,12 +211,167 @@ function geminiDevProxy(): Plugin {
   }
 }
 
+function claudeDevProxy(): Plugin {
+  let anthropicKey = ''
+  let client: Anthropic | null = null
+
+  const DEFAULT_MODEL = 'claude-sonnet-4-6'
+  const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
+  const OPUS_MODEL = 'claude-opus-4-7'
+
+  const LEGACY_REMAP: Record<string, string> = {
+    'gemini-3.1-pro-preview': DEFAULT_MODEL,
+    'gemini-3-flash': DEFAULT_MODEL,
+    'gemini-2.5-pro': DEFAULT_MODEL,
+    'gemini-2.5-flash': DEFAULT_MODEL,
+    'gemini-2.5-flash-preview-04-17': DEFAULT_MODEL,
+    'gemini-2.0-flash': HAIKU_MODEL,
+    'gemini-1.5-pro': DEFAULT_MODEL,
+    'gemini-1.5-flash': HAIKU_MODEL,
+  }
+  const ALLOWED_MODELS = new Set([DEFAULT_MODEL, HAIKU_MODEL, OPUS_MODEL])
+
+  type SupportedImageMime = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+  const IMAGE_MIMES: ReadonlySet<SupportedImageMime> = new Set<SupportedImageMime>([
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  ])
+
+  return {
+    name: 'claude-dev-proxy',
+    configResolved(config) {
+      const env = loadEnv(config.mode, config.root, '')
+      anthropicKey = env.ANTHROPIC_API_KEY || ''
+      if (anthropicKey) client = new Anthropic({ apiKey: anthropicKey })
+    },
+    configureServer(server) {
+      server.middlewares.use('/api/claude', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+        if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return }
+        if (!client) { res.writeHead(500); res.end(JSON.stringify({ error: 'ANTHROPIC_API_KEY not set' })); return }
+
+        const chunks: Buffer[] = []
+        req.on('data', (c: Buffer) => chunks.push(c))
+        req.on('end', async () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+              systemPrompt?: string
+              userPrompt?: string
+              maxOutputTokens?: number
+              jsonMode?: boolean
+              preferredModel?: string
+              documents?: Array<{ mimeType: string; data: string }>
+            }
+            const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents } = body
+            if (!userPrompt) { res.writeHead(400); res.end(JSON.stringify({ error: 'userPrompt required' })); return }
+
+            let model = DEFAULT_MODEL
+            if (preferredModel) {
+              const remapped = LEGACY_REMAP[preferredModel] ?? preferredModel
+              model = ALLOWED_MODELS.has(remapped) ? remapped : DEFAULT_MODEL
+            }
+
+            const userContent: Anthropic.ContentBlockParam[] = []
+            if (documents?.length) {
+              for (const doc of documents) {
+                if (!doc?.mimeType || !doc?.data) continue
+                if (IMAGE_MIMES.has(doc.mimeType as SupportedImageMime)) {
+                  userContent.push({
+                    type: 'image',
+                    source: { type: 'base64', media_type: doc.mimeType as SupportedImageMime, data: doc.data },
+                  })
+                } else if (doc.mimeType === 'application/pdf') {
+                  userContent.push({
+                    type: 'document',
+                    source: { type: 'base64', media_type: 'application/pdf', data: doc.data },
+                  })
+                }
+              }
+              if (userContent.length > 0) {
+                userContent.push({
+                  type: 'text',
+                  text: 'Les documents ci-dessus sont les pièces jointes du patient (radios, comptes rendus médicaux). Tiens-en compte dans ton analyse.',
+                })
+              }
+            }
+
+            let finalUserText = userPrompt
+            if (jsonMode) {
+              finalUserText += '\n\nRéponds UNIQUEMENT avec du JSON valide, sans markdown, sans préambule, sans commentaires.'
+            }
+            userContent.push({ type: 'text', text: finalUserText })
+
+            const systemBlocks: Anthropic.TextBlockParam[] | undefined = systemPrompt
+              ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+              : undefined
+
+            const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userContent }]
+            if (jsonMode) messages.push({ role: 'assistant', content: '{' })
+
+            let response: Anthropic.Message
+            try {
+              response = await client!.messages.create({
+                model,
+                max_tokens: maxOutputTokens || 8192,
+                system: systemBlocks,
+                messages,
+              })
+            } catch (e: unknown) {
+              const err = e as { status?: number; message?: string }
+              const status = err?.status ?? 500
+              const message = err?.message || 'Unknown Anthropic error'
+              console.error(`[claude] API error ${status}: ${message}`)
+              const outStatus = status === 529 ? 503 : status
+              res.writeHead(outStatus, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: message }))
+              return
+            }
+
+            const textBlock = response.content.find(b => b.type === 'text')
+            let result = textBlock && textBlock.type === 'text' ? textBlock.text : ''
+            if (jsonMode && result) result = '{' + result
+
+            if (!result) {
+              res.writeHead(503, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'Empty response from Claude' }))
+              return
+            }
+
+            const usage = {
+              input: response.usage.input_tokens,
+              output: response.usage.output_tokens,
+              cacheRead: response.usage.cache_read_input_tokens ?? 0,
+              cacheCreated: response.usage.cache_creation_input_tokens ?? 0,
+            }
+            console.log(`[claude] ${response.model} OK (${result.length} chars, in: ${usage.input}, out: ${usage.output}, cache hit: ${usage.cacheRead})`)
+
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({
+              result,
+              model: response.model,
+              endpoint: 'anthropic',
+              usage,
+            }))
+          } catch (err) {
+            console.error('[claude] Error:', err)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: (err as Error).message }))
+          }
+        })
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     transcribeDevProxy(),
     geminiDevProxy(),
+    claudeDevProxy(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
