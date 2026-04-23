@@ -35,7 +35,7 @@ import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS, DEFAULT_ZONE_FOR_BILAN } f
 import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
-import { callGeminiSecure, UnmaskedDocumentsError } from './utils/geminiSecure'
+import { callClaudeSecure, UnmaskedDocumentsError } from './utils/claudeSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
 import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
 import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
@@ -483,11 +483,11 @@ function App() {
    * accepté, false = refusé. Usage dans les sites appelants :
    *
    *   try {
-   *     await callGeminiSecure({...})
+   *     await callClaudeSecure({...})
    *   } catch (e) {
    *     if (e instanceof UnmaskedDocumentsError) {
    *       const ok = await askUnmaskedDocsConfirm(e.unmaskedDocs)
-   *       if (ok) await callGeminiSecure({..., userAcknowledgedUnmasked: true})
+   *       if (ok) await callClaudeSecure({..., userAcknowledgedUnmasked: true})
    *     }
    *   }
    */
@@ -498,21 +498,21 @@ function App() {
   }, [])
 
   /**
-   * Wrapper autour de callGeminiSecure qui gère automatiquement la confirmation
+   * Wrapper autour de callClaudeSecure qui gère automatiquement la confirmation
    * utilisateur en cas de documents non masqués. Rejoue l'appel avec
    * userAcknowledgedUnmasked=true si le praticien accepte, ou lève une erreur
    * silencieuse sinon (pour que l'appelant puisse abandonner proprement).
    */
-  const callGeminiWithDocGuard = useCallback(async (
-    opts: Parameters<typeof callGeminiSecure>[0]
+  const callClaudeWithDocGuard = useCallback(async (
+    opts: Parameters<typeof callClaudeSecure>[0]
   ): Promise<string> => {
     try {
-      return await callGeminiSecure(opts)
+      return await callClaudeSecure(opts)
     } catch (err) {
       if (err instanceof UnmaskedDocumentsError) {
         const ok = await askUnmaskedDocsConfirm(err.unmaskedDocs)
         if (!ok) throw new Error('UNMASKED_DOCS_CANCELLED')
-        return await callGeminiSecure({ ...opts, userAcknowledgedUnmasked: true })
+        return await callClaudeSecure({ ...opts, userAcknowledgedUnmasked: true })
       }
       throw err
     }
@@ -822,13 +822,12 @@ Règles :
 - Maximum 6 exercices.
 - Sois précis et professionnel.`
 
-    const result = await callGeminiSecure({
+    const result = await callClaudeSecure({
       apiKey,
       systemPrompt,
       userPrompt: prompt,
       maxOutputTokens: 4096,
       jsonMode: true,
-      preferredModel: 'gemini-2.5-flash',
       patient: { nom: formData.nom || '', prenom: formData.prenom || '', patientKey: `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim() },
       category: 'fiche_exercice',
     })
@@ -1292,13 +1291,12 @@ Règles :
           notesLibres: bilanNotes || undefined,
           analyseIA: currentAnalyseIA ?? null,
         })
-        const report = await callGeminiWithDocGuard({
+        const report = await callClaudeWithDocGuard({
           apiKey,
           systemPrompt: PDF_ANALYSE_SYSTEM_PROMPT,
           userPrompt,
           maxOutputTokens: 8192,
           jsonMode: false,
-          preferredModel: 'gemini-2.5-flash',
           documents: bilanDocuments.length > 0 ? bilanDocuments : undefined,
           patient: {
             nom: formData.nom,
@@ -1423,13 +1421,12 @@ STRUCTURE (n'inclure que si données présentes) :
           notesLibres: record.notes || undefined,
           analyseIA: null, // Bilan PDF = pas d'analyse IA
         })
-        const report = await callGeminiWithDocGuard({
+        const report = await callClaudeWithDocGuard({
           apiKey,
           systemPrompt: PDF_BILAN_SYSTEM_PROMPT,
           userPrompt,
           maxOutputTokens: 8192,
           jsonMode: false,
-          preferredModel: 'gemini-2.5-flash',
           documents: record.documents?.length ? record.documents : undefined,
           patient: {
             nom: record.nom,
@@ -3004,13 +3001,12 @@ STRUCTURE (n'inclure que si données présentes) :
                                                         return lines.join('\n')
                                                       }).join('\n\n')
                                                       const historiqueStr = [bilansStr, intersStr, notesStr].filter(Boolean).join('\n\n')
-                                                      const raw = await callGeminiSecure({
+                                                      const raw = await callClaudeSecure({
                                                         apiKey,
                                                         systemPrompt: 'Tu es un kinésithérapeute expert. Analyse la séance actuelle dans le contexte de tout l\'historique COMPLET du patient (bilans, bilans intermédiaires, séances précédentes, analyses IA, exercices prescrits). Sois concis. Réponds UNIQUEMENT en JSON valide.',
                                                         userPrompt: `HISTORIQUE COMPLET DU PATIENT (${ZONE_LABELS[zt] ?? zt}) :\n${historiqueStr}\n\nSÉANCE ACTUELLE (n°${note.numSeance}) :\nEVA : ${note.data.eva}/10\nÉvolution : ${note.data.evolution}\nObservance : ${note.data.observance}\nInterventions : ${note.data.interventions.join(', ')}\nDosage : ${note.data.detailDosage}\nTolérance : ${note.data.tolerance} ${note.data.toleranceDetail}\nRessenti : ${note.data.noteSubjective}\nProchaine étape : ${note.data.prochaineEtape.join(', ')}\nNote : ${note.data.notePlan}\n\nRéponds en JSON :\n{"resume":"1-2 phrases résumant la séance","evolution":"1 phrase sur la tendance globale de l\'évolution","vigilance":["point de vigilance 1","point 2 si pertinent"],"focus":"1 phrase sur quoi se focaliser à la prochaine séance","conseil":"1-2 phrases de conseil IA basé sur la direction de la symptomatologie et l\'historique — concret et actionnable"}`,
                                                         maxOutputTokens: 2048,
                                                         jsonMode: true,
-                                                        preferredModel: 'gemini-3.1-pro-preview',
                                                         patient: { nom: note.nom, prenom: note.prenom, patientKey: note.patientKey },
                                                         category: 'note_seance_mini',
                                                         onAudit: recordAIAudit,
@@ -4047,7 +4043,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Inclus dans votre plan</div>
                   {[
                     'Bilans illimités (toutes zones)',
-                    'Analyse IA par bilan (Gemini)',
+                    'Analyse IA par bilan (Claude)',
                     'Génération PDF & courriers',
                     'Stockage local sécurisé',
                     'Fiche d\'exercices IA',
@@ -5403,11 +5399,11 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                         ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`),
                         ...(closedLines.length > 0 ? ['', 'Antécédents d\'autres PEC (clôturées, contexte) :', ...closedLines.map(l => `- ${l}`)] : [])
                       ].join('\n')
-                      const raw = await callGeminiSecure({
+                      const raw = await callClaudeSecure({
                         apiKey,
                         systemPrompt: 'Tu es un kinésithérapeute expert. Génère une synthèse clinique de fin de prise en charge. Sois professionnel, concis et structuré. Réponds UNIQUEMENT en JSON valide.',
                         userPrompt: `HISTORIQUE COMPLET DU PATIENT :\n${historiqueStr}\n\nGénère en JSON :\n{"resumePEC":"résumé complet de la prise en charge (techniques, progression, nombre de séances)","resultatsObtenus":"résultats cliniques obtenus (EVN, scores, gains fonctionnels)","facteursLimitants":"facteurs limitants rencontrés pendant la PEC (si aucun, mettre 'Aucun facteur limitant identifié')"}`,
-                        maxOutputTokens: 4096, jsonMode: true, preferredModel: 'gemini-2.5-flash',
+                        maxOutputTokens: 4096, jsonMode: true,
                         patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
                         category: 'bilan_analyse', onAudit: recordAIAudit,
                       })
@@ -5444,7 +5440,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                       for (const n of allNotes) { if ((n as unknown as { ficheExercice?: { markdown?: string } }).ficheExercice?.markdown) fichesExo.push((n as unknown as { ficheExercice: { markdown: string } }).ficheExercice.markdown) }
                       const dosages = allNotes.filter(n => n.data.detailDosage).map(n => `Séance ${n.numSeance}: ${n.data.detailDosage}`)
                       const interventions = Array.from(new Set(allNotes.flatMap(n => n.data.interventions)))
-                      const raw = await callGeminiSecure({
+                      const raw = await callClaudeSecure({
                         apiKey,
                         systemPrompt: `Tu es un kinésithérapeute expert. Génère des recommandations de fin de prise en charge.
 
@@ -5466,7 +5462,7 @@ ${dosages.length > 0 ? dosages.join('\n') : 'Non renseignés'}
 
 Génère en JSON :
 {"autoExercices":"UNIQUEMENT les exercices déjà prescrits ci-dessus avec leurs dosages (répétitions, séries, fréquence). Ne rien inventer.","precautions":"précautions basées sur l'évolution clinique constatée","infoMedecin":"éléments factuels pour le médecin prescripteur (EVN initial/final, nombre de séances, résultats)"}`,
-                        maxOutputTokens: 4096, jsonMode: true, preferredModel: 'gemini-2.5-flash',
+                        maxOutputTokens: 4096, jsonMode: true,
                         patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
                         category: 'bilan_analyse', onAudit: recordAIAudit,
                       })

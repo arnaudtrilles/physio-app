@@ -40,7 +40,7 @@ export interface BilanDocument {
   /**
    * true si le document a été passé par DocumentMasker (identifiants patient
    * masqués manuellement). false / absent = document brut, dangereux à envoyer
-   * à l'IA tel quel. Le wrapper callGeminiSecure vérifie ce flag.
+   * à l'IA tel quel. Le wrapper callClaudeSecure vérifie ce flag.
    */
   masked?: boolean
 }
@@ -303,7 +303,7 @@ export interface LetterRecord {
 
 /**
  * Journal d'audit des traitements IA pour traçabilité RGPD.
- * Une entrée est créée à chaque appel effectif à Gemini pour générer un courrier.
+ * Une entrée est créée à chaque appel effectif à Claude pour générer un courrier.
  * Contient uniquement des métadonnées non-identifiantes ; jamais le contenu du courrier.
  */
 export interface LetterAuditEntry {
@@ -314,7 +314,7 @@ export interface LetterAuditEntry {
   type: LetterType
   pseudonymized: boolean               // toujours true en l'état, documenté pour le futur
   piiWarningsCount: number             // combien d'alertes PII le praticien a vues avant validation
-  modelUsed: string                    // ex: "gemini-2.5-flash"
+  modelUsed: string                    // ex: "claude-sonnet-4-6"
   resultLength: number                 // taille du texte généré (caractères)
 }
 

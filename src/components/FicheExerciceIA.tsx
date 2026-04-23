@@ -4,7 +4,7 @@ import { DictableTextarea } from './VoiceMic'
 import type { FicheExercice, AnalyseIA, AICallAuditEntry } from '../types'
 import { buildFicheExercicePrompt, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
-import { callGeminiSecure } from '../utils/geminiSecure'
+import { callClaudeSecure } from '../utils/claudeSecure'
 
 interface FicheExerciceIAProps {
   apiKey: string
@@ -147,13 +147,12 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
 
 [Répéter pour l'exercice 2, 3 et 4 maximum]`
 
-      const markdown = await callGeminiSecure({
+      const markdown = await callClaudeSecure({
         apiKey,
         systemPrompt,
         userPrompt: buildFicheExercicePrompt(context, notesSeance, analyseIA),
         maxOutputTokens: 8192,
         jsonMode: false,
-        preferredModel: 'gemini-3.1-pro-preview',
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'fiche_exercice',
         onAudit,
@@ -434,9 +433,9 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
         {/* No API key */}
         {!apiKey && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem', marginBottom: 8 }}>Clé API Gemini requise</div>
+            <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem', marginBottom: 8 }}>Service IA indisponible</div>
             <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px', lineHeight: 1.5 }}>
-              Configurez votre clé API Gemini dans votre profil pour générer la fiche d'exercices.
+              La fiche d'exercices n'est pas disponible actuellement. Vérifiez votre connexion.
             </p>
             <button onClick={onGoToProfile} style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #059669, #047857)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer dans le Profil
@@ -448,14 +447,14 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Vérifiez votre compte Google AI Studio.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Réessayez dans quelques minutes.</p>
           </div>
         )}
         {error === 'auth' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Clé API Gemini invalide</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: '0 0 10px' }}>Clé Gemini absente ou incorrecte (AIza...).</p>
-            <button onClick={onGoToProfile} style={{ fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Configurer ma clé Gemini</button>
+            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Authentification IA échouée</div>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: '0 0 10px' }}>Le service IA a refusé la requête. Réessayez plus tard.</p>
+            <button onClick={onGoToProfile} style={{ fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Ouvrir le profil</button>
           </div>
         )}
         {error && error !== 'quota' && error !== 'auth' && (

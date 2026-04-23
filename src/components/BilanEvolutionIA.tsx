@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import type { EvolutionIA, AICallAuditEntry } from '../types'
 import { buildEvolutionPrompt, parseEvolutionIA, roleTitle } from '../utils/clinicalPrompt'
 import type { EvolutionContext } from '../utils/clinicalPrompt'
-import { GeminiAuthError } from '../utils/geminiClient'
-import { callGeminiSecure } from '../utils/geminiSecure'
+import { ClaudeAuthError } from '../utils/claudeClient'
+import { callClaudeSecure } from '../utils/claudeSecure'
 
 interface BilanEvolutionIAProps {
   apiKey: string
@@ -61,12 +61,11 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
     setError(null)
     let willRetry = false
     try {
-      const raw = await callGeminiSecure({
+      const raw = await callClaudeSecure({
         apiKey,
         systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.`,
         userPrompt: buildEvolutionPrompt(context),
         maxOutputTokens: 8192,
-        preferredModel: 'gemini-3.1-pro-preview',
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'bilan_evolution',
         onAudit,
@@ -86,7 +85,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         }, 1200)
         return
       }
-      if (err instanceof GeminiAuthError) {
+      if (err instanceof ClaudeAuthError) {
         setError('auth')
       } else {
         const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -147,8 +146,8 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         {/* No API key */}
         {!apiKey && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Clé API Gemini requise</div>
-            <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Configurez votre clé API Gemini dans votre profil.</p>
+            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Service IA indisponible</div>
+            <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Le rapport d'évolution n'est pas disponible actuellement. Vérifiez votre connexion.</p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer dans le Profil
@@ -160,16 +159,16 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Vérifiez votre compte Google AI Studio.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Réessayez dans quelques minutes.</p>
           </div>
         )}
         {error === 'auth' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Clé API Gemini invalide</div>
-            <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Renseignez une clé valide (AIza...) dans votre profil.</p>
+            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Authentification IA échouée</div>
+            <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Le service IA a refusé la requête. Réessayez dans quelques minutes.</p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
-              Configurer ma clé Gemini
+              Ouvrir le profil
             </button>
           </div>
         )}

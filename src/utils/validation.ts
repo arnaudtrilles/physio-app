@@ -68,7 +68,7 @@ export const bilanRecordSchema = z.object({
   }).optional(),
 })
 
-// ── Gemini mini-analyse response ───────────────────────────────────────────
+// ── Claude mini-analyse response ───────────────────────────────────────────
 export const analyseSeanceMiniSchema = z.object({
   resume: z.string(),
   evolution: z.string().optional().default(''),

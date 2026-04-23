@@ -291,9 +291,9 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
                   } catch (err) {
                     const msg = err instanceof Error ? err.message : 'Erreur inconnue'
                     if (msg.includes('API key') || msg.includes('API_KEY') || msg.includes('401') || msg.includes('403')) {
-                      setGenerateError('Clé API Gemini manquante ou invalide. Configurez-la dans votre Profil.')
+                      setGenerateError('Authentification IA échouée. Réessayez dans quelques minutes.')
                     } else if (msg.includes('quota') || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
-                      setGenerateError('Quota Gemini dépassé. Réessayez plus tard.')
+                      setGenerateError('Quota IA dépassé. Réessayez plus tard.')
                     } else if (err instanceof SyntaxError) {
                       setGenerateError('Réponse IA invalide. Réessayez.')
                     } else {
