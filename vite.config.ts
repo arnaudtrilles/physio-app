@@ -91,6 +91,74 @@ function transcribeDevProxy(): Plugin {
   }
 }
 
+function claudeDevProxy(): Plugin {
+  let anthropicKey = ''
+  return {
+    name: 'claude-dev-proxy',
+    configResolved(config) {
+      const env = loadEnv(config.mode, config.root, '')
+      anthropicKey = env.ANTHROPIC_API_KEY || ''
+    },
+    configureServer(server) {
+      server.middlewares.use('/api/claude', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+        if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return }
+        if (!anthropicKey) { res.writeHead(500); res.end(JSON.stringify({ error: 'ANTHROPIC_API_KEY not set' })); return }
+
+        const chunks: Buffer[] = []
+        req.on('data', (c: Buffer) => chunks.push(c))
+        req.on('end', async () => {
+          try {
+            const { systemPrompt, userPrompt, maxTokens = 8192, model = 'claude-sonnet-4-6' } = JSON.parse(Buffer.concat(chunks).toString())
+            if (!userPrompt) { res.writeHead(400); res.end(JSON.stringify({ error: 'userPrompt required' })); return }
+
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 55_000)
+            let apiRes: Response
+            try {
+              apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': anthropicKey,
+                  'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                  model,
+                  max_tokens: maxTokens,
+                  ...(systemPrompt ? { system: systemPrompt } : {}),
+                  messages: [{ role: 'user', content: userPrompt }],
+                }),
+                signal: controller.signal,
+              })
+            } finally {
+              clearTimeout(timeoutId)
+            }
+
+            const responseText = await apiRes.text()
+            if (!apiRes.ok) {
+              res.writeHead(apiRes.status, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: responseText.slice(0, 500) }))
+              return
+            }
+            const data = JSON.parse(responseText)
+            const result = data?.content?.find((c: { type: string }) => c.type === 'text')?.text ?? ''
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ result, model }))
+          } catch (err) {
+            console.error('[claude] Error:', err)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: (err as Error).message }))
+          }
+        })
+      })
+    },
+  }
+}
+
 function geminiDevProxy(): Plugin {
   let projectId = ''
   let region = ''
@@ -215,6 +283,7 @@ export default defineConfig({
   plugins: [
     react(),
     transcribeDevProxy(),
+    claudeDevProxy(),
     geminiDevProxy(),
     VitePWA({
       registerType: 'autoUpdate',

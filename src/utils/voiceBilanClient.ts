@@ -1,5 +1,6 @@
 import { callGemini } from './geminiClient'
-import type { BilanType } from '../types'
+import { callClaude } from './claudeClient'
+import type { BilanType, NarrativeSection } from '../types'
 
 /**
  * Transcrit un blob audio via le proxy serverless /api/transcribe.
@@ -333,6 +334,57 @@ export async function extractBilanFromTranscription(
     parsed = JSON.parse(raw)
   } catch (e) {
     throw new Error(`Réponse IA non-JSON : ${(e as Error).message.slice(0, 200)}`)
+  }
+
+  return parsed
+}
+
+/**
+ * Génère un compte-rendu narratif structuré en 7 sections à partir d'une
+ * transcription de consultation, en utilisant Claude.
+ */
+export async function generateNarrativeReport(
+  transcription: string,
+  zone: string,
+): Promise<NarrativeSection[]> {
+  const systemPrompt = `Tu es un kinésithérapeute expert qui rédige des comptes rendus cliniques professionnels en français.
+Tu reçois la transcription brute d'une consultation de kinésithérapie (dictée par le thérapeute pendant ou après la séance).
+Tu dois produire un compte rendu structuré, clair et professionnel, en corrigeant les hésitations et répétitions orales.
+
+RÈGLES :
+1. Réponds UNIQUEMENT en JSON valide, sans markdown, sans texte avant ou après.
+2. Le JSON est un tableau de 7 objets avec les clés : "id", "titre", "contenu".
+3. Les 7 sections sont dans cet ordre exact :
+   - id: "anamnese",       titre: "Anamnèse"
+   - id: "biopsychosocial", titre: "Facteurs biopsychosociaux"
+   - id: "examen",         titre: "Examen clinique"
+   - id: "diagnostic",     titre: "Diagnostic physiothérapeutique"
+   - id: "objectifs",      titre: "Objectifs"
+   - id: "plan",           titre: "Plan de traitement"
+   - id: "conseils",       titre: "Conseils au patient"
+4. Chaque "contenu" est un texte narratif professionnel (pas de JSON, pas de listes à puces sauf si cliniquement pertinent).
+5. Si une section n'est pas abordée dans la transcription, écris "Non renseigné lors de cette consultation." dans le contenu.
+6. Utilise les termes cliniques appropriés (EVN, PSFS, MRC, ROM, etc.) tels que mentionnés.
+7. Ne rajoute AUCUNE information qui n'est pas dans la transcription.
+8. Conserve toutes les valeurs numériques (EVN, amplitudes, scores) telles quelles.
+9. Style : phrases complètes, présent de l'indicatif, vocabulaire clinique (ex: "Le patient présente...", "L'examen révèle...").`
+
+  const userPrompt = `Zone anatomique : ${zone}
+
+Transcription de la consultation :
+"""
+${transcription}
+"""`
+
+  const raw = await callClaude(systemPrompt, userPrompt, 8192, 'claude-sonnet-4-6')
+
+  let parsed: NarrativeSection[]
+  try {
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
+    parsed = JSON.parse(cleaned)
+    if (!Array.isArray(parsed)) throw new Error('Expected array')
+  } catch (e) {
+    throw new Error(`Réponse Claude invalide : ${(e as Error).message.slice(0, 200)}`)
   }
 
   return parsed

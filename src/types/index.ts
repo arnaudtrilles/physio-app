@@ -360,3 +360,17 @@ export interface EvolutionIA {
   recommandations: Array<{ titre: string; detail: string }>
   conclusion: string
 }
+
+export type BilanMode = 'noyau' | 'complet' | 'vocal'
+
+export interface NarrativeSection {
+  id: string
+  titre: string
+  contenu: string
+}
+
+export interface NarrativeReport {
+  sections: NarrativeSection[]
+  transcription: string
+  generatedAt: string
+}

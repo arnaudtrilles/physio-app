@@ -1,5 +1,6 @@
 import { useState, useImperativeHandle, forwardRef, memo } from 'react'
-import type { BilanHandle } from '../../types'
+import type { BilanHandle, BilanMode, NarrativeReport } from '../../types'
+import { BilanVocalMode } from './BilanVocalMode'
 import { SmartObjectifsInline } from '../SmartObjectifsInline'
 import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
@@ -27,7 +28,9 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   // Mode Noyau EBP (JOSPT 2025 Rotator Cuff) activé par défaut.
-  const [coreMode, setCoreMode] = useState(true)
+  const [mode, setMode] = useState<BilanMode>('noyau')
+  const coreMode = mode === 'noyau'
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
 
   // Si initialData ne contient pas de redFlags existants, pré-cocher tous les booléens à "non".
   const redFlagsIsNew = !initialData?.redFlags || Object.keys(initialData.redFlags as Record<string, unknown>).length === 0
@@ -236,8 +239,11 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
       conseils: { conseilsRecos },
       questionnaireAnswers,
       questionnaireResults,
+      _mode: mode,
+      narrativeReport: vocalReport,
     }),
     setData: (data: Record<string, unknown>) => {
+      if (data._mode === 'vocal') { setMode('vocal'); if (data.narrativeReport) setVocalReport(data.narrativeReport as NarrativeReport); return }
       const d   = (data.douleur        as Record<string, unknown>) ?? {}
       const rfD = (data.redFlags       as Record<string, unknown>) ?? {}
       const yfD = (data.yellowFlags    as Record<string, unknown>) ?? {}
@@ -379,8 +385,9 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
 
   return (
     <div>
-      <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
-      {sectionList.map(sec => (
+      <BilanModeToggle mode={mode} onChange={setMode} />
+      {mode === 'vocal' && <BilanVocalMode zone="Épaule" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode !== 'vocal' && sectionList.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (

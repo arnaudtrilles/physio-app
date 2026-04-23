@@ -1,4 +1,6 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import type { BilanMode, NarrativeReport } from '../../types'
+import { BilanVocalMode } from './BilanVocalMode'
 import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
@@ -37,7 +39,9 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
 
   // Mode Noyau (EBP minimum) activé par défaut pour tout nouveau bilan.
   // Si initialData contient déjà des données, on reste en Noyau également — le kiné peut basculer en Complet à tout moment.
-  const [coreMode, setCoreMode] = useState(true)
+  const [mode, setMode] = useState<BilanMode>('noyau')
+  const coreMode = mode === 'noyau'
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
 
   const [douleur, setDouleur] = useState<DouleurState>(() => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))
   const [redFlags, setRedFlags] = useState<RedFlagsState>(() => initRedFlags(init.redFlags as Record<string, unknown> | undefined))
@@ -135,8 +139,11 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
       conseils: { recos: conseils },
       questionnaireAnswers: qAnswers,
       questionnaireResults: qResults,
+      _mode: mode,
+      narrativeReport: vocalReport,
     }),
     setData: (d: Record<string, unknown>) => {
+      if (d._mode === 'vocal') { setMode('vocal'); if (d.narrativeReport) setVocalReport(d.narrativeReport as NarrativeReport); return }
       if (d.douleur)        setDouleur(mergeDouleur(d.douleur as Record<string, unknown>))
       if (d.redFlags)       setRedFlags(initRedFlags(d.redFlags as Record<string, unknown>))
       if (d.yellowFlags)    setYellow(mergeYellow(d.yellowFlags as Record<string, unknown>))
@@ -195,8 +202,9 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
 
   return (
     <div>
-      <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
-      {sections.map(sec => (
+      <BilanModeToggle mode={mode} onChange={setMode} />
+      {mode === 'vocal' && <BilanVocalMode zone="Lombaire" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode !== 'vocal' && sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (

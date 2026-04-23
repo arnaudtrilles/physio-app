@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { DictableTextarea } from '../VoiceMic'
+import type { BilanMode } from '../../types'
 
 // ─── MRC scale description ─────────────────────────────────────────────────
 const MRC_DESCRIPTIONS = [
@@ -130,43 +131,48 @@ export function SectionHeader({ title, open, onToggle, color = 'var(--primary)',
 }
 
 // ─── BilanModeToggle ───────────────────────────────────────────────────────
-// Toggle "Mode Noyau" (EBP minimum) / "Mode Complet" en haut du bilan.
-// Le mode Noyau par défaut masque les sections/champs d'approfondissement
-// pour un bilan rapide (~10-15 min) aligné sur les Clinical Practice Guidelines.
-export function BilanModeToggle({ coreMode, onChange }: { coreMode: boolean; onChange: (core: boolean) => void }) {
-  const btn = (active: boolean, side: 'left' | 'right'): React.CSSProperties => ({
+// Toggle 3 modes : Noyau EBP / Complet / Vocal (enregistrement consultation).
+export function BilanModeToggle({ mode, onChange }: { mode: BilanMode; onChange: (mode: BilanMode) => void }) {
+  const btn = (active: boolean, radius: string): React.CSSProperties => ({
     flex: 1,
-    padding: '0.55rem 0.8rem',
-    fontSize: '0.78rem',
+    padding: '0.55rem 0.5rem',
+    fontSize: '0.75rem',
     fontWeight: 700,
     border: 'none',
     cursor: 'pointer',
     background: active ? 'var(--primary)' : 'transparent',
     color: active ? 'white' : 'var(--text-muted)',
-    borderRadius: side === 'left' ? '8px 0 0 8px' : '0 8px 8px 0',
+    borderRadius: radius,
     transition: 'all 0.15s',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 5,
+    whiteSpace: 'nowrap',
   })
+  const hints: Record<BilanMode, string> = {
+    noyau: 'Noyau minimum aligné EBP — les sections d\'approfondissement sont masquées.',
+    complet: 'Bilan détaillé complet — toutes les sections sont visibles.',
+    vocal: 'Mode consultation — enregistrez, Whisper transcrit, Claude rédige.',
+  }
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', border: '1.5px solid var(--border-color)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)' }}>
-        <button onClick={() => onChange(true)} style={btn(coreMode, 'left')} title="Bilan minimum EBP (~10-15 min)">
+        <button onClick={() => onChange('noyau')} style={btn(mode === 'noyau', '8px 0 0 8px')} title="Bilan minimum EBP (~10-15 min)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           Noyau EBP
         </button>
-        <button onClick={() => onChange(false)} style={btn(!coreMode, 'right')} title="Bilan détaillé complet">
+        <button onClick={() => onChange('complet')} style={{ ...btn(mode === 'complet', '0'), borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)' }} title="Bilan détaillé complet">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
           Complet
         </button>
+        <button onClick={() => onChange('vocal')} style={btn(mode === 'vocal', '0 8px 8px 0')} title="Mode consultation vocale (Whisper + Claude)">
+          🎙 Vocal
+        </button>
       </div>
-      {coreMode && (
-        <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
-          Noyau minimum aligné EBP — les sections d'approfondissement sont masquées.
-        </div>
-      )}
+      <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
+        {hints[mode]}
+      </div>
     </div>
   )
 }

@@ -1,4 +1,6 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import type { BilanMode, NarrativeReport } from '../../types'
+import { BilanVocalMode } from './BilanVocalMode'
 import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
@@ -79,7 +81,9 @@ function MobInput({ label, value, onChange }: { label: string; value: string; on
 export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
-  const [coreMode, setCoreMode] = useState(true)
+  const [mode, setMode] = useState<BilanMode>('noyau')
+  const coreMode = mode === 'noyau'
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
 
   // ── Section 1 : Contexte de vie ──────────────────────────────────────────
   const _ctx = (init.contexte as Record<string, unknown>) ?? {}
@@ -219,8 +223,11 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
       conseils: { recos: conseils },
       questionnaireAnswers: qAnswers,
       questionnaireResults: qResults,
+      _mode: mode,
+      narrativeReport: vocalReport,
     }),
     setData: (data: Record<string, unknown>) => {
+      if (data._mode === 'vocal') { setMode('vocal'); if (data.narrativeReport) setVocalReport(data.narrativeReport as NarrativeReport); return }
       const ctx    = (data.contexte     as Record<string, unknown>) ?? {}
       const chutes = (data.chutes       as Record<string, unknown>) ?? {}
       const rfd    = (data.redFlags     as Record<string, unknown>) ?? {}
@@ -301,8 +308,9 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
 
   return (
     <div>
-      <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
-      {sections.map(sec => (
+      <BilanModeToggle mode={mode} onChange={setMode} />
+      {mode === 'vocal' && <BilanVocalMode zone="Gériatrique" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode !== 'vocal' && sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (

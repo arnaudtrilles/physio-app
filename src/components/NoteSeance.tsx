@@ -1,4 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
+import type { BilanMode } from '../types'
 import { DictableTextarea } from './VoiceMic'
 import { SectionHeader, BilanModeToggle, EVASlider } from './bilans/shared'
 
@@ -95,7 +96,8 @@ interface NoteSeanceProps {
 
 export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
   ({ initialData, onGenerateExercices, onExportExercicesPDF }, ref) => {
-    const [coreMode, setCoreMode] = useState(true)
+    const [mode, setMode] = useState<BilanMode>('noyau')
+    const coreMode = mode === 'noyau'
     const [open, setOpen] = useState<Record<string, boolean>>({ subjective: true, objective: true, assessment: true, plan: true })
     const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
@@ -354,7 +356,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
     if (coreMode) {
       return (
         <div>
-          <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
+          <BilanModeToggle mode={mode} onChange={setMode} />
 
           {/* EVN DU JOUR */}
           <div style={{ marginBottom: 20 }}>
@@ -464,7 +466,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
 
     return (
       <div>
-        <BilanModeToggle coreMode={coreMode} onChange={setCoreMode} />
+        <BilanModeToggle mode={mode} onChange={setMode} />
 
         {sections.map(sec => (
           <div key={sec.id} style={{ marginBottom: 4 }}>
