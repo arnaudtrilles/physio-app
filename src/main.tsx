@@ -6,6 +6,13 @@ import { applyInitialTheme } from './hooks/useTheme'
 
 applyInitialTheme()
 
+// Recharge automatiquement quand un nouveau service worker prend le contrôle
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload()
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
