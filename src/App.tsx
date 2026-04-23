@@ -61,6 +61,7 @@ import { AuthScreen } from './components/AuthScreen'
 import { OnboardingScreen } from './components/OnboardingScreen'
 import { Tutorial, type TutorialStep } from './components/Tutorial'
 import { SplashScreen } from './components/SplashScreen'
+import { AdminDashboard } from './components/AdminDashboard'
 // ── Design system + patient command center ────────────────────────────────
 import { colors as c } from './design/tokens'
 import { PatientHeader } from './components/patient/PatientHeader'
@@ -68,7 +69,7 @@ import { PatientHeroCard } from './components/patient/PatientHeroCard'
 import { ConsultationChooser } from './components/patient/ConsultationChooser'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie' | 'admin'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -3831,7 +3832,13 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                     </div>
                   </div>
 
-                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
+                  <button
+                    onClick={() => setStep('admin')}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.65rem', borderRadius:10, background:'rgba(15,23,42,0.05)', border:'1.5px solid rgba(15,23,42,0.12)', color:'#0f172a', fontWeight:600, fontSize:'0.84rem', cursor:'pointer', marginBottom:'0.75rem' }}>
+                    ⬡ Dashboard admin
+                  </button>
+
+                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'0.5rem' }}
                     onClick={() => {
                       setProfile(profileEditDraft)
                       showToast('Profil enregistré', 'success')
@@ -4571,6 +4578,19 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Admin Dashboard ───────────────────────────────────────────────────── */}
+      {step === 'admin' && (
+        <AdminDashboard
+          db={db}
+          dbIntermediaires={dbIntermediaires}
+          dbNotes={dbNotes}
+          dbObjectifs={dbObjectifs}
+          dbExerciceBank={dbExerciceBank}
+          profile={profile}
+          onClose={() => setStep('profile')}
+        />
       )}
 
       {/* ── Identity step ──────────────────────────────────────────────────────── */}
