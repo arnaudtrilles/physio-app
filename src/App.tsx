@@ -1632,7 +1632,7 @@ STRUCTURE (n'inclure que si données présentes) :
         const initials = `${(profile.nom || 'W')[0]}${(profile.prenom || '')[0] || ''}`.toUpperCase()
         return (
           <div className={slideEntry || swipedNav.current ? '' : 'fade-in'} style={{ ...swipeDragStyle, ...slideEntryStyle, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-            <div className="scroll-area" style={{ flex: 1, padding: '0.5rem 0.35rem 4rem' }}>
+            <div className="scroll-area" style={{ flex: 1, padding: '0.5rem 0.35rem 0' }}>
               {/* Header — centered with settings */}
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.25rem', paddingTop: '0.3rem' }}>
                 <button onClick={() => setStep('settings')} style={{ position: 'absolute', top: '0.3rem', right: 0, width: 30, height: 30, borderRadius: 'var(--radius-full)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -1689,8 +1689,8 @@ STRUCTURE (n'inclure que si données présentes) :
               <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
 
             </div>
-            {/* Action buttons — fixed bottom */}
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0.6rem 0.75rem', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--base-bg) 70%, transparent)', display: 'flex', gap: '0.5rem' }}>
+            {/* Action buttons — sticky bottom */}
+            <div style={{ flexShrink: 0, padding: '0.6rem 0.75rem', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--base-bg) 70%, transparent)', display: 'flex', gap: '0.5rem' }}>
               <button
                 onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
