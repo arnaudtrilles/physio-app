@@ -1,7 +1,8 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
-import type { BilanMode } from '../types'
+import type { BilanMode, NarrativeReport } from '../types'
 import { DictableTextarea } from './VoiceMic'
 import { SectionHeader, BilanModeToggle, EVASlider } from './bilans/shared'
+import { BilanVocalMode } from './bilans/BilanVocalMode'
 
 export interface NoteSeanceHandle {
   getData: () => NoteSeanceData
@@ -90,14 +91,16 @@ const PROCHAINES = [
 
 interface NoteSeanceProps {
   initialData?: NoteSeanceData
+  zone?: string
   onGenerateExercices?: (prompt: string) => Promise<ExerciceDomicile[]>
   onExportExercicesPDF?: (exercices: ExerciceDomicile[]) => void
 }
 
 export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
-  ({ initialData, onGenerateExercices, onExportExercicesPDF }, ref) => {
+  ({ initialData, zone, onGenerateExercices, onExportExercicesPDF }, ref) => {
     const [mode, setMode] = useState<BilanMode>('noyau')
     const coreMode = mode === 'noyau'
+    const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
     const [open, setOpen] = useState<Record<string, boolean>>({ subjective: true, objective: true, assessment: true, plan: true })
     const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
@@ -351,6 +354,16 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
         )}
       </div>
     )
+
+    // ── VOCAL MODE ───────────────────────────────────────────────
+    if (mode === 'vocal') {
+      return (
+        <div>
+          <BilanModeToggle mode={mode} onChange={setMode} />
+          <BilanVocalMode zone={zone ?? 'Séance'} initialReport={vocalReport} onChange={setVocalReport} />
+        </div>
+      )
+    }
 
     // ── CORE MODE (flat, simple) ──────────────────────────────────
     if (coreMode) {

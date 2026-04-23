@@ -4975,7 +4975,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             </header>
 
             <div className="scroll-area" style={{ paddingBottom: '9rem' }}>
-              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} onGenerateExercices={handleGenerateExercices} onExportExercicesPDF={handleExportExercicesPDF} />
+              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} zone={noteSeanceZone ?? undefined} onGenerateExercices={handleGenerateExercices} onExportExercicesPDF={handleExportExercicesPDF} />
             </div>
 
             <div className="fixed-bottom">
