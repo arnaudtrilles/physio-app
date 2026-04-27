@@ -5336,7 +5336,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         const notes = getPatientNotes(selectedPatient).filter(r => matchBt(r.bilanType, r.zone))
         const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
         return (
-          <div className="app-container" style={{ padding: '1rem 1.5rem', overflowY: 'auto' }}>
+          <div className="app-container" style={{ paddingLeft: '1.5rem', paddingRight: '1.5rem', paddingBottom: '1rem', overflowY: 'auto' }}>
             <header className="screen-header">
               <button className="btn-back" onClick={() => setStep('database')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
