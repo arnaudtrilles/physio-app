@@ -56,12 +56,15 @@ export interface PatientDocument {
   masked?: boolean
 }
 
+export type Sexe = 'masculin' | 'feminin'
+
 export interface BilanRecord {
   id: number
   nom: string
   prenom: string
   dateBilan: string
   dateNaissance: string
+  sexe?: Sexe
   zoneCount: number
   evn?: number
   zone?: string
@@ -352,9 +355,31 @@ export interface AICallAuditEntry {
 
 export interface EvolutionIA {
   generatedAt: string
+  /** Résumé clinique global 3-4 phrases (synthèse narrative). */
   resume: string
   tendance: 'amelioration' | 'stationnaire' | 'regression' | 'mixte'
+  /** Tableau clinique initial (prose médicale, 3-5 phrases). */
+  tableauInitial?: string
+  /** Évolution clinique structurée (4 sous-blocs narratifs). */
+  evolutionClinique?: {
+    syntheseGlobale: string
+    evolutionSymptomatique: string
+    evolutionFonctionnelle: string
+    evolutionObjective: string
+  }
   progression: Array<{ bilanNum: number; date: string; evn: number | null; commentaire: string; etape?: string }>
+  /** Interventions réalisées au fil de la PEC (3 sous-blocs). */
+  interventionsRealisees?: {
+    techniquesManuelles: string
+    exercicesProgrammes: string
+    educationConseils: string
+  }
+  /** État clinique actuel (symptômes, fonctionnel, objectif). */
+  etatActuel?: {
+    symptomes: string
+    fonctionnel: string
+    objectif: string
+  }
   pointsForts: string[]
   pointsVigilance: string[]
   recommandations: Array<{ titre: string; detail: string }>

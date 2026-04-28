@@ -109,7 +109,9 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
   const redFlags = bilanData.redFlags as Record<string, unknown> | undefined
   const yellowFlags = bilanData.yellowFlags as Record<string, unknown> | undefined
   const scores = bilanData.scores as Record<string, unknown> | undefined
-  const tests = bilanData.tests as Record<string, unknown> | undefined
+  // Les composants de bilan (Lombaire, Hanche, Cheville…) sérialisent les tests sous `testsSpecifiques`.
+  // On garde la compat avec l'ancienne clé `tests` par sécurité.
+  const tests = (bilanData.testsSpecifiques ?? bilanData.tests) as Record<string, unknown> | undefined
 
   const flagsPositifs = (obj: Record<string, unknown> | undefined) =>
     obj ? Object.entries(obj).filter(([, v]) => v === 'oui' || v === true).map(([k]) => k).join(', ') || 'Aucun' : 'Non renseigné'
@@ -355,10 +357,14 @@ export function buildEvolutionPrompt(ctx: EvolutionContext): string {
   const { age, sexe, scrub } = anonymizePatientData(patient)
 
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
-  const sexeLine = sexe ? ` — Sexe : ${sexe}` : ''
   const profession = scrub(patient.profession || 'Non renseignée')
   const sport = scrub(patient.sport || 'Non renseignée')
   const antecedents = scrub(patient.antecedents || 'Non renseignés')
+
+  const sexeNorm = sexe === 'feminin' ? 'feminin' : sexe === 'masculin' ? 'masculin' : null
+  const sexeLine = sexeNorm
+    ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur (voir règle 3).`
+    : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
 
   const flagsPositifs = (obj: Record<string, unknown> | undefined) =>
     obj ? Object.entries(obj).filter(([, v]) => v === 'oui' || v === true).map(([k]) => k).join(', ') || 'Aucun' : 'Aucun'
@@ -373,6 +379,17 @@ export function buildEvolutionPrompt(ctx: EvolutionContext): string {
     ...intermediaires.map<TimelineItem>(i => ({ kind: 'intermediaire', date: i.date, ts: parseFrDateStr(i.date), entry: i })),
     ...seances.map<TimelineItem>(s => ({ kind: 'seance', date: s.date, ts: parseFrDateStr(s.date), entry: s })),
   ].sort((a, b) => a.ts - b.ts)
+
+  // Durée totale PEC (jours entre 1ère et dernière étape)
+  const dateDebut = timeline.length > 0 ? timeline[0].date : '—'
+  const dateFin = timeline.length > 0 ? timeline[timeline.length - 1].date : '—'
+  const dureeJours = timeline.length > 1
+    ? Math.max(0, Math.round((timeline[timeline.length - 1].ts - timeline[0].ts) / 86400000))
+    : 0
+  const dureeLine = dureeJours > 0 ? `${dureeJours} jours (${dateDebut} → ${dateFin})` : 'Étape unique'
+
+  // Motif initial = zone du premier bilan
+  const motifInitial = bilans[0]?.zone ?? ctx.currentZoneLabel ?? 'Non renseigné'
 
   const timelineStr = timeline.map((item, idx) => {
     const stepNum = idx + 1
@@ -417,39 +434,100 @@ Prochaine étape : ${scrub(prochaines)}
 Plan : ${scrub(d.notePlan ?? 'N/R')}`
   }).join('\n\n')
 
-  const zoneScope = ctx.currentZoneLabel ? `\nPRISE EN CHARGE ANALYSÉE : ${ctx.currentZoneLabel} (RAPPORT CENTRÉ UNIQUEMENT SUR CETTE ZONE)` : ''
+  const zoneScope = ctx.currentZoneLabel ?? motifInitial
   const antecedentsPEC = (ctx.closedAntecedents && ctx.closedAntecedents.length > 0)
-    ? `\nANTÉCÉDENTS D'AUTRES PEC CLÔTURÉES (contexte patient uniquement, NE PAS mélanger à l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
+    ? `\n\nANTÉCÉDENTS D'AUTRES PEC CLÔTURÉES (contexte patient uniquement, NE PAS mélanger à l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
     : ''
 
-  return `Tu es un ${roleTitle(ctx.therapistProfession)} expert chargé de rédiger un rapport d'évolution clinique complet pour un suivi de patient.
+  return `${sexeLine}
 
-PATIENT (données anonymisées — aucun nom ni identifiant) :
-- ${ageLine}${sexeLine}
+========================================
+SECTION 1 — DONNÉES PATIENT
+========================================
+- Âge : ${ageLine}
+- Sexe : ${sexeNorm ?? 'inconnu'}
 - Profession : ${profession}
 - Activité sportive : ${sport}
-- Antécédents : ${antecedents}
-- Bilans initiaux : ${bilans.length} | Bilans intermédiaires : ${intermediaires.length} | Séances : ${seances.length}
-- Total d'étapes : ${timeline.length}${zoneScope}${antecedentsPEC}
+- Antécédents médicaux : ${antecedents}
+- Motif initial de consultation : ${motifInitial}
+- Date de début de PEC : ${dateDebut}
+- Durée totale de PEC analysée : ${dureeLine}${antecedentsPEC}
 
-HISTORIQUE COMPLET DE LA PEC (ordre chronologique — inclut bilans initiaux, bilans intermédiaires et notes de séance pour la zone ciblée) :
-${timelineStr}
+========================================
+SECTION 2 — PRISE EN CHARGE ANALYSÉE
+========================================
+- Zone ciblée : ${zoneScope} (RAPPORT CENTRÉ UNIQUEMENT SUR CETTE ZONE)
+- Nombre de bilans initiaux : ${bilans.length}
+- Nombre de bilans intermédiaires : ${intermediaires.length}
+- Nombre de séances documentées : ${seances.length}
+- Total d'étapes analysées : ${timeline.length}
 
-INSTRUCTIONS :
-Rédige un rapport d'évolution complet en français médical professionnel, basé sur TOUTE la chronologie (bilans initiaux, bilans intermédiaires ET séances). Pour chaque étape, indique clairement son type dans le champ "etape" (ex : "Bilan initial", "Bilan intermédiaire", "Séance N°2"). Le champ "evn" doit contenir la douleur perçue (EVN du bilan ou EVA de la séance) quand disponible, sinon null. Le champ "bilanNum" sert de numéro d'étape séquentiel (1, 2, 3…).
-Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour, selon ce schéma exact :
+========================================
+SECTION 3 — CHRONOLOGIE COMPLÈTE
+========================================
+Ordre chronologique strict (1 = début de PEC, ${timeline.length} = étape la plus récente). Les EVN sont les valeurs déclarées par le patient ; les EVA proviennent des notes de séance. Les champs "N/R" signifient Non Renseigné.
+
+${timelineStr || '(Aucune étape exploitable — rapport non génératif.)'}
+
+========================================
+SECTION 4 — INSTRUCTIONS DE RÉDACTION (10 règles absolues)
+========================================
+1. ANCRAGE FACTUEL STRICT — N'utilise QUE les données de la section 3. Aucune invention, aucune extrapolation, aucune pathologie ou mécanisme lésionnel non explicité dans les données. Si une information manque, écris "Non documenté dans le suivi" ou laisse le champ vide ([]).
+2. PROSE MÉDICALE — Rédige en français médical professionnel, phrases articulées (sujet + verbe + complément), pas de style télégraphique, pas de listes à puces dans les blocs narratifs (tableauInitial, evolutionClinique.*, interventionsRealisees.*, etatActuel.*, resume, conclusion). Les tableaux (pointsForts, pointsVigilance, recommandations, progression) sont en revanche listes structurées.
+3. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "née", "Elle", "active", "sportive". Si \`masculin\` : "Le patient", "âgé", "né", "Il", "actif", "sportif". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule SEXE_PATIENT fait foi.
+4. TERMINOLOGIE VERBATIM — Noms de tests, articulations, échelles, acronymes : reproduis-les exactement comme dans les données. "Lasègue" reste "Lasègue", jamais "signe de Lasègue inversé" sauf si écrit tel quel.
+5. PAS DE POURCENTAGES — aucune hypothèse diagnostique chiffrée (ni %, ni probabilité numérique). Langage qualitatif uniquement : "évolution favorable", "amélioration marquée", "progression lente", "stagnation relative".
+6. CALIBRAGE LONGUEUR — tableauInitial : 3-5 phrases. evolutionClinique.syntheseGlobale : 3-4 phrases. evolutionClinique.evolutionSymptomatique/fonctionnelle/objective : 2-4 phrases chacun. interventionsRealisees.* : 2-3 phrases chacun. etatActuel.* : 2-3 phrases chacun. resume : 3-4 phrases. conclusion : 3-5 phrases. Respecte ces fourchettes.
+7. TIMELINE — le champ "progression" liste CHAQUE étape de la section 3 dans l'ordre chronologique. "bilanNum" = numéro d'étape séquentiel (1, 2, 3…). "etape" = libellé type ("Bilan initial", "Bilan intermédiaire N°2", "Séance N°3"). "evn" = valeur EVN ou EVA quand disponible, sinon null. "commentaire" = 1 phrase courte (15-25 mots) résumant cliniquement l'étape.
+8. TENDANCE — valeur unique parmi : "amelioration", "stationnaire", "regression", "mixte". Évalue sur l'ensemble de la chronologie (EVN/EVA, capacité fonctionnelle déclarée, tolérance). "mixte" = trajectoires divergentes (ex. douleur qui baisse mais fonction qui régresse).
+9. TON CLINIQUE — concis, factuel, sans pathos, sans jargon gratuit, sans qualificatifs subjectifs ("malheureusement", "heureusement", "impressionnant"). Le rapport s'adresse à un médecin prescripteur : il doit pouvoir être lu en 2 minutes et donner une image fidèle de la PEC.
+10. UNE INFO = UNE PLACE — ne répète pas une donnée dans plusieurs champs. Le resume est une synthèse narrative globale ; evolutionClinique détaille par dimension ; etatActuel est une photographie à la dernière étape ; conclusion est une orientation thérapeutique prospective.
+
+RÉFÉRENTIEL KNODE (acronymes autorisés — n'invente AUCUNE expansion) :
+- EVN = Échelle Visuelle Numérique
+- EVA = Échelle Visuelle Analogique
+- HAD = Hospital Anxiety and Depression scale
+- SLR = Straight Leg Raise (Lasègue)
+- PKB = Prone Knee Bend (test de Léri)
+- Test TA = Test d'Adam
+- RAS = Rien À Signaler
+- PEC = Prise En Charge
+Tout autre acronyme non listé : conservé verbatim sans expansion.
+
+========================================
+SECTION 5 — FORMAT DE SORTIE (JSON STRICT)
+========================================
+Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour. Schéma exact (les champs obligatoires doivent tous être présents ; laisse "" ou [] si "Non documenté dans le suivi") :
+
 {
-  "resume": "Résumé clinique global de l'évolution en 3-4 phrases",
+  "resume": "Synthèse narrative globale de la PEC en 3-4 phrases (motif, durée, trajectoire globale).",
   "tendance": "amelioration | stationnaire | regression | mixte",
+  "tableauInitial": "Description clinique de l'état du patient à l'entrée en PEC, 3-5 phrases en prose médicale (symptômes, retentissement fonctionnel, contexte).",
+  "evolutionClinique": {
+    "syntheseGlobale": "Trajectoire générale sur toute la PEC en 3-4 phrases (tendance + moments clés).",
+    "evolutionSymptomatique": "Évolution de la douleur et des symptômes perçus en 2-4 phrases (EVN/EVA, type, rythme, déclencheurs).",
+    "evolutionFonctionnelle": "Évolution des capacités fonctionnelles en 2-4 phrases (AVQ, activités sportives/professionnelles, autonomie).",
+    "evolutionObjective": "Évolution des données objectives en 2-4 phrases (mobilités, force, tests, scores fonctionnels)."
+  },
   "progression": [
-    { "bilanNum": 1, "etape": "Bilan initial", "date": "dd/mm/yyyy", "evn": 8, "commentaire": "Observation clinique courte" }
+    { "bilanNum": 1, "etape": "Bilan initial", "date": "dd/mm/yyyy", "evn": 8, "commentaire": "Observation clinique courte (15-25 mots)." }
   ],
-  "pointsForts": ["Point positif 1", "Point positif 2"],
-  "pointsVigilance": ["Point de vigilance 1"],
+  "interventionsRealisees": {
+    "techniquesManuelles": "Techniques manuelles appliquées en 2-3 phrases (mobilisations, thérapie manuelle, massage, etc.).",
+    "exercicesProgrammes": "Exercices prescrits et programme actif en 2-3 phrases (renforcement, mobilité, proprioception, auto-rééducation).",
+    "educationConseils": "Éducation thérapeutique et conseils délivrés en 2-3 phrases (ergonomie, gestion de la charge, facteurs contributifs)."
+  },
+  "etatActuel": {
+    "symptomes": "État symptomatique à la dernière étape en 2-3 phrases (EVN/EVA actuelle, caractère, rythme).",
+    "fonctionnel": "Capacités fonctionnelles actuelles en 2-3 phrases (AVQ, retour activités).",
+    "objectif": "Données objectives à la dernière étape en 2-3 phrases (mobilités, force, tests de contrôle)."
+  },
+  "pointsForts": ["Élément positif factuel 1", "Élément positif factuel 2"],
+  "pointsVigilance": ["Point de vigilance factuel 1"],
   "recommandations": [
-    { "titre": "Titre de la recommandation", "detail": "Description détaillée" }
+    { "titre": "Titre court de la recommandation", "detail": "Description précise de la recommandation (2-3 phrases)." }
   ],
-  "conclusion": "Conclusion clinique et orientation thérapeutique pour la suite de la prise en charge"
+  "conclusion": "Conclusion clinique et orientation thérapeutique pour la suite de la PEC en 3-5 phrases (poursuite, fin de PEC, réorientation éventuelle)."
 }`
 }
 
@@ -457,14 +535,49 @@ export function parseEvolutionIA(raw: string): EvolutionIA | null {
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return null
-    const parsed = JSON.parse(jsonMatch[0]) as EvolutionIA
+    const parsed = JSON.parse(jsonMatch[0]) as Partial<EvolutionIA>
     if (!parsed.resume || !parsed.tendance || !parsed.progression) return null
+
+    // Normalisation des sous-blocs narratifs — si l'IA a omis, on laisse undefined (UI masque).
+    // Si elle a fourni un objet partiel, on complète avec chaînes vides pour éviter les crashs.
+    const evClinique = parsed.evolutionClinique
+      ? {
+          syntheseGlobale: parsed.evolutionClinique.syntheseGlobale ?? '',
+          evolutionSymptomatique: parsed.evolutionClinique.evolutionSymptomatique ?? '',
+          evolutionFonctionnelle: parsed.evolutionClinique.evolutionFonctionnelle ?? '',
+          evolutionObjective: parsed.evolutionClinique.evolutionObjective ?? '',
+        }
+      : undefined
+
+    const interventions = parsed.interventionsRealisees
+      ? {
+          techniquesManuelles: parsed.interventionsRealisees.techniquesManuelles ?? '',
+          exercicesProgrammes: parsed.interventionsRealisees.exercicesProgrammes ?? '',
+          educationConseils: parsed.interventionsRealisees.educationConseils ?? '',
+        }
+      : undefined
+
+    const etatActuel = parsed.etatActuel
+      ? {
+          symptomes: parsed.etatActuel.symptomes ?? '',
+          fonctionnel: parsed.etatActuel.fonctionnel ?? '',
+          objectif: parsed.etatActuel.objectif ?? '',
+        }
+      : undefined
+
     return {
-      ...parsed,
       generatedAt: new Date().toISOString(),
+      resume: parsed.resume,
+      tendance: parsed.tendance,
+      tableauInitial: parsed.tableauInitial ?? undefined,
+      evolutionClinique: evClinique,
+      progression: parsed.progression,
+      interventionsRealisees: interventions,
+      etatActuel,
       pointsForts: parsed.pointsForts ?? [],
       pointsVigilance: parsed.pointsVigilance ?? [],
       recommandations: parsed.recommandations ?? [],
+      conclusion: parsed.conclusion ?? '',
     }
   } catch {
     return null
@@ -751,7 +864,9 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
   const examClinique = bilanData.examClinique as Record<string, unknown> | undefined
   const neurologique = bilanData.neurologique as Record<string, unknown> | undefined
   const mecanosensibilite = bilanData.mecanosensibilite as Record<string, unknown> | undefined
-  const tests = bilanData.tests as Record<string, unknown> | undefined
+  // Les composants de bilan (Lombaire, Hanche, Cheville…) sérialisent les tests sous `testsSpecifiques`.
+  // On garde la compat avec l'ancienne clé `tests` par sécurité.
+  const tests = (bilanData.testsSpecifiques ?? bilanData.tests) as Record<string, unknown> | undefined
   const scores = bilanData.scores as Record<string, unknown> | undefined
   const contrat = (bilanData.contrat ?? bilanData.contratKine) as Record<string, unknown> | undefined
   const ottawa = bilanData.ottawa as Record<string, unknown> | undefined
@@ -803,11 +918,14 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
   const ottawaStr = renderSection(ottawa)
   const cinqD3NStr = renderSection(cinqD3N)
 
+  // Hypothèses : on passe un classement qualitatif (rang) SANS pourcentages — la section 7
+  // de sortie doit être rédigée en langage médical argumenté, pas en statistiques chiffrées.
+  const rangLabel = (r: number) => r === 1 ? 'Principale' : r === 2 ? 'Second plan' : r === 3 ? 'Troisième plan' : `Rang ${r}`
   const analyseSection = analyseIA ? `
-ANALYSE CLINIQUE (données issues du bilan — à intégrer au diagnostic, SANS rien ajouter) :
+ANALYSE CLINIQUE (données issues du bilan — à intégrer au diagnostic, SANS rien ajouter, SANS reproduire de pourcentages) :
 - Diagnostic retenu : ${analyseIA.diagnostic.titre}
 - Justification : ${scrub(analyseIA.diagnostic.description)}
-- Hypothèses : ${analyseIA.hypotheses.map(h => `H${h.rang} (${h.probabilite}%) ${h.titre} — ${scrub(h.justification)}`).join(' | ')}
+- Hypothèses (classement qualitatif, NE PAS reporter le rang sous forme de %) : ${analyseIA.hypotheses.map(h => `[${rangLabel(h.rang)}] ${h.titre} — ${scrub(h.justification)}`).join(' | ')}
 - Plan de traitement : ${analyseIA.priseEnCharge.map(p => `${p.phase} : ${p.titre} — ${scrub(p.detail)}`).join(' | ')}
 ${analyseIA.alertes.length > 0 ? `- Alertes cliniques : ${analyseIA.alertes.join(', ')}` : ''}` : ''
 
@@ -816,13 +934,34 @@ ${analyseIA.alertes.length > 0 ? `- Alertes cliniques : ${analyseIA.alertes.join
   const sport = defined(patient.sport)
   const antecedents = defined(patient.antecedents)
 
-  return `RÈGLES ABSOLUES :
-1. Tu ne peux utiliser QUE les informations présentes dans ce document. Zéro invention, zéro supposition.
-2. Si une donnée est absente (champ vide, non fourni), tu NE la mentionnes PAS.
-3. Un test "non" ou "négatif" N'EST PAS absent — c'est un résultat clinique à inclure obligatoirement.
-4. Tu n'inventes aucun résultat qui n'est pas explicitement dans les données.
-5. Tu n'utilises pas le nom ni le prénom du patient.
-6. Le rapport doit être fluide et professionnel, rigoureusement fidèle aux données.
+  const sexeNorm = sexe === 'feminin' ? 'feminin' : sexe === 'masculin' ? 'masculin' : null
+  const sexeLine = sexeNorm
+    ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur (voir règle 18).`
+    : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
+
+  return `CONTEXTE : Bilan de Physiothérapie destiné au médecin prescripteur. Rédige en respectant strictement la structure figée (9 sections numérotées 1→9 dans cet ordre, sans saut — titres VERBATIM ; section 10 Signature rendue par le template) et toutes les règles du system prompt, en particulier : AUCUNE puce dans les sections 3 (Symptomatologie), 5 (Examen clinique) et 6 (Tests spécifiques), déduplication sémantique des synonymes, placement rigoureux des données (palpation → section 5, localisation / facteurs douleur → section 3), terminologie reproduite verbatim.
+
+${sexeLine}
+
+RÈGLES ABSOLUES (rappel) :
+1. SÉCURITÉ CLINIQUE — Un réflexe ostéotendineux (achilléen, rotulien, quadricipital, Babinski, etc.) renseigné « négatif » / « non » / « normal » signifie NORMAL ET SYMÉTRIQUE. INTERDICTION d'écrire « aboli », « aréflexie », « hyporéflexie » sauf si l'entrée le dit explicitement.
+2. SÉMANTIQUE GLOBALE — « négatif » = RASSURANT pour TOUS les items cliniques (drapeaux rouges/jaunes/bleus/noirs, tests neurodynamiques, tests spécifiques, réflexes). Formulations autorisées : « négatif », « absent », « normal », « rassurant », « non retrouvé ». INTERDITES : « non renseigné », « non documenté », « aboli ».
+3. Utilise UNIQUEMENT les informations présentes ci-dessous. Zéro invention, zéro supposition.
+4. Les rubriques d'entrée (« Scores Fonctionnels », « Notes Complémentaires », « Mécanosensibilité »…) sont des véhicules de données — IGNORE leurs intitulés et redistribue chaque donnée dans la section 1→9 appropriée selon son contenu clinique.
+5. TITRES VERBATIM — Les 9 titres sont imposés mot pour mot : « 1. Profil du patient et contexte », « 2. Anamnèse », « 3. Symptomatologie douloureuse », « 4. Drapeaux cliniques », « 5. Examen clinique », « 6. Tests spécifiques », « 7. Synthèse diagnostique », « 8. Projet thérapeutique », « 9. Conclusion ». Aucune variation, aucun enrichissement, aucune reformulation.
+6. Sections 1 à 6 : si aucune donnée, écris le titre puis « Non renseigné lors de ce bilan. ». Sections 7, 8 et 9 : JAMAIS « Non renseigné » — elles sont GÉNÉRÉES par raisonnement clinique à partir des sections 1–6.
+7. Un test « non » / « négatif » (hors réflexes, cf. règle 1) N'EST PAS une donnée absente — c'est un résultat clinique à inclure, rédigé en prose (règle B), jamais en puces.
+8. Terminologie REPRODUITE VERBATIM : noms de tests, articulations, échelles, acronymes — jamais de variation inventée (« temporo-auriculaire » reste « temporo-auriculaire », jamais « temporo-acromiale »).
+9. Section 1 = CADRAGE PUR (âge, zone, motif) — ATCD/traitements/histoire de la plainte appartiennent à la section 2. Section 9 = CONCLUSION COURTE (2-3 phrases) — pas de liste de vigilance ni de red flags.
+10. UNE INFO = UNE PLACE DÉTAILLÉE. La section 7 reprend les éléments en synthèse articulée au raisonnement, sans redétailler ce qui est déjà exposé en sections 2–6.
+11. Pas de surtitre markdown (\`#\` ou \`##\`). Ta sortie commence directement par « ### 1. Profil du patient et contexte ».
+12. N'utilise JAMAIS le nom ni le prénom du patient.
+13. PAS DE POURCENTAGES — aucune hypothèse diagnostique n'est chiffrée en % ni en probabilité numérique. Langage qualitatif uniquement : « hypothèse principale », « différentiel évoqué et écarté », « compatible avec », « évocateur de ».
+14. ACRONYMES — n'invente JAMAIS l'expansion d'un acronyme. Référentiel Knode autorisé : Test TA = Test d'Adam ; SLR = Straight Leg Raise (Lasègue) ; PKB = Prone Knee Bend (test de Léri) ; HAD = Hospital Anxiety and Depression scale ; EVN = Échelle Visuelle Numérique ; EVA = Échelle Visuelle Analogique ; RAS = Rien À Signaler. Tout autre acronyme → conservé verbatim sans expansion.
+15. ANCRAGE FACTUEL STRICT — pas de contexte socio-professionnel, pas de segment vertébral chiffré (L4-L5, T12-L2, C5-C6…), pas de facteur contributif inventé qui ne figure pas explicitement dans les données.
+16. PROJET THÉRAPEUTIQUE (section 8) — structure par 3 à 5 axes (contrôle antalgique, mobilité, renforcement, éducation, reprise activités), techniques introduites par formulations conditionnelles (« pourront être mobilisés », « selon l'évolution », « en fonction de la réponse clinique »). Pas de jalons datés.
+17. PAS DE SÉPARATEURS HORIZONTAUX (\`---\`, \`***\`, \`___\`) — ni entre sections, ni à l'intérieur.
+18. ACCORD GRAMMATICAL SELON LE SEXE — Utilise la valeur SEXE_PATIENT en tête de prompt. Si \`feminin\` : « La patiente », « âgée », « née », « Elle », « active », « sportive », « kiné­sithérapeute traitante ». Si \`masculin\` : « Le patient », « âgé », « né », « Il », « actif », « sportif », « kinésithérapeute traitant ». INTERDICTIONS ABSOLUES — aucune formulation inclusive ni neutre tolérée : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule la valeur SEXE_PATIENT fait foi. Si \`inconnu\` (cas de repli uniquement) : rédige au masculin singulier par défaut, toujours sans inclusif.
 
 DONNÉES DU BILAN (source unique — ne rien ajouter) :
 
