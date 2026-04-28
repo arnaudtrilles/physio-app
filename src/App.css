@@ -602,6 +602,17 @@
   display: inline-block;
 }
 
+/* Small spinner inheriting currentColor — for buttons on light backgrounds */
+.spinner-sm {
+  width: 13px; height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  opacity: 0.85;
+}
+
 /* Collapsible bilan section */
 .bilan-collapsible-header {
   display: flex; align-items: center; justify-content: space-between;

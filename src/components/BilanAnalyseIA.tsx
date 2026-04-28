@@ -20,6 +20,8 @@ interface BilanAnalyseIAProps {
   onBack: () => void
   onClose?: () => void
   onExport: () => void
+  /** True while the parent is generating/exporting the PDF — drives spinner + disabled on the export button. */
+  exporting?: boolean
   onGoToProfile: () => void
   onFicheExercice?: () => void
 }
@@ -43,7 +45,7 @@ function NeuralIcon() {
   )
 }
 
-export function BilanAnalyseIA({ apiKey, context, patientKey, profession, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
+export function BilanAnalyseIA({ apiKey, context, patientKey, profession, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, exporting = false, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
   // Helper : appelle callClaudeSecure en gérant la confirmation documents non-masqués
   const callWithDocGuard = async (opts: Parameters<typeof callClaudeSecure>[0]): Promise<string> => {
     try {
@@ -520,15 +522,20 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
           {analyse && (
             <button
               className="btn-primary-luxe"
-              style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: exporting ? 0.7 : 1, cursor: exporting ? 'wait' : 'pointer' }}
               onClick={onExport}
+              disabled={exporting}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-              </svg>
-              Exporter le bilan + analyse
+              {exporting ? (
+                <div className="spinner" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              )}
+              {exporting ? 'Génération du rapport…' : 'Exporter le bilan + analyse'}
             </button>
           )}
           {analyse && onFicheExercice && (
