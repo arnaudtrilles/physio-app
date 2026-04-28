@@ -4,6 +4,7 @@ import type { NarrativeReport, NarrativeSection } from '../../types'
 import { DictableTextarea } from '../VoiceMic'
 
 type VocalState = 'idle' | 'recording' | 'transcribing' | 'generating' | 'done' | 'error'
+type RecordingContext = 'dictee' | 'seance'
 
 const BAR_COUNT = 32
 const WARN_SECONDS = 55 * 60 // 55 min warning
@@ -16,6 +17,7 @@ interface Props {
 
 export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
   const [state, setState] = useState<VocalState>(initialReport ? 'done' : 'idle')
+  const [context, setContext] = useState<RecordingContext>('dictee')
   const [report, setReport] = useState<NarrativeReport | null>(initialReport)
   const [error, setError] = useState('')
   const [bars, setBars] = useState<number[]>(Array(BAR_COUNT).fill(4))
@@ -101,7 +103,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       try {
         const transcription = await transcribeAudio(blob)
         setState('generating')
-        const sections = await generateNarrativeReport(transcription, zone)
+        const sections = await generateNarrativeReport(transcription, zone, context)
         const newReport: NarrativeReport = {
           sections,
           transcription,
@@ -143,9 +145,27 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
 
   // ── IDLE ──────────────────────────────────────────────────────────────────
   if (state === 'idle') return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '1rem 0 0.5rem' }}>
-      <div style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-        Enregistrez la consultation. Whisper transcrit, Claude rédige le compte rendu.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '1rem 0 0.5rem' }}>
+      <div style={{ display: 'flex', border: '1.5px solid var(--border-color)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)' }}>
+        <button
+          onClick={() => setContext('dictee')}
+          style={{ flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer', background: context === 'dictee' ? 'var(--primary)' : 'transparent', color: context === 'dictee' ? 'white' : 'var(--text-muted)', borderRadius: '8px 0 0 8px', transition: 'all 0.15s' }}
+          title="Vous dictez seul le résumé après la séance"
+        >
+          📋 Dictée
+        </button>
+        <button
+          onClick={() => setContext('seance')}
+          style={{ flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.75rem', fontWeight: 700, border: 'none', borderLeft: '1px solid var(--border-color)', cursor: 'pointer', background: context === 'seance' ? 'var(--primary)' : 'transparent', color: context === 'seance' ? 'white' : 'var(--text-muted)', borderRadius: '0 8px 8px 0', transition: 'all 0.15s' }}
+          title="Enregistrement de la séance complète — thérapeute + patient"
+        >
+          🎙 Séance complète
+        </button>
+      </div>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
+        {context === 'dictee'
+          ? 'Dictez ce que vous avez observé et fait — Claude rédige le compte rendu.'
+          : 'Enregistrez toute la séance. Claude extrait les informations cliniques des deux voix.'}
       </div>
       <button
         onClick={startRecording}
