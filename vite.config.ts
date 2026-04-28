@@ -308,7 +308,6 @@ function claudeDevProxy(): Plugin {
               : undefined
 
             const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userContent }]
-            if (jsonMode) messages.push({ role: 'assistant', content: '{' })
 
             let response: Anthropic.Message
             try {
@@ -330,8 +329,7 @@ function claudeDevProxy(): Plugin {
             }
 
             const textBlock = response.content.find(b => b.type === 'text')
-            let result = textBlock && textBlock.type === 'text' ? textBlock.text : ''
-            if (jsonMode && result) result = '{' + result
+            const result = textBlock && textBlock.type === 'text' ? textBlock.text : ''
 
             if (!result) {
               res.writeHead(503, { 'Content-Type': 'application/json' })

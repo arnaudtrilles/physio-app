@@ -151,13 +151,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
       : undefined
 
-    // ── Messages — prefill `{` en JSON mode pour forcer le format ─────
+    // ── Messages ──────────────────────────────────────────────────────
+    // Note : pas de prefill assistant — certains modèles Claude 4.6+ le refusent
+    // ("This model does not support assistant message prefill"). La consigne JSON
+    // est déjà injectée dans finalUserText ci-dessus ; les parseurs côté client
+    // utilisent /\{[\s\S]*\}/ donc tolèrent un éventuel fencing markdown.
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: userContent },
     ]
-    if (jsonMode) {
-      messages.push({ role: 'assistant', content: '{' })
-    }
 
     const client = getClient()
 
@@ -190,12 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Récupère le premier bloc texte
     const textBlock = response.content.find(b => b.type === 'text')
-    let result = textBlock && textBlock.type === 'text' ? textBlock.text : ''
-
-    // Réinjection du `{` prefilled en JSON mode
-    if (jsonMode && result) {
-      result = '{' + result
-    }
+    const result = textBlock && textBlock.type === 'text' ? textBlock.text : ''
 
     if (!result) {
       return res.status(503).json({ error: 'Empty response from Claude' })
