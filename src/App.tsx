@@ -5336,8 +5336,8 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         const notes = getPatientNotes(selectedPatient).filter(r => matchBt(r.bilanType, r.zone))
         const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
         return (
-          <div className="app-container" style={{ paddingLeft: '1.5rem', paddingRight: '1.5rem', paddingBottom: '1rem', overflowY: 'auto' }}>
-            <header className="screen-header">
+          <>
+            <header className="screen-header" style={{ padding: '0 1.5rem', marginBottom: '0.5rem' }}>
               <button className="btn-back" onClick={() => setStep('database')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
@@ -5346,6 +5346,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{formData.nom} {formData.prenom}</p>
               </div>
             </header>
+            <div className="scroll-area" style={{ padding: '0 1.5rem', paddingBottom: '9rem' }}>
             <Suspense fallback={<LazyFallback />}>
               <BilanSortie
                 ref={(handle: import('./components/BilanSortie').BilanSortieHandle | null) => {
@@ -5487,7 +5488,8 @@ Génère en JSON :
                 }}
               />
             </Suspense>
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-color)' }}>
+            </div>
+            <div className="fixed-bottom">
               <button className="btn-primary-luxe" style={{ marginBottom: 8, background: 'linear-gradient(135deg, #059669, #047857)' }}
                 onClick={() => {
                   const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
@@ -5517,7 +5519,7 @@ Génère en JSON :
                 Annuler
               </button>
             </div>
-          </div>
+          </>
         )
       })()}
     </div>
