@@ -11,6 +11,12 @@ interface PDFPreviewProps {
   signatureTitle?: string | null
   /** Préfixe nom de fichier PDF. Défaut "Bilan_Physiotherapie". */
   filenamePrefix?: string
+  /**
+   * Callback déclenché après l'export PDF, pour permettre à l'app
+   * d'attacher le fichier généré au dossier patient (auto-save).
+   * Le caller décide de la source ('analyse-ia' / 'evolution' selon contexte).
+   */
+  onExported?: (blob: Blob, fileName: string) => void
   onBack: () => void
 }
 
@@ -114,7 +120,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
   return <div>{nodes}</div>
 }
 
-export const PDFPreview = memo(function PDFPreview({ patient, zone, markdown: initialMarkdown, pdfTitle, praticien, signatureTitle, filenamePrefix, onBack }: PDFPreviewProps) {
+export const PDFPreview = memo(function PDFPreview({ patient, zone, markdown: initialMarkdown, pdfTitle, praticien, signatureTitle, filenamePrefix, onExported, onBack }: PDFPreviewProps) {
   const [markdown, setMarkdown] = useState(initialMarkdown)
   const [mode, setMode] = useState<'preview' | 'edit'>('preview')
   const [exported, setExported] = useState(false)
@@ -126,7 +132,8 @@ export const PDFPreview = memo(function PDFPreview({ patient, zone, markdown: in
     // setTimeout 0 : laisse React peindre le spinner avant le travail synchrone de jsPDF.
     setTimeout(() => {
       try {
-        generateAIPDF(patient, markdown, pdfTitle, praticien, { signatureTitle, filenamePrefix })
+        const { blob, fileName } = generateAIPDF(patient, markdown, pdfTitle, praticien, { signatureTitle, filenamePrefix })
+        if (onExported) onExported(blob, fileName)
         setExported(true)
         setTimeout(() => setExported(false), 3000)
       } finally {

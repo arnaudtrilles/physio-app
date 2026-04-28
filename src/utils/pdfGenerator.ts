@@ -324,7 +324,7 @@ export const generatePDF = async (
   analyseIA?: { diagnostic: { titre: string; description: string }; hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>; priseEnCharge: Array<{ phase: string; titre: string; detail: string }>; alertes: string[] } | null,
   notesLibres?: string,
   pdfTitle?: string,
-) => {
+): Promise<{ blob: Blob; fileName: string }> => {
   const doc = new jsPDF()
   const W = 210
   const ML = 18
@@ -1018,7 +1018,9 @@ export const generatePDF = async (
   // ── Sauvegarde ────────────────────────────────────────────────────────────
   const safeName = (patientId.nom || 'Anonyme').replace(/\s+/g, '_')
   const safeFirst = (patientId.prenom || '').replace(/\s+/g, '_')
-  doc.save(`Bilan_${safeName}_${safeFirst}_${dateFile}.pdf`)
+  const fileName = `Bilan_${safeName}_${safeFirst}_${dateFile}.pdf`
+  doc.save(fileName)
+  return { blob: doc.output('blob') as Blob, fileName }
 }
 
 // ── AI-generated PDF report ──────────────────────────────────────────────────
@@ -1059,7 +1061,7 @@ export const generateAIPDF = (
   pdfTitle?: string,
   praticien?: AIReportPraticien,
   options?: AIReportOptions,
-) => {
+): { blob: Blob; fileName: string } => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const W = 210
   const H = 297
@@ -1480,7 +1482,9 @@ export const generateAIPDF = (
   const safeName = (patientId.nom || 'Anonyme').replace(/\s+/g, '_')
   const safeFirst = (patientId.prenom || '').replace(/\s+/g, '_')
   const prefix = options?.filenamePrefix ?? 'Bilan_Physiotherapie'
-  doc.save(`${prefix}_${safeName}_${safeFirst}_${dateFile}.pdf`)
+  const fileName = `${prefix}_${safeName}_${safeFirst}_${dateFile}.pdf`
+  doc.save(fileName)
+  return { blob: doc.output('blob') as Blob, fileName }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

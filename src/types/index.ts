@@ -45,6 +45,13 @@ export interface BilanDocument {
   masked?: boolean
 }
 
+/**
+ * Origine d'un PatientDocument. Sert à différencier les uploads manuels
+ * (photos, ordonnances) des PDF auto-générés par l'app (bilan, analyse IA,
+ * évolution) — affichage d'un badge dédié dans DossierDocuments.
+ */
+export type PatientDocumentSource = 'upload' | 'bilan' | 'analyse-ia' | 'evolution'
+
 export interface PatientDocument {
   id: string
   patientKey: string
@@ -54,6 +61,10 @@ export interface PatientDocument {
   originalData?: string // base64 de l'original non caviardé
   addedAt: string
   masked?: boolean
+  /** Origine du document. Si absent, traité comme 'upload' (compat). */
+  source?: PatientDocumentSource
+  /** true = PDF généré par l'app (pas un upload manuel). */
+  generated?: boolean
 }
 
 export type Sexe = 'masculin' | 'feminin'

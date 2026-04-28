@@ -34,6 +34,8 @@ import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS, DEFAULT_ZONE_FOR_BILAN } from './utils/bilanRouter'
 import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
 import { hashInputs, documentFingerprint, getCachedBilanPDF, setCachedBilanPDF, getCachedAnalysePDF, setCachedAnalysePDF } from './utils/pdfCache'
+import { buildGeneratedPatientDoc } from './utils/pdfPersistence'
+import type { PatientDocumentSource } from './types'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callClaudeSecure, UnmaskedDocumentsError } from './utils/claudeSecure'
@@ -455,6 +457,27 @@ function App() {
     dbClosedTreatments, setDbClosedTreatments, profile, setProfile,
   })
 
+  /**
+   * Attache un PDF auto-généré (bilan, analyse IA, évolution) au dossier patient.
+   * Stocke le blob en base64 dans IndexedDB via setDbPatientDocs.
+   * Échec silencieux pour ne pas casser l'export — l'utilisateur a déjà son
+   * téléchargement local, l'auto-save est un bonus.
+   */
+  const attachPdfToPatient = useCallback(async (
+    blob: Blob,
+    fileName: string,
+    patientKey: string,
+    source: Exclude<PatientDocumentSource, 'upload'>,
+  ) => {
+    if (!patientKey) return
+    try {
+      const doc = await buildGeneratedPatientDoc(blob, patientKey, fileName, source)
+      setDbPatientDocs(prev => [...prev, doc])
+    } catch (err) {
+      console.warn('[attachPdfToPatient] failed to persist generated PDF', err)
+    }
+  }, [setDbPatientDocs])
+
   // Si un profil existe déjà dans le cloud (nom rempli après sync), considérer
   // l'utilisateur comme onboardé — évite de refaire le wizard quand on se
   // reconnecte depuis un nouvel appareil ou un nouveau domaine (IndexedDB neuve).
@@ -585,6 +608,9 @@ function App() {
   // Le rapport d'évolution surcharge : signatureTitle=null, filenamePrefix='Rapport_Evolution'.
   const [pdfPreviewSignatureTitle, setPdfPreviewSignatureTitle] = useState<string | null | undefined>(undefined)
   const [pdfPreviewFilenamePrefix, setPdfPreviewFilenamePrefix] = useState<string | undefined>(undefined)
+  // Origine attachée au PDF auto-sauvegardé dans le dossier patient.
+  const [pdfPreviewSource, setPdfPreviewSource] = useState<Exclude<PatientDocumentSource, 'upload'>>('analyse-ia')
+  const [pdfPreviewPatientKey, setPdfPreviewPatientKey] = useState<string>('')
   const [profileEditDraft, setProfileEditDraft] = useState<ProfileData>(profile)
   // apiKeyDraft removed — Vertex AI, no client key needed
 
@@ -1371,6 +1397,8 @@ Règles :
       const cached = getCachedAnalysePDF(cacheHash)
       if (cached) {
         setPdfPreviewMarkdown(cached)
+        setPdfPreviewSource('analyse-ia')
+        setPdfPreviewPatientKey(`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim())
         setStep('pdf_preview')
         return
       }
@@ -1402,6 +1430,8 @@ Règles :
         })
         setCachedAnalysePDF(cacheHash, report)
         setPdfPreviewMarkdown(report)
+        setPdfPreviewSource('analyse-ia')
+        setPdfPreviewPatientKey(`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim())
         setStep('pdf_preview')
       } catch (err) {
         // Annulation volontaire utilisateur (docs non masqués) → rien à faire
@@ -1417,10 +1447,11 @@ Règles :
           num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
           delta: i === 0 ? null : improvDelta(patBilans[i - 1].evn!, r.evn!),
         }))
-        generatePDF(formDataAsPatientInfo(formData), formDataAsPatientInfo(formData), silhouetteData,
+        const out = await generatePDF(formDataAsPatientInfo(formData), formDataAsPatientInfo(formData), silhouetteData,
           bilanData ? { sectionTitle: selectedBodyZone ?? '', data: bilanData } : null,
           entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
           currentAnalyseIA ?? undefined, bilanNotes || undefined)
+        attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
       } finally {
         setExportingPDF(false)
       }
@@ -1434,10 +1465,11 @@ Règles :
       num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
       delta: i === 0 ? null : improvDelta(patBilans[i - 1].evn!, r.evn!),
     }))
-    generatePDF(formDataAsPatientInfo(formData), formDataAsPatientInfo(formData), silhouetteData,
+    const out = await generatePDF(formDataAsPatientInfo(formData), formDataAsPatientInfo(formData), silhouetteData,
       bilanData ? { sectionTitle: selectedBodyZone ?? '', data: bilanData } : null,
       entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
       currentAnalyseIA ?? undefined, bilanNotes || undefined)
+    attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
   }
 
   // Prompt pour "Bilan PDF" — mise au propre rédigée, fidèle aux données, sans diagnostic ni ajout
@@ -1981,6 +2013,8 @@ Mobilité articulaire lombaire
       const cached = getCachedBilanPDF(cacheHash)
       if (cached) {
         setPdfPreviewMarkdown(cached)
+        setPdfPreviewSource('bilan')
+        setPdfPreviewPatientKey(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
         setStep('pdf_preview')
         return
       }
@@ -2012,6 +2046,8 @@ Mobilité articulaire lombaire
         })
         setCachedBilanPDF(cacheHash, report)
         setPdfPreviewMarkdown(report)
+        setPdfPreviewSource('bilan')
+        setPdfPreviewPatientKey(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
         setStep('pdf_preview')
       } catch (err) {
         if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
@@ -2026,10 +2062,11 @@ Mobilité articulaire lombaire
           delta: i === 0 ? null : improvDelta(patBilans[i - 1].evn!, r.evn!),
         }))
         const pi = { nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe, profession: '', sport: '', famille: '', chirurgie: '', notes: '' }
-        generatePDF(pi, pi, record.silhouetteData ?? {},
+        const out = await generatePDF(pi, pi, record.silhouetteData ?? {},
           record.bilanData ? { sectionTitle: record.zone ?? '', data: record.bilanData } : null,
           entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
           undefined, record.notes || undefined)
+        attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
       } finally {
         setExportingRecordId(null)
       }
@@ -2042,10 +2079,11 @@ Mobilité articulaire lombaire
         delta: i === 0 ? null : improvDelta(patBilans[i - 1].evn!, r.evn!),
       }))
       const pi = { nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe, profession: '', sport: '', famille: '', chirurgie: '', notes: '' }
-      generatePDF(pi, pi, record.silhouetteData ?? {},
+      const out = await generatePDF(pi, pi, record.silhouetteData ?? {},
         record.bilanData ? { sectionTitle: record.zone ?? '', data: record.bilanData } : null,
         entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
         undefined, record.notes || undefined)
+      attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
     }
   }
 
@@ -5791,6 +5829,8 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
               setPdfPreviewTitle("RAPPORT D'ÉVOLUTION EN PHYSIOTHÉRAPIE")
               setPdfPreviewSignatureTitle(null)
               setPdfPreviewFilenamePrefix('Rapport_Evolution')
+              setPdfPreviewSource('evolution')
+              setPdfPreviewPatientKey(selectedPatient ?? '')
               setStep('pdf_preview')
             }}
           />
@@ -5972,6 +6012,9 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             telephone: profile.telephone,
             email: profile.email,
             signatureImage: profile.signatureImage,
+          }}
+          onExported={(blob, fileName) => {
+            attachPdfToPatient(blob, fileName, pdfPreviewPatientKey, pdfPreviewSource)
           }}
           onBack={() => {
             setPdfPreviewSignatureTitle(undefined)
