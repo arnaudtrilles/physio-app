@@ -399,7 +399,7 @@ export function AdminDashboard({ db, dbIntermediaires, dbNotes, dbObjectifs, dbE
             <SectionTitle label="Coûts API" />
             {[
               { label: 'ElevenLabs', value: '22 $', note: 'fixe/mois' },
-              { label: 'Gemini', value: 'Gratuit', note: 'phase test', green: true },
+              { label: 'Claude (Anthropic)', value: 'Pay-as-you-go', note: 'selon usage' },
               { label: 'Vercel', value: 'Gratuit', note: 'hobby', green: true },
             ].map(({ label, value, note, green }) => (
               <div key={label} style={{ padding: '0.35rem 0', borderBottom: `1px solid ${C.divider}` }}>
@@ -423,7 +423,7 @@ export function AdminDashboard({ db, dbIntermediaires, dbNotes, dbObjectifs, dbE
           <StatusRow label="Zero retention ElevenLabs" status="ok" note="Aucun audio ni transcript stocké côté serveur" />
           <StatusRow label="Stockage 100% local (IndexedDB)" status="ok" note="Données sur l'appareil du thérapeute uniquement" />
           <StatusRow label="Transit HTTPS chiffré (Vercel)" status="ok" note="TLS 1.3 sur tous les endpoints" />
-          <StatusRow label="Clé Gemini propriétaire" status="ok" note="Aucune donnée patient transmise aux tiers" />
+          <StatusRow label="Clé Claude (Anthropic) serveur" status="ok" note="Clé stockée côté serveur — jamais exposée au client" />
           <StatusRow label="Pas de partage tiers sans consentement" status="ok" note="Architecture locale — pas de CRM ni tracking tiers" />
           <StatusRow label="Aucun nom patient dans sessions vocales" status="warn" note="Recommandé — à rappeler à l'onboarding" />
           <div style={{ marginTop: 10, padding: '0.6rem 0.75rem', background: '#fffbeb', borderRadius: 9, border: '1px solid #fde68a' }}>

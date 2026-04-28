@@ -3,8 +3,8 @@ import { DictableTextarea } from './VoiceMic'
 import type { AnalyseIA, BilanDocument, AICallAuditEntry } from '../types'
 import { buildClinicalPrompt, parseAnalyseIA, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
-import { GeminiAuthError } from '../utils/geminiClient'
-import { callGeminiSecure, UnmaskedDocumentsError } from '../utils/geminiSecure'
+import { ClaudeAuthError } from '../utils/claudeClient'
+import { callClaudeSecure, UnmaskedDocumentsError } from '../utils/claudeSecure'
 
 interface BilanAnalyseIAProps {
   apiKey: string
@@ -20,6 +20,8 @@ interface BilanAnalyseIAProps {
   onBack: () => void
   onClose?: () => void
   onExport: () => void
+  /** True while the parent is generating/exporting the PDF — drives spinner + disabled on the export button. */
+  exporting?: boolean
   onGoToProfile: () => void
   onFicheExercice?: () => void
 }
@@ -43,16 +45,16 @@ function NeuralIcon() {
   )
 }
 
-export function BilanAnalyseIA({ apiKey, context, patientKey, profession, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
-  // Helper : appelle callGeminiSecure en gérant la confirmation documents non-masqués
-  const callWithDocGuard = async (opts: Parameters<typeof callGeminiSecure>[0]): Promise<string> => {
+export function BilanAnalyseIA({ apiKey, context, patientKey, profession, documents, cached, onAudit, onUnmaskedDocsConfirm, onResult, onBack, onClose, onExport, exporting = false, onGoToProfile, onFicheExercice }: BilanAnalyseIAProps) {
+  // Helper : appelle callClaudeSecure en gérant la confirmation documents non-masqués
+  const callWithDocGuard = async (opts: Parameters<typeof callClaudeSecure>[0]): Promise<string> => {
     try {
-      return await callGeminiSecure(opts)
+      return await callClaudeSecure(opts)
     } catch (err) {
       if (err instanceof UnmaskedDocumentsError && onUnmaskedDocsConfirm) {
         const ok = await onUnmaskedDocsConfirm(err.unmaskedDocs)
         if (!ok) throw new Error('UNMASKED_DOCS_CANCELLED')
-        return await callGeminiSecure({ ...opts, userAcknowledgedUnmasked: true })
+        return await callClaudeSecure({ ...opts, userAcknowledgedUnmasked: true })
       }
       throw err
     }
@@ -101,7 +103,6 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
         userPrompt: buildClinicalPrompt(mergedContext),
         maxOutputTokens: 8192,
         jsonMode: true,
-        preferredModel: 'gemini-3.1-pro-preview',
         documents,
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'bilan_analyse',
@@ -127,7 +128,7 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
         }, 1200)
         return
       }
-      if (err instanceof GeminiAuthError) {
+      if (err instanceof ClaudeAuthError) {
         setError('auth')
       } else {
         const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -165,7 +166,6 @@ ${correction.trim()}
 Produis une nouvelle analyse corrigée en tenant compte des observations du thérapeute. Ajuste les probabilités des hypothèses, le diagnostic principal et le plan de traitement en conséquence.`,
         maxOutputTokens: 8192,
         jsonMode: true,
-        preferredModel: 'gemini-3.1-pro-preview',
         documents,
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'bilan_analyse_refine',
@@ -239,10 +239,10 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
               </div>
-              <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem' }}>Clé API Gemini requise</div>
+              <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem' }}>Service IA indisponible</div>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px', lineHeight: 1.5 }}>
-              Pour accéder à l'analyse clinique, configurez votre clé API Gemini dans votre profil.
+              L'analyse clinique n'est pas disponible. Vérifiez votre connexion, puis réessayez.
             </p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-light))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -259,7 +259,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Quota de requêtes dépassé. Vérifiez votre compte Google AI Studio.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Quota de requêtes dépassé. Réessayez dans quelques minutes.</p>
           </div>
         )}
         {error && error !== 'quota' && error !== 'auth' && (
@@ -278,10 +278,10 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
               </div>
-              <div style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.95rem' }}>Clé API Gemini invalide</div>
+              <div style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.95rem' }}>Authentification IA échouée</div>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px', lineHeight: 1.5 }}>
-              Votre clé API Gemini est absente ou incorrecte. Rendez-vous dans votre profil et renseignez une clé valide commençant par <strong>AIza</strong>.
+              Le service IA a refusé la requête. Cela peut indiquer un problème de configuration serveur temporaire. Réessayez dans quelques minutes ou contactez le support si le problème persiste.
             </p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -289,7 +289,7 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
-              Configurer ma clé Gemini
+              Ouvrir le profil
             </button>
           </div>
         )}
@@ -522,15 +522,20 @@ Produis une nouvelle analyse corrigée en tenant compte des observations du thé
           {analyse && (
             <button
               className="btn-primary-luxe"
-              style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: exporting ? 0.7 : 1, cursor: exporting ? 'wait' : 'pointer' }}
               onClick={onExport}
+              disabled={exporting}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-              </svg>
-              Exporter le bilan + analyse
+              {exporting ? (
+                <div className="spinner" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              )}
+              {exporting ? 'Génération du rapport…' : 'Exporter le bilan + analyse'}
             </button>
           )}
           {analyse && onFicheExercice && (

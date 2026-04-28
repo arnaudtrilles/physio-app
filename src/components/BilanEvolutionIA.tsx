@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import type { EvolutionIA, AICallAuditEntry } from '../types'
 import { buildEvolutionPrompt, parseEvolutionIA, roleTitle } from '../utils/clinicalPrompt'
 import type { EvolutionContext } from '../utils/clinicalPrompt'
-import { GeminiAuthError } from '../utils/geminiClient'
-import { callGeminiSecure } from '../utils/geminiSecure'
+import { ClaudeAuthError } from '../utils/claudeClient'
+import { callClaudeSecure } from '../utils/claudeSecure'
 
 interface BilanEvolutionIAProps {
   apiKey: string
@@ -14,6 +14,8 @@ interface BilanEvolutionIAProps {
   onBack: () => void
   onClose?: () => void
   onGoToProfile: () => void
+  /** Export PDF du rapport d'évolution courant. Parent reçoit l'objet EvolutionIA prêt à rendre. */
+  onExportPDF?: (evolution: EvolutionIA) => void
 }
 
 function SkeletonBlock({ h, w = '100%' }: { h: number; w?: string }) {
@@ -27,7 +29,7 @@ const TENDANCE_CONFIG = {
   mixte:         { label: 'Évolution mixte', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: '~' },
 }
 
-export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAudit, onBack, onClose, onGoToProfile }: BilanEvolutionIAProps) {
+export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAudit, onBack, onClose, onGoToProfile, onExportPDF }: BilanEvolutionIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
@@ -61,12 +63,19 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
     setError(null)
     let willRetry = false
     try {
-      const raw = await callGeminiSecure({
+      const raw = await callClaudeSecure({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige le rapport d'évolution clinique impérativement en français médical professionnel.`,
+        systemPrompt: `Tu es un ${roleTitle(profession)} expert en rédaction de rapports cliniques, chargé de produire un rapport d'évolution adressé à un médecin prescripteur.
+
+Ton rapport est factuellement ancré sur les données transmises : aucune invention, aucune extrapolation, aucun mécanisme lésionnel non explicité. Quand une donnée manque, tu écris "Non documenté dans le suivi" (pour un champ texte) ou tu laisses un tableau vide ([]) — tu ne combles jamais par supposition.
+
+Tu rédiges en français médical professionnel, en prose articulée (phrases complètes, sujet + verbe + complément), jamais en style télégraphique dans les blocs narratifs. L'accord grammatical suit strictement la valeur SEXE_PATIENT transmise en tête de prompt : jamais de formulation inclusive ou neutre (pas de "(e)", "·e", "/" inclusive, "le/la patient·e", "cette personne"). Tu n'infères jamais le sexe depuis le prénom.
+
+Tu respectes la terminologie clinique verbatim (noms de tests, articulations, acronymes du référentiel Knode). Aucune hypothèse diagnostique n'est chiffrée en pourcentage. Ton ton est concis, factuel, sans pathos, sans qualificatifs subjectifs : le rapport doit pouvoir être lu en 2 minutes par un médecin et donner une image fidèle de la prise en charge.
+
+Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en section 5 du prompt utilisateur. Aucun markdown, aucun texte en dehors du JSON.`,
         userPrompt: buildEvolutionPrompt(context),
         maxOutputTokens: 8192,
-        preferredModel: 'gemini-3.1-pro-preview',
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'bilan_evolution',
         onAudit,
@@ -86,7 +95,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         }, 1200)
         return
       }
-      if (err instanceof GeminiAuthError) {
+      if (err instanceof ClaudeAuthError) {
         setError('auth')
       } else {
         const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -147,8 +156,8 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         {/* No API key */}
         {!apiKey && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Clé API Gemini requise</div>
-            <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Configurez votre clé API Gemini dans votre profil.</p>
+            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6 }}>Service IA indisponible</div>
+            <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px' }}>Le rapport d'évolution n'est pas disponible actuellement. Vérifiez votre connexion.</p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
               Configurer dans le Profil
@@ -160,16 +169,16 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Vérifiez votre compte Google AI Studio.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Réessayez dans quelques minutes.</p>
           </div>
         )}
         {error === 'auth' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Clé API Gemini invalide</div>
-            <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Renseignez une clé valide (AIza...) dans votre profil.</p>
+            <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>Authentification IA échouée</div>
+            <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0 0 14px' }}>Le service IA a refusé la requête. Réessayez dans quelques minutes.</p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
-              Configurer ma clé Gemini
+              Ouvrir le profil
             </button>
           </div>
         )}
@@ -228,6 +237,50 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
               </div>
             </div>
 
+            {/* Tableau clinique initial */}
+            {evolution.tableauInitial && (
+              <div className="ai-section-card">
+                <div className="ai-section-header">
+                  <div className="ai-section-icon" style={{ background: '#eff6ff' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </div>
+                  <h4 style={{ color: '#1d4ed8' }}>Tableau clinique initial</h4>
+                </div>
+                <div className="ai-section-body">
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: 1.6, margin: 0 }}>{evolution.tableauInitial}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Évolution clinique — 4 sous-blocs */}
+            {evolution.evolutionClinique && (
+              <div className="ai-section-card">
+                <div className="ai-section-header">
+                  <div className="ai-section-icon" style={{ background: '#ecfdf5' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                  </div>
+                  <h4 style={{ color: '#047857' }}>Évolution clinique</h4>
+                </div>
+                <div className="ai-section-body">
+                  {([
+                    ['Synthèse globale', evolution.evolutionClinique.syntheseGlobale],
+                    ['Évolution symptomatique', evolution.evolutionClinique.evolutionSymptomatique],
+                    ['Évolution fonctionnelle', evolution.evolutionClinique.evolutionFonctionnelle],
+                    ['Évolution objective', evolution.evolutionClinique.evolutionObjective],
+                  ] as const).filter(([, v]) => v && v.trim()).map(([label, v], i) => (
+                    <div key={i} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 4 }}>{label}</div>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--text-main)', lineHeight: 1.55, margin: 0 }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Progression bilan par bilan */}
             <div className="ai-section-card">
               <div className="ai-section-header">
@@ -267,6 +320,58 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
                 })}
               </div>
             </div>
+
+            {/* Interventions réalisées — 3 sous-blocs */}
+            {evolution.interventionsRealisees && (
+              <div className="ai-section-card">
+                <div className="ai-section-header">
+                  <div className="ai-section-icon" style={{ background: '#fef3c7' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                  </div>
+                  <h4 style={{ color: '#b45309' }}>Interventions réalisées</h4>
+                </div>
+                <div className="ai-section-body">
+                  {([
+                    ['Techniques manuelles', evolution.interventionsRealisees.techniquesManuelles],
+                    ['Exercices programmés', evolution.interventionsRealisees.exercicesProgrammes],
+                    ['Éducation & conseils', evolution.interventionsRealisees.educationConseils],
+                  ] as const).filter(([, v]) => v && v.trim()).map(([label, v], i) => (
+                    <div key={i} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 4 }}>{label}</div>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--text-main)', lineHeight: 1.55, margin: 0 }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* État actuel — 3 sous-blocs */}
+            {evolution.etatActuel && (
+              <div className="ai-section-card">
+                <div className="ai-section-header">
+                  <div className="ai-section-icon" style={{ background: '#e0e7ff' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4338ca" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                  </div>
+                  <h4 style={{ color: '#4338ca' }}>État clinique actuel</h4>
+                </div>
+                <div className="ai-section-body">
+                  {([
+                    ['Symptômes', evolution.etatActuel.symptomes],
+                    ['Fonctionnel', evolution.etatActuel.fonctionnel],
+                    ['Objectif', evolution.etatActuel.objectif],
+                  ] as const).filter(([, v]) => v && v.trim()).map(([label, v], i) => (
+                    <div key={i} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 4 }}>{label}</div>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--text-main)', lineHeight: 1.55, margin: 0 }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Points forts */}
             {evolution.pointsForts.length > 0 && (
@@ -376,6 +481,18 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
             <button className="btn-primary-luxe" disabled style={{ marginBottom: 0, opacity: 0.7, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <div className="spinner" />
               Analyse en cours…
+            </button>
+          )}
+          {evolution && !loading && onExportPDF && (
+            <button
+              onClick={() => onExportPDF(evolution)}
+              style={{ width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, #1e3a8a, #2563eb)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              Exporter le rapport en PDF
             </button>
           )}
           {evolution && !loading && (

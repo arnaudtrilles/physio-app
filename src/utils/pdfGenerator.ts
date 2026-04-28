@@ -306,6 +306,7 @@ interface PatientInfo {
   nom: string
   prenom: string
   dateNaissance: string
+  sexe?: 'masculin' | 'feminin'
   profession?: string
   sport?: string
   famille?: string
@@ -323,7 +324,7 @@ export const generatePDF = async (
   analyseIA?: { diagnostic: { titre: string; description: string }; hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>; priseEnCharge: Array<{ phase: string; titre: string; detail: string }>; alertes: string[] } | null,
   notesLibres?: string,
   pdfTitle?: string,
-) => {
+): Promise<{ blob: Blob; fileName: string }> => {
   const doc = new jsPDF()
   const W = 210
   const ML = 18
@@ -451,7 +452,10 @@ export const generatePDF = async (
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...C.muted)
-  if (patientId.dateNaissance) doc.text(`Né(e) le ${patientId.dateNaissance}`, ML + 6, y + 12)
+  if (patientId.dateNaissance) {
+    const neLbl = patientId.sexe === 'feminin' ? 'Née' : 'Né'
+    doc.text(`${neLbl} le ${patientId.dateNaissance}`, ML + 6, y + 12)
+  }
   if (generalInfo.profession) doc.text(`Profession : ${generalInfo.profession}`, ML + MW / 2, y + 12)
   doc.setTextColor(...C.text)
   y += 26
@@ -1014,157 +1018,473 @@ export const generatePDF = async (
   // ── Sauvegarde ────────────────────────────────────────────────────────────
   const safeName = (patientId.nom || 'Anonyme').replace(/\s+/g, '_')
   const safeFirst = (patientId.prenom || '').replace(/\s+/g, '_')
-  doc.save(`Bilan_${safeName}_${safeFirst}_${dateFile}.pdf`)
+  const fileName = `Bilan_${safeName}_${safeFirst}_${dateFile}.pdf`
+  doc.save(fileName)
+  return { blob: doc.output('blob') as Blob, fileName }
 }
 
 // ── AI-generated PDF report ──────────────────────────────────────────────────
 
+export interface AIReportPraticien {
+  nom?: string
+  prenom?: string
+  profession?: string
+  specialisationsLibelle?: string
+  rcc?: string
+  adresse?: string
+  adresseComplement?: string
+  codePostal?: string
+  ville?: string
+  telephone?: string
+  email?: string
+  signatureImage?: string | null
+}
+
+export interface AIReportOptions {
+  /**
+   * Titre du bloc signature auto-appendu sous le corps du rapport.
+   * Défaut : '10. Signature' (cohérent avec les bilans 1→9). Passer `null` pour
+   * supprimer le titre — utile quand le markdown contient déjà un titre final
+   * englobant la signature (ex : rapport d'évolution, section 7).
+   */
+  signatureTitle?: string | null
+  /**
+   * Préfixe du nom de fichier PDF téléchargé. Défaut : 'Bilan_Physiotherapie'.
+   * Ex : 'Rapport_Evolution' pour l'export du rapport d'évolution.
+   */
+  filenamePrefix?: string
+}
+
 export const generateAIPDF = (
-  patientId: { nom?: string; prenom?: string; dateNaissance?: string },
+  patientId: { nom?: string; prenom?: string; dateNaissance?: string; sexe?: 'masculin' | 'feminin' },
   markdownReport: string,
   pdfTitle?: string,
-) => {
-  const doc = new jsPDF()
+  praticien?: AIReportPraticien,
+  options?: AIReportOptions,
+): { blob: Blob; fileName: string } => {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const W = 210
-  const ML = 18
-  const MR = 18
+  const H = 297
+  const ML = 20
+  const MR = 20
   const MW = W - ML - MR
-  let y = 20
+  let y = 18
 
   const today = new Date()
   const dateFile = today.toISOString().split('T')[0]
   const dateStr = today.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
 
-  const check = (need = 10) => { if (y + need > 282) { doc.addPage(); y = 20 } }
+  const check = (need = 10) => { if (y + need > H - 22) { doc.addPage(); y = 20 } }
   const split = (text: string, maxW: number) => doc.splitTextToSize(sanitize(text), maxW)
 
-  // ── En-tête ──
-  doc.setFillColor(...C.primary)
-  doc.rect(0, 0, W, 30, 'F')
-  doc.setFillColor(...C.accent)
-  doc.rect(0, 30, W, 1.5, 'F')
+  const p = praticien ?? {}
+  const hasPraticien = Boolean(p.nom || p.prenom || p.profession || p.adresse || p.ville || p.telephone || p.email)
+  const fullPraticienName = `${p.prenom ?? ''} ${p.nom ?? ''}`.trim()
 
-  doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...C.white)
-  doc.text(sanitize(pdfTitle ?? 'BILAN EN PHYSIOTHÉRAPIE'), ML, 13)
-  doc.setFontSize(9)
+  // ── En-tête : bloc coordonnées thérapeute (haut-gauche) + bloc patient (haut-droite) ──
+  const headerTop = y
+  let yLeft = y
+  let yRight = y
+
+  // Bloc gauche : coordonnées thérapeute
+  if (hasPraticien) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(...C.primary)
+    doc.text(sanitize(fullPraticienName.toUpperCase() || '—'), ML, yLeft)
+    yLeft += 4.5
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...C.text)
+    if (p.profession) { doc.text(sanitize(p.profession), ML, yLeft); yLeft += 4 }
+    if (p.specialisationsLibelle) {
+      doc.setTextColor(...C.muted)
+      doc.setFontSize(8.5)
+      const sl = split(p.specialisationsLibelle, MW / 2 - 4)
+      for (const s of sl) { doc.text(s, ML, yLeft); yLeft += 3.8 }
+      doc.setFontSize(9)
+      doc.setTextColor(...C.text)
+    }
+    if (p.rcc) { doc.text(`RCC / ADELI : ${sanitize(p.rcc)}`, ML, yLeft); yLeft += 4 }
+    if (p.adresse) { doc.text(sanitize(p.adresse), ML, yLeft); yLeft += 4 }
+    if (p.adresseComplement) { doc.text(sanitize(p.adresseComplement), ML, yLeft); yLeft += 4 }
+    if (p.codePostal || p.ville) {
+      doc.text(sanitize(`${p.codePostal ?? ''} ${p.ville ?? ''}`.trim()), ML, yLeft); yLeft += 4
+    }
+    if (p.telephone) { doc.text(`Tél : ${sanitize(p.telephone)}`, ML, yLeft); yLeft += 4 }
+    if (p.email) { doc.text(sanitize(p.email), ML, yLeft); yLeft += 4 }
+  }
+
+  // Bloc droite : date + identité patient
   doc.setFont('helvetica', 'normal')
-  doc.text(`${patientId.prenom ?? ''} ${patientId.nom ?? ''}  ·  ${dateStr}`, ML, 22)
-  doc.setFontSize(7.5)
-  doc.text('Document confidentiel — usage médical uniquement', ML, 27)
+  doc.setFontSize(9)
+  doc.setTextColor(...C.muted)
+  const cityDate = `${(p.ville ?? '').toUpperCase() || ''}${p.ville ? ', le ' : 'Le '}${dateStr}`
+  doc.text(sanitize(cityDate), W - MR, yRight, { align: 'right' })
+  yRight += 6
+
   doc.setTextColor(...C.text)
-  y = 38
+  const patientFull = `${patientId.prenom ?? ''} ${patientId.nom ?? ''}`.trim()
+  const patientLabel = patientId.sexe === 'feminin' ? 'Patiente' : 'Patient'
+  const neLabel = patientId.sexe === 'feminin' ? 'Née' : 'Né'
+  if (patientFull) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.text(sanitize(`${patientLabel} : ${patientFull}`), W - MR, yRight, { align: 'right' })
+    yRight += 4.5
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    if (patientId.dateNaissance) {
+      const age = computeAge(patientId.dateNaissance)
+      const dobStr = new Date(patientId.dateNaissance).toLocaleDateString('fr-FR')
+      const dobLine = age !== null ? `${neLabel} le ${dobStr} (${age} ans)` : `${neLabel} le ${dobStr}`
+      doc.text(sanitize(dobLine), W - MR, yRight, { align: 'right' })
+      yRight += 4
+    }
+  }
+
+  y = Math.max(yLeft, yRight, headerTop + 8)
+
+  // Ligne de séparation
+  y += 3
+  doc.setDrawColor(...C.light)
+  doc.setLineWidth(0.3)
+  doc.line(ML, y, W - MR, y)
+  y += 8
+
+  // ── Titre centré ──
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.setTextColor(...C.primary)
+  const title = sanitize(pdfTitle ?? 'Bilan de Physiothérapie')
+  doc.text(title, W / 2, y, { align: 'center' })
+  y += 4
+  doc.setDrawColor(...C.primary)
+  doc.setLineWidth(0.6)
+  const titleWidth = doc.getTextWidth(title)
+  doc.line(W / 2 - titleWidth / 2, y, W / 2 + titleWidth / 2, y)
+  doc.setTextColor(...C.text)
+  y += 8
+
+  // ── Helpers : parse et rendu des tables GFM ──
+  // Syntaxe reconnue :
+  //   | H1 | H2 | H3 |
+  //   | --- | --- | --- |
+  //   | r1c1 | r1c2 | r1c3 |
+  // Les largeurs sont proportionnelles au contenu max (header + rows), bornées.
+  const isTableRow = (l: string) => /^\s*\|(.+)\|\s*$/.test(l)
+  const isTableSep = (l: string) => /^\s*\|(\s*:?-{3,}:?\s*\|)+\s*$/.test(l)
+  const splitRow = (l: string): string[] =>
+    l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+
+  const drawTable = (headers: string[], rows: string[][]) => {
+    const nCols = headers.length
+    const MWtab = MW
+    // Répartition par défaut équiprobable ; cas spécial 4 cols = preset chronologie.
+    const defaultWeights = Array(nCols).fill(1 / nCols) as number[]
+    const chronoWeights = nCols === 4 ? [0.12, 0.22, 0.08, 0.58] : defaultWeights
+    const colW = chronoWeights.map(w => w * MWtab)
+    // Colonnes centrées : Date (0) et EVN (2) en preset 4-cols.
+    const centeredIdx = new Set<number>(nCols === 4 ? [0, 2] : [])
+    const padX = 2
+    const headerH = 7
+    const lineH = 3.8
+    const rowPadY = 1.8
+
+    const drawHeader = () => {
+      check(headerH + 2)
+      doc.setFillColor(...C.primaryLight)
+      doc.rect(ML, y, MWtab, headerH, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(...C.primary)
+      let xc = ML
+      headers.forEach((h, i) => {
+        const w = colW[i]
+        const centered = centeredIdx.has(i)
+        const tx = centered ? xc + w / 2 : xc + padX
+        doc.text(sanitize(h), tx, y + 4.8, { align: centered ? 'center' : 'left' })
+        xc += w
+      })
+      doc.setTextColor(...C.text)
+      y += headerH
+    }
+
+    drawHeader()
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    rows.forEach((row, rIdx) => {
+      // Wrapping par cellule
+      const wrapped = row.map((cell, i) =>
+        doc.splitTextToSize(sanitize(cell || ''), colW[i] - padX * 2)
+      )
+      const maxLines = Math.max(1, ...wrapped.map(w => w.length))
+      const h = maxLines * lineH + rowPadY * 2
+      // Si la ligne ne rentre pas dans la page : addPage + redraw header.
+      if (y + h > H - 22) {
+        doc.addPage()
+        y = 20
+        drawHeader()
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8.5)
+      }
+      // Alternance fond très clair
+      if (rIdx % 2 === 0) {
+        doc.setFillColor(250, 250, 250)
+        doc.rect(ML, y, MWtab, h, 'F')
+      }
+      // Texte cellules
+      let xc = ML
+      wrapped.forEach((cellLines, i) => {
+        const w = colW[i]
+        const centered = centeredIdx.has(i)
+        const tx = centered ? xc + w / 2 : xc + padX
+        cellLines.forEach((line: string, li: number) => {
+          doc.text(line, tx, y + rowPadY + 2.8 + li * lineH, { align: centered ? 'center' : 'left' })
+        })
+        xc += w
+      })
+      // Bordure bas discrète
+      doc.setDrawColor(...C.light)
+      doc.setLineWidth(0.2)
+      doc.line(ML, y + h, ML + MWtab, y + h)
+      y += h
+    })
+    y += 3
+  }
 
   // ── Parse markdown ──
   const lines = markdownReport.split('\n')
-  for (let i = 0; i < lines.length; i++) {
+  let i = 0
+  while (i < lines.length) {
     const line = lines[i]
 
+    // Détection table GFM : ligne de header |…| suivie d'un séparateur |---|…|
+    if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      const headers = splitRow(line)
+      const rows: string[][] = []
+      let j = i + 2
+      while (j < lines.length && isTableRow(lines[j])) {
+        rows.push(splitRow(lines[j]))
+        j++
+      }
+      drawTable(headers, rows)
+      i = j
+      continue
+    }
+
+    // Guard — ignorer un éventuel surtitre markdown `#` ou `##` généré à tort par l'IA
+    // (le document n'a qu'un seul titre, rendu par l'en-tête ci-dessus).
+    if (/^\s*#{1,2}(\s|$)/.test(line) && !line.startsWith('### ')) {
+      i++
+      continue
+    }
+
+    // Guard V7 — les séparateurs horizontaux (---, ***, ___) sont interdits par le prompt,
+    // mais on ignore au cas où l'IA en glisserait un : la séparation visuelle est portée par les titres.
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      i++
+      continue
+    }
+
     if (line.startsWith('### ')) {
-      y += 4
-      check(14)
-      doc.setFillColor(...C.primaryLight)
-      doc.roundedRect(ML - 1, y - 6, MW + 2, 9, 1, 1, 'F')
-      doc.setFillColor(...C.primary)
-      doc.rect(ML - 1, y - 6, 2.5, 9, 'F')
+      y += 3
+      check(12)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(11)
+      doc.setFontSize(10.5)
       doc.setTextColor(...C.primary)
-      doc.text(line.replace(/^### /, ''), ML + 4, y)
+      const titleText = line.replace(/^### /, '')
+      doc.text(sanitize(titleText), ML, y)
+      // Soulignement discret
+      y += 1.5
+      doc.setDrawColor(...C.primary)
+      doc.setLineWidth(0.4)
+      const tw = doc.getTextWidth(sanitize(titleText))
+      doc.line(ML, y, ML + tw, y)
       doc.setTextColor(...C.text)
-      y += 8
+      y += 5
     } else if (line.startsWith('## ')) {
       y += 3
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(13)
+      doc.setFontSize(12)
       doc.text(line.replace(/^## /, ''), ML, y)
-      y += 7
+      y += 6
     } else if (line.match(/^- \*\*H\d/)) {
       const full = line.replace(/^- \*\*/, '').replace(/\*\*/, '')
-      // Remove percentages like (70%), (20%), etc.
       const cleaned = full.replace(/\s*\(\d+%?\)\s*/g, ' ').trim()
       const dashIdx = cleaned.indexOf(' — ')
-      const title = dashIdx !== -1 ? cleaned.slice(0, dashIdx).trim() : cleaned.trim()
+      const tTitle = dashIdx !== -1 ? cleaned.slice(0, dashIdx).trim() : cleaned.trim()
       const justification = dashIdx !== -1 ? cleaned.slice(dashIdx + 3).trim() : ''
       check(14)
-      // Title in bold
       doc.setFontSize(9.5)
       doc.setFont('helvetica', 'bold')
-      const tl = split(title, MW - 4)
+      const tl = split(tTitle, MW - 4)
       for (const t of tl) { check(6); doc.text(t, ML + 4, y); y += 5 }
-      // Justification in normal
       if (justification) {
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8.5)
+        doc.setFontSize(9)
         const jl = split(justification, MW - 8)
         for (const j of jl) { check(5); doc.text(j, ML + 8, y); y += 4.5 }
       }
       y += 2
     } else if (line.match(/^- \*\*(.+?)\*\*(.*)$/)) {
+      // Pattern "- **Titre** détail" : titre en gras sur sa propre ligne,
+      // détail en paragraphe normal dessous, aligné sur la marge gauche du contenu.
+      // Évite l'effet "escalier" sur les wraps de lignes longues (recommandations,
+      // axes thérapeutiques). Voir PDF guide §puces hanging indent.
       const m = line.match(/^- \*\*(.+?)\*\*(.*)$/)!
+      const title = m[1].trim()
+      const detail = m[2].replace(/^\s*[—:–-]\s*/, '').trim()
       check(8)
-      doc.setFontSize(9)
+      // Titre : en gras, indenté légèrement, marge gauche cohérente avec les paragraphes
+      doc.setFontSize(9.5)
       doc.setFont('helvetica', 'bold')
-      const bullet = `• ${m[1]}`
-      const bw = doc.getTextWidth(bullet)
-      doc.text(bullet, ML + 4, y)
-      if (m[2].trim()) {
+      const tl = split(title, MW - 4)
+      for (const t of tl) { check(5.5); doc.text(t, ML + 2, y); y += 5 }
+      // Détail : en normal, même marge gauche (pas de hanging indent qui décroche),
+      // ligne hauteur compactée, espacement sous le bloc pour aérer.
+      if (detail) {
         doc.setFont('helvetica', 'normal')
-        const rest = split(m[2].trimStart(), MW - 4 - bw - 2)
-        doc.text(rest[0] ?? '', ML + 4 + bw + 1, y)
-        y += 5
-        for (let r = 1; r < rest.length; r++) { check(5); doc.text(rest[r], ML + 4 + bw + 1, y); y += 4.5 }
-      } else {
-        y += 5
+        doc.setFontSize(9.5)
+        const dl = split(detail, MW - 4)
+        for (const d of dl) { check(5); doc.text(d, ML + 2, y); y += 4.6 }
       }
+      y += 2
     } else if (line.startsWith('- ')) {
+      // Puce simple : hanging indent propre — la puce sort à gauche, les lignes
+      // suivantes s'alignent juste après la puce (pas un retour à la marge brute).
       const text = line.replace(/^- /, '').replace(/\*\*(.+?)\*\*/g, '$1')
       check(7)
-      doc.setFontSize(9)
+      doc.setFontSize(9.5)
       doc.setFont('helvetica', 'normal')
-      const bl = split(`• ${text}`, MW - 6)
-      for (const b of bl) { check(5); doc.text(b, ML + 4, y); y += 4.5 }
+      const bulletGlyph = '• '
+      const bw = doc.getTextWidth(bulletGlyph)
+      const bl = split(text, MW - 4 - bw)
+      for (let r = 0; r < bl.length; r++) {
+        check(5)
+        if (r === 0) doc.text(sanitize(bulletGlyph), ML + 2, y)
+        doc.text(bl[r], ML + 2 + bw, y)
+        y += 4.5
+      }
       y += 1
     } else if (line.trim() === '') {
       y += 3
     } else if (line.startsWith('**') && line.endsWith('**')) {
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9.5)
+      doc.setFontSize(10)
+      doc.setTextColor(...C.primary)
       const txt = line.replace(/\*\*/g, '')
       const tl = split(txt, MW)
       for (const t of tl) { check(6); doc.text(t, ML, y); y += 5 }
+      doc.setTextColor(...C.text)
       y += 1
     } else {
       const text = line.replace(/\*\*(.+?)\*\*/g, '$1')
       if (text.trim()) {
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
+        doc.setFontSize(10)
         const tl = split(text, MW)
-        for (const t of tl) { check(5); doc.text(t, ML, y); y += 4.5 }
-        y += 1
+        for (const t of tl) { check(5.5); doc.text(t, ML, y); y += 5 }
+        y += 1.5
+      }
+    }
+    i++
+  }
+
+  // ── Signature : titre optionnel (défaut '10. Signature') + bloc aligné à droite ──
+  const sigTitleOpt = options?.signatureTitle === undefined ? '10. Signature' : options.signatureTitle
+  if (hasPraticien) {
+    y += 8
+    check(45)
+
+    if (sigTitleOpt) {
+      // Titre de section numérotée, même style que les sections précédentes
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10.5)
+      doc.setTextColor(...C.primary)
+      const sigTitle = sanitize(sigTitleOpt)
+      doc.text(sigTitle, ML, y)
+      y += 1.5
+      doc.setDrawColor(...C.primary)
+      doc.setLineWidth(0.4)
+      const sigTw = doc.getTextWidth(sigTitle)
+      doc.line(ML, y, ML + sigTw, y)
+      doc.setTextColor(...C.text)
+      y += 6
+    }
+
+    // Contenu de la signature aligné à droite
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(9)
+    doc.setTextColor(...C.muted)
+    doc.text(sanitize(`${(p.ville ?? '').toUpperCase() || ''}${p.ville ? ', le ' : 'Le '}${dateStr}`), W - MR, y, { align: 'right' })
+    y += 6
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(...C.primary)
+    doc.text(sanitize(fullPraticienName || '—'), W - MR, y, { align: 'right' })
+    y += 4.5
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...C.text)
+    if (p.profession) {
+      doc.text(sanitize(p.profession), W - MR, y, { align: 'right' })
+      y += 4
+    }
+    if (p.codePostal || p.ville) {
+      doc.setTextColor(...C.muted)
+      doc.text(sanitize(`${p.codePostal ?? ''} ${p.ville ?? ''}`.trim()), W - MR, y, { align: 'right' })
+      y += 4
+      doc.setTextColor(...C.text)
+    }
+    if (p.telephone) {
+      doc.setTextColor(...C.muted)
+      doc.text(sanitize(`Tél : ${p.telephone}`), W - MR, y, { align: 'right' })
+      y += 4
+      doc.setTextColor(...C.text)
+    }
+
+    // Image signature manuscrite si disponible
+    if (p.signatureImage) {
+      try {
+        const imgW = 45
+        const imgH = 22
+        const imgX = W - MR - imgW
+        const imgY = y + 2
+        check(imgH + 5)
+        doc.addImage(p.signatureImage, 'PNG', imgX, imgY, imgW, imgH)
+        y += imgH + 4
+      } catch (e) {
+        console.warn('[PDF] Échec ajout signature image :', e instanceof Error ? e.message : e)
       }
     }
   }
 
   // ── Footer ──
   const totalPages = (doc as any).internal.getNumberOfPages()
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p)
+  for (let pg = 1; pg <= totalPages; pg++) {
+    doc.setPage(pg)
     doc.setDrawColor(...C.light)
     doc.setLineWidth(0.3)
-    doc.line(ML, 286, W - MR, 286)
+    doc.line(ML, H - 14, W - MR, H - 14)
     doc.setFontSize(6.5)
     doc.setFont('helvetica', 'italic')
     doc.setTextColor(...C.muted)
-    doc.text('Document confidentiel — à usage exclusivement médical et paramédical', ML, 291)
-    doc.text(`Page ${p}/${totalPages}`, W - MR - 18, 291)
+    doc.text('Document confidentiel — couvert par le secret professionnel', ML, H - 9)
+    doc.text(`Page ${pg}/${totalPages}`, W - MR - 18, H - 9)
     doc.setTextColor(...C.text)
   }
 
   const safeName = (patientId.nom || 'Anonyme').replace(/\s+/g, '_')
   const safeFirst = (patientId.prenom || '').replace(/\s+/g, '_')
-  doc.save(`Rapport_${safeName}_${safeFirst}_${dateFile}.pdf`)
+  const prefix = options?.filenamePrefix ?? 'Bilan_Physiotherapie'
+  const fileName = `${prefix}_${safeName}_${safeFirst}_${dateFile}.pdf`
+  doc.save(fileName)
+  return { blob: doc.output('blob') as Blob, fileName }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

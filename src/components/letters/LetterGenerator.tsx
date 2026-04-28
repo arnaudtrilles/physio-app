@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { LetterType, LetterFormData, LetterRecord, ProfileData, BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, LetterAuditEntry } from '../../types'
 import { LETTER_TYPES, buildLetterPrompt, letterTitleFor, getLetterTypeMeta, buildPatientPrefill } from '../../utils/letterPrompts'
-import { callGemini, GeminiAuthError } from '../../utils/geminiClient'
+import { callClaude, ClaudeAuthError } from '../../utils/claudeClient'
 import { generateLetterPDF } from '../../utils/pdfGenerator'
 import { pseudonymizeForm, rehydrateText } from '../../utils/pseudonymize'
 import { scanFormForPII, type PIIMatch } from '../../utils/piiScanner'
@@ -156,7 +156,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
       //    data clinique (non identifiante) + âge + pathologie est transmise.
       const { placeholders, formSansPII } = pseudonymizeForm(form)
       const { system, user } = buildLetterPrompt(type, formSansPII, profile.profession)
-      const text = await callGemini(apiKey, system, user, 2500, false)
+      const text = await callClaude(apiKey, system, user, 2500, false)
       // ── Réhydratation côté client : les vraies valeurs sont réinjectées
       //    dans le texte avant qu'il soit affiché ou sauvegardé.
       const cleaned = rehydrateText(text.trim(), placeholders)
@@ -177,15 +177,15 @@ export function LetterGenerator(props: LetterGeneratorProps) {
         type,
         pseudonymized: true,
         piiWarningsCount: warningsCount,
-        modelUsed: 'gemini (fallback chain)',
+        modelUsed: 'claude-sonnet-4-6',
         resultLength: cleaned.length,
       })
       // Reset flags pour la prochaine génération
       setPiiAcknowledged(false)
       setPiiWarnings(null)
     } catch (e) {
-      if (e instanceof GeminiAuthError) {
-        setGenError("Clé API invalide. Vérifiez-la dans votre profil.")
+      if (e instanceof ClaudeAuthError) {
+        setGenError("Authentification IA échouée. Réessayez dans quelques minutes.")
       } else {
         setGenError((e as Error).message || 'Erreur lors de la génération.')
       }
@@ -423,7 +423,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
               ⚠ Configuration incomplète
             </p>
             <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#78350f', lineHeight: 1.5 }}>
-              {missingApiKey && <>• Clé API Gemini manquante dans votre profil.<br/></>}
+              {missingApiKey && <>• Service IA indisponible — vérifiez votre connexion.<br/></>}
               {missingPraticien && <>• Vos informations praticien (nom, ville) sont incomplètes. Renseignez-les dans votre profil pour un en-tête correct.</>}
             </p>
           </div>
@@ -546,7 +546,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
               onClick={() => { handleGenerate() }}
               disabled={generating}
               style={{ width: '100%', marginTop: 8, padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'transparent', color: 'var(--primary)', border: '1.5px dashed var(--primary)', fontWeight: 600, fontSize: '0.84rem', cursor: generating ? 'wait' : 'pointer' }}>
-              {generating ? 'Régénération…' : '↻ Régénérer avec Gemini'}
+              {generating ? 'Régénération…' : '↻ Régénérer le courrier'}
             </button>
           </div>
         )}

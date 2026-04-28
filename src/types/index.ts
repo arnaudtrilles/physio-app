@@ -40,10 +40,17 @@ export interface BilanDocument {
   /**
    * true si le document a été passé par DocumentMasker (identifiants patient
    * masqués manuellement). false / absent = document brut, dangereux à envoyer
-   * à l'IA tel quel. Le wrapper callGeminiSecure vérifie ce flag.
+   * à l'IA tel quel. Le wrapper callClaudeSecure vérifie ce flag.
    */
   masked?: boolean
 }
+
+/**
+ * Origine d'un PatientDocument. Sert à différencier les uploads manuels
+ * (photos, ordonnances) des PDF auto-générés par l'app (bilan, analyse IA,
+ * évolution) — affichage d'un badge dédié dans DossierDocuments.
+ */
+export type PatientDocumentSource = 'upload' | 'bilan' | 'analyse-ia' | 'evolution'
 
 export interface PatientDocument {
   id: string
@@ -54,7 +61,13 @@ export interface PatientDocument {
   originalData?: string // base64 de l'original non caviardé
   addedAt: string
   masked?: boolean
+  /** Origine du document. Si absent, traité comme 'upload' (compat). */
+  source?: PatientDocumentSource
+  /** true = PDF généré par l'app (pas un upload manuel). */
+  generated?: boolean
 }
+
+export type Sexe = 'masculin' | 'feminin'
 
 export interface BilanRecord {
   id: number
@@ -62,6 +75,7 @@ export interface BilanRecord {
   prenom: string
   dateBilan: string
   dateNaissance: string
+  sexe?: Sexe
   zoneCount: number
   evn?: number
   zone?: string
@@ -303,7 +317,7 @@ export interface LetterRecord {
 
 /**
  * Journal d'audit des traitements IA pour traçabilité RGPD.
- * Une entrée est créée à chaque appel effectif à Gemini pour générer un courrier.
+ * Une entrée est créée à chaque appel effectif à Claude pour générer un courrier.
  * Contient uniquement des métadonnées non-identifiantes ; jamais le contenu du courrier.
  */
 export interface LetterAuditEntry {
@@ -314,7 +328,7 @@ export interface LetterAuditEntry {
   type: LetterType
   pseudonymized: boolean               // toujours true en l'état, documenté pour le futur
   piiWarningsCount: number             // combien d'alertes PII le praticien a vues avant validation
-  modelUsed: string                    // ex: "gemini-2.5-flash"
+  modelUsed: string                    // ex: "claude-sonnet-4-6"
   resultLength: number                 // taille du texte généré (caractères)
 }
 
@@ -352,9 +366,31 @@ export interface AICallAuditEntry {
 
 export interface EvolutionIA {
   generatedAt: string
+  /** Résumé clinique global 3-4 phrases (synthèse narrative). */
   resume: string
   tendance: 'amelioration' | 'stationnaire' | 'regression' | 'mixte'
+  /** Tableau clinique initial (prose médicale, 3-5 phrases). */
+  tableauInitial?: string
+  /** Évolution clinique structurée (4 sous-blocs narratifs). */
+  evolutionClinique?: {
+    syntheseGlobale: string
+    evolutionSymptomatique: string
+    evolutionFonctionnelle: string
+    evolutionObjective: string
+  }
   progression: Array<{ bilanNum: number; date: string; evn: number | null; commentaire: string; etape?: string }>
+  /** Interventions réalisées au fil de la PEC (3 sous-blocs). */
+  interventionsRealisees?: {
+    techniquesManuelles: string
+    exercicesProgrammes: string
+    educationConseils: string
+  }
+  /** État clinique actuel (symptômes, fonctionnel, objectif). */
+  etatActuel?: {
+    symptomes: string
+    fonctionnel: string
+    objectif: string
+  }
   pointsForts: string[]
   pointsVigilance: string[]
   recommandations: Array<{ titre: string; detail: string }>

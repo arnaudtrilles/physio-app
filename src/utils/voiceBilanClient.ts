@@ -1,5 +1,5 @@
-import { callGemini } from './geminiClient'
 import { callClaude } from './claudeClient'
+import { CLAUDE_MODELS } from './claudeModels'
 import type { BilanType, NarrativeSection } from '../types'
 
 /**
@@ -77,12 +77,12 @@ Transcription brute :
 ${rawText}
 """`
 
-  const result = await callGemini('', systemPrompt, userPrompt, 4096, false, 'gemini-2.0-flash')
+  const result = await callClaude('', systemPrompt, userPrompt, 4096, false, CLAUDE_MODELS.VOICE_REFORMULATION)
   return result.trim()
 }
 
 // ─── Schéma d'extraction par type de bilan ─────────────────────────────────
-// Description compacte — Gemini voit ce schéma dans le system prompt et
+// Description compacte — Claude voit ce schéma dans le system prompt et
 // retourne UNIQUEMENT les champs explicitement mentionnés dans la dictée.
 // Les champs non évoqués doivent être OMIS (pas de null, pas de chaîne vide).
 
@@ -270,7 +270,7 @@ const SCHEMAS: Partial<Record<BilanType, string>> = {
 }
 
 /**
- * Construit le system prompt pour Gemini selon le type de bilan.
+ * Construit le system prompt pour Claude selon le type de bilan.
  */
 function buildExtractionPrompt(bilanType: BilanType): string {
   const schema = SCHEMAS[bilanType]
@@ -310,7 +310,7 @@ ${schema}
 }
 
 /**
- * Appelle Gemini pour extraire un objet BilanData partiel depuis une transcription.
+ * Appelle Claude pour extraire un objet BilanData partiel depuis une transcription.
  * Le JSON retourné est directement utilisable avec bilanRef.setData(...).
  */
 export async function extractBilanFromTranscription(
@@ -320,13 +320,13 @@ export async function extractBilanFromTranscription(
   const systemPrompt = buildExtractionPrompt(bilanType)
   const userPrompt = `Transcription de la dictée du kiné (à analyser) :\n\n"""\n${transcription}\n"""`
 
-  const raw = await callGemini(
+  const raw = await callClaude(
     '',                // apiKey ignoré (auth côté serveur)
     systemPrompt,
     userPrompt,
     16384,             // maxOutputTokens — le JSON extrait peut être volumineux
     true,              // jsonMode
-    'gemini-2.5-pro'   // modèle préféré — précision max pour l'extraction
+    CLAUDE_MODELS.DEFAULT  // modèle préféré — Sonnet pour extraction précise
   )
 
   let parsed: Record<string, unknown>
@@ -384,7 +384,7 @@ Transcription :
 ${transcription}
 """`
 
-  const raw = await callClaude(systemPrompt, userPrompt, 8192, 'claude-sonnet-4-6')
+  const raw = await callClaude('', systemPrompt, userPrompt, 8192, false, CLAUDE_MODELS.DEFAULT)
 
   let parsed: NarrativeSection[]
   try {

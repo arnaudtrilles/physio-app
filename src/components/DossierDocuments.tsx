@@ -1,5 +1,6 @@
 import { memo, useRef, useState } from 'react'
-import type { BilanRecord, PatientDocument } from '../types'
+import type { BilanRecord, PatientDocument, PatientDocumentSource } from '../types'
+import { sourceBadgeLabel } from '../utils/pdfPersistence'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +25,10 @@ interface UnifiedDoc {
   bilanDate?: string
   docIndex?: number
   docId?: string
+  /** Origine d'un document standalone (upload vs PDF auto-généré). */
+  patientDocSource?: PatientDocumentSource
+  /** true = PDF auto-généré par l'app (badge dédié). */
+  generated?: boolean
 }
 
 interface DossierDocumentsProps {
@@ -240,6 +245,8 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
       addedAt: d.addedAt,
       kind: 'standalone',
       docId: d.id,
+      patientDocSource: d.source,
+      generated: d.generated,
     })
   }
   unified.sort((a, b) => (a.addedAt < b.addedAt ? 1 : -1))
@@ -383,6 +390,13 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
                         fontSize: 10, fontWeight: 600, background: '#dbeafe', color: '#1e3a8a', lineHeight: '16px',
                       }}>
                         {doc.bilanZone ?? 'Bilan'} · {doc.bilanDate}
+                      </span>
+                    ) : doc.generated ? (
+                      <span style={{
+                        display: 'inline-block', padding: '0 6px', borderRadius: 4,
+                        fontSize: 10, fontWeight: 600, background: '#fef3c7', color: '#92400e', lineHeight: '16px',
+                      }}>
+                        {sourceBadgeLabel(doc.patientDocSource) ?? 'Auto-généré'}
                       </span>
                     ) : (
                       <span style={{

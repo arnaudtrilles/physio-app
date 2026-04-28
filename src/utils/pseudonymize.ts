@@ -10,7 +10,7 @@ import { computeAge } from './clinicalPrompt'
  * 2. Après la réponse LLM, on réinjecte les vraies valeurs dans le texte généré
  *    côté client (les données identifiantes ne quittent jamais le poste).
  *
- * Ainsi Google Gemini ne reçoit que :
+ * Ainsi Claude (Anthropic) ne reçoit que :
  *  - Un patient "Monsieur X" / "Madame X" de N ans
  *  - Un destinataire "Docteur Y"
  *  - Les données cliniques (qui ne sont pas identifiantes en elles-mêmes)

@@ -3,8 +3,8 @@ import { DictableTextarea } from './VoiceMic'
 import type { AnalyseIAIntermediaire, AICallAuditEntry } from '../types'
 import { buildIntermediairePrompt, parseAnalyseIAIntermediaire, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanIntermediaireEntry, SeanceHistoryEntry } from '../utils/clinicalPrompt'
-import { GeminiAuthError } from '../utils/geminiClient'
-import { callGeminiSecure } from '../utils/geminiSecure'
+import { ClaudeAuthError } from '../utils/claudeClient'
+import { callClaudeSecure } from '../utils/claudeSecure'
 
 interface Props {
   apiKey: string
@@ -46,13 +46,12 @@ export function BilanNoteIntermediaire({
     setError(null)
     try {
       const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession, closedAntecedents)
-      const raw = await callGeminiSecure({
+      const raw = await callClaudeSecure({
         apiKey,
         systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige impérativement en français médical professionnel.`,
         userPrompt: prompt,
         maxOutputTokens: 8192,
         jsonMode: true,
-        preferredModel: 'gemini-3.1-pro-preview',
         patient: { nom: patient.nom, prenom: patient.prenom, patientKey },
         category: 'bilan_intermediaire',
         onAudit,
@@ -67,7 +66,7 @@ export function BilanNoteIntermediaire({
         setTimeout(() => run(attempt + 1), 1200)
         return
       }
-      if (err instanceof GeminiAuthError) {
+      if (err instanceof ClaudeAuthError) {
         setError('auth')
       } else {
         const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -90,7 +89,7 @@ export function BilanNoteIntermediaire({
 - Prise en charge : ${note.priseEnChargeAjustee.map(p => p.point).join(' | ')}`
 
       const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession, closedAntecedents)
-      const raw = await callGeminiSecure({
+      const raw = await callClaudeSecure({
         apiKey,
         systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,
         userPrompt: `${prompt}
@@ -103,7 +102,6 @@ ${correction.trim()}
 Produis une nouvelle note corrigée en tenant compte des observations du thérapeute.`,
         maxOutputTokens: 8192,
         jsonMode: true,
-        preferredModel: 'gemini-3.1-pro-preview',
         patient: { nom: patient.nom, prenom: patient.prenom, patientKey },
         category: 'bilan_intermediaire',
         onAudit,
@@ -168,9 +166,9 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
         {/* No API key */}
         {!apiKey && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem', marginBottom: 8 }}>Clé API Gemini requise</div>
+            <div style={{ fontWeight: 700, color: '#92400e', fontSize: '0.95rem', marginBottom: 8 }}>Service IA indisponible</div>
             <p style={{ fontSize: '0.85rem', color: '#78350f', margin: '0 0 14px', lineHeight: 1.5 }}>
-              Configurez votre clé API Gemini dans votre profil pour accéder à cette fonctionnalité.
+              La note diagnostique n'est pas disponible actuellement. Vérifiez votre connexion.
             </p>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-light))', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
@@ -183,7 +181,7 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
         {error === 'quota' && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Quota dépassé</div>
-            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Quota de requêtes dépassé. Vérifiez votre compte Google AI Studio.</p>
+            <p style={{ fontSize: '0.82rem', color: '#7f1d1d', margin: 0 }}>Quota de requêtes dépassé. Réessayez dans quelques minutes.</p>
           </div>
         )}
         {error === 'auth' && (
@@ -191,7 +189,7 @@ Produis une nouvelle note corrigée en tenant compte des observations du thérap
             <div style={{ fontWeight: 700, color: '#991b1b', fontSize: '0.95rem', marginBottom: 8 }}>Clé API invalide</div>
             <button onClick={onGoToProfile}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 10, background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>
-              Configurer ma clé Gemini
+              Ouvrir le profil
             </button>
           </div>
         )}
