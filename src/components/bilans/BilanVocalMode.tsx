@@ -7,7 +7,7 @@ type VocalState = 'idle' | 'recording' | 'transcribing' | 'generating' | 'done' 
 type RecordingContext = 'dictee' | 'seance'
 
 const BAR_COUNT = 32
-const WARN_SECONDS = 55 * 60 // 55 min warning
+const WARN_SECONDS = 45 * 60 // 45 min warning
 
 interface Props {
   zone: string
@@ -181,7 +181,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
         <MicIcon /> Démarrer l'enregistrement
       </button>
       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-        Durée max recommandée : 55 min · WebM ~14 Mo/h
+        Durée max recommandée : 45 min · WebM ~11 Mo/h
       </div>
     </div>
   )
@@ -191,7 +191,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '1rem 0 0.5rem' }}>
       {warned && (
         <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#92400e', textAlign: 'center' }}>
-          ⚠ Approche des 55 min — recommandé d'arrêter avant la limite Whisper (25 Mo).
+          ⚠ Approche des 45 min — recommandé d'arrêter avant la limite Whisper (25 Mo).
         </div>
       )}
       <div style={{ background: 'var(--input-bg)', border: '1.5px solid var(--primary)', borderRadius: 14, padding: '1rem 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
