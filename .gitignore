@@ -31,3 +31,8 @@ dist-ssr
 gcp-*.json
 .env*.local
 .env
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
