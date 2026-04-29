@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
   const [visible, setVisible] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const onDoneRef = useRef(onDone)
 
   useEffect(() => {
-    // Légère pause avant d'apparaître — sensation de respiration
     const t0 = setTimeout(() => setVisible(true), 80)
     const t1 = setTimeout(() => setLeaving(true), 1600)
-    const t2 = setTimeout(() => onDone(), 2200)
+    const t2 = setTimeout(() => onDoneRef.current(), 2200)
     return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2) }
-  }, [onDone])
+  }, [])
 
   return (
     <div style={{
