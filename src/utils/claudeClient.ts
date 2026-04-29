@@ -8,8 +8,10 @@ export class ClaudeTimeoutError extends Error {
   constructor() { super('timeout') }
 }
 
-// 58s — légèrement sous la limite Vercel Hobby Node serverless de 60s
-const CLIENT_TIMEOUT_MS = 58_000
+// 290s — légèrement sous la limite Vercel Pro Node serverless de 300s.
+// Couvre les transcriptions longues (ex: bilan vocal séance 45 min) sans
+// abandonner avant que la fonction serverless n'ait eu le temps de répondre.
+const CLIENT_TIMEOUT_MS = 290_000
 
 export interface ClaudeUsage {
   input: number

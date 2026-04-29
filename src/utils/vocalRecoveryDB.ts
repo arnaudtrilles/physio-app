@@ -18,7 +18,9 @@ export type VocalContext = 'dictee' | 'seance'
 
 export interface VocalChunk {
   index: number
-  blob: Blob
+  // Audio brut. Optionnel : on le drop dès que la transcription complète est
+  // consolidée pour libérer l'espace IDB (un bilan de 45 min = ~10 Mo d'audio).
+  blob?: Blob
   transcription?: string
   durationSec?: number
   sizeBytes: number
@@ -147,12 +149,21 @@ export function concatChunkTranscriptions(rec: VocalRecovery): string {
  * Reconstruit un blob audio unique en concaténant tous les chunks dans l'ordre.
  * NB : chaque chunk WebM est un fichier autonome — le blob agrégé n'est pas lisible
  * par tous les players, mais reste valide pour téléchargement.
+ * Renvoie un Blob vide si tous les chunks ont été nettoyés post-transcription.
  */
 export function concatChunkBlobs(rec: VocalRecovery): Blob {
   const parts = rec.chunks
     .slice()
     .sort((a, b) => a.index - b.index)
     .map(c => c.blob)
+    .filter((b): b is Blob => !!b)
   const mimeType = parts[0]?.type || 'audio/webm'
   return new Blob(parts, { type: mimeType })
+}
+
+/**
+ * Indique s'il reste de l'audio brut dans le recovery (avant nettoyage post-transcription).
+ */
+export function recoveryHasAudio(rec: VocalRecovery): boolean {
+  return rec.chunks.some(c => !!c.blob)
 }
