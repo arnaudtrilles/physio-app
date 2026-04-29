@@ -24,25 +24,30 @@ export const OEDEME_COLORS: Record<OedemeType, { fg: string; bg: string; border:
 }
 
 // ─── Localisation ────────────────────────────────────────────────────────────
-// On adopte une cartographie macro (~13 zones cliniquement pertinentes pour le
-// DLM) plutôt qu'une granularité segmentaire. La granularité fine est capturée
-// dans les annotations texte et la circométrie. Cette approche limite les
-// micro-tap sur tablette et les superpositions visuelles dans la silhouette.
+// Cartographie segmentaire — chaque articulation est un territoire distinct.
+// Pour les MS : épaule, bras, avant-bras, main. Pour les MI : cuisse, genou,
+// jambe, pied. Le tronc reste en zones macro (seins, thorax, abdomen, pelvis,
+// dos haut, lombaire, fesses). Cliniquement pertinent pour la cartographie
+// lymphatique (drainage par territoire) et la circométrie associée.
 export type BodyRegion =
   | 'tete' | 'cou'
-  | 'MSD' | 'MSG'
+  | 'epauleD' | 'brasD' | 'avantBrasD' | 'mainD'
+  | 'epauleG' | 'brasG' | 'avantBrasG' | 'mainG'
   | 'seinD' | 'seinG'
   | 'thorax' | 'abdomen' | 'pelvis'
-  | 'MID' | 'MIG'
   | 'dosHaut' | 'lombaire' | 'fesses'
+  | 'cuisseD' | 'genouD' | 'jambeD' | 'piedD'
+  | 'cuisseG' | 'genouG' | 'jambeG' | 'piedG'
 
 export const REGION_LABELS: Record<BodyRegion, string> = {
   tete: 'Tête / face', cou: 'Cou',
-  MSD: 'Membre supérieur D', MSG: 'Membre supérieur G',
+  epauleD: 'Épaule D', brasD: 'Bras D', avantBrasD: 'Avant-bras D', mainD: 'Main D',
+  epauleG: 'Épaule G', brasG: 'Bras G', avantBrasG: 'Avant-bras G', mainG: 'Main G',
   seinD: 'Sein D', seinG: 'Sein G',
   thorax: 'Thorax', abdomen: 'Abdomen', pelvis: 'Pelvis / génital',
-  MID: 'Membre inférieur D', MIG: 'Membre inférieur G',
   dosHaut: 'Dos haut', lombaire: 'Lombaire', fesses: 'Fesses',
+  cuisseD: 'Cuisse D', genouD: 'Genou D', jambeD: 'Jambe D', piedD: 'Pied D',
+  cuisseG: 'Cuisse G', genouG: 'Genou G', jambeG: 'Jambe G', piedG: 'Pied G',
 }
 
 export type Cote = 'D' | 'G' | 'bilateral'
@@ -618,7 +623,7 @@ export const DLM_PRESETS: DlmPreset[] = [
     apply: () => ({
       oedemeTypes: ['lymphoedeme'],
       cote: 'D',
-      regions: ['MSD'],
+      regions: ['epauleD', 'brasD', 'avantBrasD', 'mainD', 'seinD'],
       anamnese: {
         ...emptyDlmAnamnese(),
         curageGanglionnaire: 'oui',
@@ -651,7 +656,7 @@ export const DLM_PRESETS: DlmPreset[] = [
     apply: () => ({
       oedemeTypes: ['lipoedeme'],
       cote: 'bilateral',
-      regions: ['MID', 'MIG'],
+      regions: ['cuisseD', 'genouD', 'jambeD', 'cuisseG', 'genouG', 'jambeG'],
       stadeLipo: '2',
       typeLipoDistribution: 'Type III — Hanches → chevilles',
       anamnese: {
@@ -686,7 +691,7 @@ export const DLM_PRESETS: DlmPreset[] = [
     apply: () => ({
       oedemeTypes: ['phleboedeme'],
       cote: 'D',
-      regions: ['MID'],
+      regions: ['cuisseD', 'genouD', 'jambeD', 'piedD'],
       ceap: 'C3',
       anamnese: {
         ...emptyDlmAnamnese(),
@@ -721,7 +726,7 @@ export const DLM_PRESETS: DlmPreset[] = [
     apply: () => ({
       oedemeTypes: ['lipoedeme', 'lymphoedeme'],
       cote: 'bilateral',
-      regions: ['MID', 'MIG'],
+      regions: ['cuisseD', 'genouD', 'jambeD', 'piedD', 'cuisseG', 'genouG', 'jambeG', 'piedG'],
       stadeLipo: '4',
       stadeISL: 'IIa',
       typeLipoDistribution: 'Type III — Hanches → chevilles',

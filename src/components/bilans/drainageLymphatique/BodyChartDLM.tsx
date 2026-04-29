@@ -3,58 +3,87 @@ import { REGION_LABELS, OEDEME_COLORS, OEDEME_LABELS } from './dlmTypes'
 import type { BodyRegion, OedemeType } from './dlmTypes'
 import { DictableTextarea } from '../../VoiceMic'
 
-// ─── Cartographie macro-zones ────────────────────────────────────────────────
-// 13 zones cliniquement pertinentes pour le DLM. Chaque zone est un path SVG
-// FERMÉ et NON CHEVAUCHANT — c'est la garantie d'une silhouette lisible et
-// d'un comportement de sélection sans ambiguïté. Les détails fins (épaule vs
-// main, mollet vs cheville…) sont consignés dans les annotations et la
-// circométrie, pas dans le tap.
+// ─── Cartographie segmentaire ────────────────────────────────────────────────
+// Silhouette anatomique avec articulations distinctes — épaule / bras /
+// avant-bras / main pour les MS, et cuisse / genou / jambe / pied pour les
+// MI. Chaque zone est un path SVG fermé et NON CHEVAUCHANT — les frontières
+// articulaires se touchent exactement. ViewBox calibré 220×562 pour que la
+// silhouette entière (tête au pied) tienne sans clipping.
 
 interface RegionPath {
   id: BodyRegion
-  /** SVG path en viewBox 0 0 200 480 — silhouette debout. */
+  /** SVG path en viewBox 0 0 220 562. */
   d: string
-  /** Position du label central (pour fallback texte). */
+  /** Position du label central (tap-feedback). */
   cx: number
   cy: number
 }
 
-// Les coordonnées sont calculées pour que les zones se touchent exactement
-// le long des frontières communes (pas de gap, pas de chevauchement).
+// ─── Pièces communes (face + dos) : tête, cou, membres ──────────────────────
+// Tête : ellipse centrée sur la silhouette.
+const HEAD: RegionPath = {
+  id: 'tete',
+  d: 'M 88 40 a 22 26 0 1 0 44 0 a 22 26 0 1 0 -44 0 z',
+  cx: 110, cy: 40,
+}
 
-const FRONT_REGIONS: RegionPath[] = [
-  // Tête + cou
-  { id: 'tete', d: 'M82 6 a18 22 0 1 0 36 0 a18 22 0 1 0 -36 0 z',                        cx: 100, cy: 22 },
-  { id: 'cou',  d: 'M88 44 h24 v14 h-24 z',                                                cx: 100, cy: 51 },
-  // Bras (entiers — épaule au bout des doigts inclus)
-  { id: 'MSD',  d: 'M22 60 q14 -4 30 4 v160 q-14 4 -30 -2 z',                              cx: 36,  cy: 140 },
-  { id: 'MSG',  d: 'M148 64 q16 -8 30 -4 v158 q-14 4 -30 0 z',                             cx: 164, cy: 140 },
-  // Tronc antérieur — seins, thorax, abdomen, pelvis (tous tuilés)
-  { id: 'seinD',   d: 'M52 60 q24 -6 48 0 v22 q-24 6 -48 0 z',                             cx: 76,  cy: 73 },
-  { id: 'seinG',   d: 'M100 60 q24 -6 48 0 v22 q-24 6 -48 0 z',                            cx: 124, cy: 73 },
-  { id: 'thorax',  d: 'M52 82 h96 v28 h-96 z',                                             cx: 100, cy: 96 },
-  { id: 'abdomen', d: 'M52 110 h96 v44 h-96 z',                                            cx: 100, cy: 132 },
-  { id: 'pelvis',  d: 'M52 154 h96 v28 q-48 8 -96 0 z',                                    cx: 100, cy: 170 },
-  // Jambes (entières — cuisse au pied inclus)
-  { id: 'MID',  d: 'M52 182 q24 8 48 0 v260 q-24 4 -48 0 z',                               cx: 76,  cy: 320 },
-  { id: 'MIG',  d: 'M100 182 q24 8 48 0 v260 q-24 4 -48 0 z',                              cx: 124, cy: 320 },
+const COU: RegionPath = {
+  id: 'cou',
+  d: 'M 100 66 L 120 66 L 120 82 L 100 82 Z',
+  cx: 110, cy: 74,
+}
+
+// Membre supérieur droit (MSD = côté gauche du viewer en vue antérieure ET
+// postérieure pour cohérence d'usage clinique tablette).
+const ARM_D: RegionPath[] = [
+  { id: 'epauleD',     d: 'M 28 82 L 72 82 L 70 130 L 32 130 Z',                                 cx: 50, cy: 106 },
+  { id: 'brasD',       d: 'M 32 130 L 70 130 L 69 215 L 35 215 Z',                               cx: 50, cy: 172 },
+  { id: 'avantBrasD',  d: 'M 35 215 L 69 215 L 66 295 L 38 295 Z',                               cx: 52, cy: 254 },
+  { id: 'mainD',       d: 'M 38 295 L 66 295 L 64 322 q -3 13 -13 13 L 41 335 q -8 0 -8 -8 Z',   cx: 51, cy: 314 },
 ]
 
-const BACK_REGIONS: RegionPath[] = [
-  // Tête + cou (mêmes paths que face)
-  { id: 'tete', d: 'M82 6 a18 22 0 1 0 36 0 a18 22 0 1 0 -36 0 z',                        cx: 100, cy: 22 },
-  { id: 'cou',  d: 'M88 44 h24 v14 h-24 z',                                                cx: 100, cy: 51 },
-  // Bras (mêmes paths)
-  { id: 'MSD',  d: 'M22 60 q14 -4 30 4 v160 q-14 4 -30 -2 z',                              cx: 36,  cy: 140 },
-  { id: 'MSG',  d: 'M148 64 q16 -8 30 -4 v158 q-14 4 -30 0 z',                             cx: 164, cy: 140 },
-  // Tronc postérieur — dos haut, lombaire, fesses
-  { id: 'dosHaut',  d: 'M52 60 h96 v60 h-96 z',                                            cx: 100, cy: 90 },
-  { id: 'lombaire', d: 'M52 120 h96 v32 h-96 z',                                           cx: 100, cy: 136 },
-  { id: 'fesses',   d: 'M52 152 h96 v32 q-48 8 -96 0 z',                                   cx: 100, cy: 170 },
-  // Jambes (mêmes paths)
-  { id: 'MID',  d: 'M52 184 q24 8 48 0 v258 q-24 4 -48 0 z',                               cx: 76,  cy: 320 },
-  { id: 'MIG',  d: 'M100 184 q24 8 48 0 v258 q-24 4 -48 0 z',                              cx: 124, cy: 320 },
+// Membre supérieur gauche (mirroir x=110).
+const ARM_G: RegionPath[] = [
+  { id: 'epauleG',     d: 'M 192 82 L 148 82 L 150 130 L 188 130 Z',                              cx: 170, cy: 106 },
+  { id: 'brasG',       d: 'M 188 130 L 150 130 L 151 215 L 185 215 Z',                            cx: 170, cy: 172 },
+  { id: 'avantBrasG',  d: 'M 185 215 L 151 215 L 154 295 L 182 295 Z',                            cx: 168, cy: 254 },
+  { id: 'mainG',       d: 'M 182 295 L 154 295 L 156 322 q 3 13 13 13 L 179 335 q 8 0 8 -8 Z',    cx: 169, cy: 314 },
 ]
+
+// Membre inférieur droit.
+const LEG_D: RegionPath[] = [
+  { id: 'cuisseD', d: 'M 72 285 L 110 285 L 108 385 L 76 385 Z',                                          cx: 91,  cy: 335 },
+  { id: 'genouD',  d: 'M 76 385 L 108 385 L 108 415 L 76 415 Z',                                          cx: 92,  cy: 400 },
+  { id: 'jambeD',  d: 'M 76 415 L 108 415 L 104 510 L 80 510 Z',                                          cx: 92,  cy: 462 },
+  { id: 'piedD',   d: 'M 80 510 L 104 510 L 102 545 q -2 7 -12 7 L 70 552 q -14 0 -14 -12 Z',            cx: 84,  cy: 530 },
+]
+
+// Membre inférieur gauche.
+const LEG_G: RegionPath[] = [
+  { id: 'cuisseG', d: 'M 110 285 L 148 285 L 144 385 L 112 385 Z',                                        cx: 129, cy: 335 },
+  { id: 'genouG',  d: 'M 112 385 L 144 385 L 144 415 L 112 415 Z',                                        cx: 128, cy: 400 },
+  { id: 'jambeG',  d: 'M 112 415 L 144 415 L 140 510 L 116 510 Z',                                        cx: 128, cy: 462 },
+  { id: 'piedG',   d: 'M 140 510 L 116 510 L 118 545 q 2 7 12 7 L 150 552 q 14 0 14 -12 Z',              cx: 136, cy: 530 },
+]
+
+// ─── Tronc antérieur ────────────────────────────────────────────────────────
+const TRUNK_FRONT: RegionPath[] = [
+  { id: 'seinD',   d: 'M 72 82  L 110 82  L 110 120 L 72 120 Z',  cx: 91,  cy: 101 },
+  { id: 'seinG',   d: 'M 110 82 L 148 82  L 148 120 L 110 120 Z', cx: 129, cy: 101 },
+  { id: 'thorax',  d: 'M 72 120 L 148 120 L 148 165 L 72 165 Z',  cx: 110, cy: 142 },
+  { id: 'abdomen', d: 'M 72 165 L 148 165 L 148 230 L 72 230 Z',  cx: 110, cy: 198 },
+  { id: 'pelvis',  d: 'M 72 230 L 148 230 L 148 285 L 72 285 Z',  cx: 110, cy: 258 },
+]
+
+// ─── Tronc postérieur ───────────────────────────────────────────────────────
+const TRUNK_BACK: RegionPath[] = [
+  { id: 'dosHaut',  d: 'M 72 82  L 148 82  L 148 165 L 72 165 Z', cx: 110, cy: 124 },
+  { id: 'lombaire', d: 'M 72 165 L 148 165 L 148 230 L 72 230 Z', cx: 110, cy: 198 },
+  { id: 'fesses',   d: 'M 72 230 L 148 230 L 148 285 L 72 285 Z', cx: 110, cy: 258 },
+]
+
+const FRONT_REGIONS: RegionPath[] = [HEAD, COU, ...ARM_D, ...ARM_G, ...TRUNK_FRONT, ...LEG_D, ...LEG_G]
+const BACK_REGIONS:  RegionPath[] = [HEAD, COU, ...ARM_D, ...ARM_G, ...TRUNK_BACK,  ...LEG_D, ...LEG_G]
 
 interface Props {
   /** Régions sélectionnées (toutes faces confondues). */
@@ -127,12 +156,12 @@ export function BodyChartDLM({ regions, onChangeRegions, annotations, onChangeAn
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 220px) 1fr', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 280px) 1fr', gap: 16, alignItems: 'flex-start' }}>
         <svg
-          viewBox="0 0 200 460"
+          viewBox="0 0 220 562"
           preserveAspectRatio="xMidYMid meet"
           style={{
-            width: '100%', height: 'auto', maxHeight: 460,
+            width: '100%', height: 'auto', maxHeight: 580,
             background: '#f8fafc', borderRadius: 8,
           }}
         >
@@ -208,7 +237,7 @@ export function BodyChartDLM({ regions, onChangeRegions, annotations, onChangeAn
               value={annotations}
               onChange={e => onChangeAnnotations(e.target.value)}
               rows={4}
-              placeholder="Sous-zones précises (épaule, main, mollet…), peau d'orange, fibrose, cicatrices, asymétries marquées…"
+              placeholder="Préciser : peau d'orange, fibrose, cicatrices, asymétries marquées, atteinte partielle d'un segment…"
               textareaStyle={{
                 width: '100%', padding: '0.55rem 0.75rem', fontSize: '0.82rem',
                 color: 'var(--text-main)', background: 'var(--input-bg)',
@@ -226,19 +255,31 @@ export function BodyChartDLM({ regions, onChangeRegions, annotations, onChangeAn
 // Étiquette courte affichée dans la zone (texte blanc sur sélection).
 function shortLabel(r: BodyRegion): string {
   switch (r) {
-    case 'tete':     return 'Tête'
-    case 'cou':      return 'Cou'
-    case 'MSD':      return 'MS-D'
-    case 'MSG':      return 'MS-G'
-    case 'seinD':    return 'Sein-D'
-    case 'seinG':    return 'Sein-G'
-    case 'thorax':   return 'Thorax'
-    case 'abdomen':  return 'Abdomen'
-    case 'pelvis':   return 'Pelvis'
-    case 'MID':      return 'MI-D'
-    case 'MIG':      return 'MI-G'
-    case 'dosHaut':  return 'Dos'
-    case 'lombaire': return 'Lombaire'
-    case 'fesses':   return 'Fesses'
+    case 'tete':         return 'Tête'
+    case 'cou':          return 'Cou'
+    case 'epauleD':      return 'Ép-D'
+    case 'epauleG':      return 'Ép-G'
+    case 'brasD':        return 'Bras-D'
+    case 'brasG':        return 'Bras-G'
+    case 'avantBrasD':   return 'AB-D'
+    case 'avantBrasG':   return 'AB-G'
+    case 'mainD':        return 'Main-D'
+    case 'mainG':        return 'Main-G'
+    case 'seinD':        return 'Sein-D'
+    case 'seinG':        return 'Sein-G'
+    case 'thorax':       return 'Thorax'
+    case 'abdomen':      return 'Abdomen'
+    case 'pelvis':       return 'Pelvis'
+    case 'dosHaut':      return 'Dos'
+    case 'lombaire':     return 'Lomb.'
+    case 'fesses':       return 'Fesses'
+    case 'cuisseD':      return 'Cu-D'
+    case 'cuisseG':      return 'Cu-G'
+    case 'genouD':       return 'Gx-D'
+    case 'genouG':       return 'Gx-G'
+    case 'jambeD':       return 'Jb-D'
+    case 'jambeG':       return 'Jb-G'
+    case 'piedD':        return 'Pd-D'
+    case 'piedG':        return 'Pd-G'
   }
 }
