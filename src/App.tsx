@@ -50,9 +50,8 @@ const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ d
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData, ExerciceDomicile } from './components/NoteSeance'
-import { DictableInput, DictableTextarea } from './components/VoiceMic'
+import { DictableTextarea } from './components/VoiceMic'
 import { PDFPreview } from './components/PDFPreview'
-import { DashboardStats } from './components/DashboardStats'
 import { EvolutionChart, type EvolutionPoint } from './components/EvolutionChart'
 import { ScoreEvolutionChart } from './components/ScoreEvolutionChart'
 import { TreatmentBodyChart } from './components/TreatmentBodyChart'
@@ -71,6 +70,12 @@ import { colors as c } from './design/tokens'
 import { PatientHeader } from './components/patient/PatientHeader'
 import { PatientHeroCard } from './components/patient/PatientHeroCard'
 import { ConsultationChooser } from './components/patient/ConsultationChooser'
+import { ProfilePage } from './components/profile/ProfilePage'
+import { SettingsPage } from './components/settings/SettingsPage'
+import { DashboardPage } from './components/home/DashboardPage'
+import { ZonePickerSheet } from './components/shared/ZonePicker'
+import { IdentityStep } from './components/wizard/IdentityStep'
+import { GeneralInfoStep } from './components/wizard/GeneralInfoStep'
 import './App.css'
 
 type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
@@ -103,117 +108,6 @@ class ErrorBoundary extends Component<{ children: ReactNode; onReset?: () => voi
 }
 
 // ── Zone picker : liste design avec icônes SVG anatomiques ───────────────
-function ZoneIcon({ zone, size = 22, color = 'currentColor' }: { zone: string; size?: number; color?: string }) {
-  const s = { width: size, height: size, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  switch (zone) {
-    case 'Épaule': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M12 8v4"/><path d="M8 9c-3 1-5 3.5-5 6"/><path d="M16 9c3 1 5 3.5 5 6"/><path d="M8 9l-2 7"/><path d="M16 9l2 7"/></svg>
-    )
-    case 'Genou': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v6"/><ellipse cx="12" cy="11" rx="4" ry="3"/><path d="M12 14v8"/><path d="M9 11c-1.5.5-2 2-1.5 3.5"/><path d="M15 11c1.5.5 2 2 1.5 3.5"/></svg>
-    )
-    case 'Hanche': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 3v5"/><ellipse cx="12" cy="11" rx="6" ry="4"/><path d="M8 14l-3 8"/><path d="M16 14l3 8"/><circle cx="12" cy="11" r="1.5"/></svg>
-    )
-    case 'Cheville': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v12"/><path d="M10 14c-2 1-3 3-3 5h10c0-2-1-4-3-5"/><path d="M7 19c-1 0-2 .5-2 2h14c0-1.5-1-2-2-2"/></svg>
-    )
-    case 'Cervicales': return (
-      <svg viewBox="0 0 24 24" {...s}><circle cx="12" cy="5" r="3"/><path d="M12 8v14"/><path d="M9 10h6"/><path d="M8 13h8"/><path d="M9 16h6"/></svg>
-    )
-    case 'Rachis Lombaire': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v20"/><path d="M8 5h8"/><path d="M7 8h10"/><path d="M6 11h12"/><path d="M7 14h10"/><path d="M8 17h8"/><path d="M9 20h6"/></svg>
-    )
-    case 'Gériatrie': return (
-      <svg viewBox="0 0 24 24" {...s}><circle cx="11" cy="4" r="2.5"/><path d="M11 6.5v6"/><path d="M8 9l-2 5"/><path d="M14 9l2 3"/><path d="M11 12.5l-3 9"/><path d="M11 12.5l2 5"/><path d="M16 12l4 3"/><line x1="20" y1="15" x2="20" y2="22"/></svg>
-    )
-    case 'Drainage Lymphatique': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2C9 6 7 9 7 12a5 5 0 0 0 10 0c0-3-2-6-5-10z"/><path d="M12 14v6"/><path d="M9 18h6"/></svg>
-    )
-    default: return (
-      <svg viewBox="0 0 24 24" {...s}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>
-    )
-  }
-}
-
-const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
-  { zone: 'Épaule',          label: 'Épaule' },
-  { zone: 'Genou',           label: 'Genou' },
-  { zone: 'Hanche',          label: 'Hanche' },
-  { zone: 'Cheville',        label: 'Cheville' },
-  { zone: 'Cervicales',      label: 'Rachis Cervical' },
-  { zone: 'Rachis Lombaire', label: 'Rachis Lombaire' },
-  { zone: 'Gériatrie',       label: 'Gériatrie' },
-  { zone: 'Drainage Lymphatique', label: 'Drainage Lymphatique' },
-  { zone: 'Autre',           label: 'Bilan général' },
-]
-
-interface ZonePickerSheetProps {
-  title: string
-  accent: string
-  accentBg: string
-  accentBorder: string
-  selectedZone?: string | null
-  onSelect: (zone: string) => void
-  onClose: () => void
-}
-
-function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerSheetProps) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--base-bg)', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 430, boxShadow: '0 -8px 40px rgba(0,0,0,0.15)', padding: '0.5rem 1.1rem 2rem', maxHeight: '85vh', overflow: 'auto', animation: 'slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1)' }}>
-        {/* Handle bar */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border-color)' }} />
-        </div>
-        <div style={{ marginBottom: '1.1rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.01em' }}>{title}</h3>
-          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Choisissez la zone anatomique du bilan</p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {ZONE_PICKER_ITEMS.map(({ zone, label }) => {
-            const active = selectedZone === zone
-            return (
-              <button
-                key={zone}
-                onClick={() => onSelect(zone)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '0.85rem 1rem',
-                  borderRadius: 14,
-                  border: active ? '2px solid var(--primary)' : '1.5px solid transparent',
-                  background: active ? 'var(--info-soft)' : 'var(--input-bg)',
-                  color: active ? 'var(--primary-dark)' : 'var(--text-main)',
-                  fontWeight: active ? 600 : 500,
-                  fontSize: '0.88rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.18s ease',
-                  boxShadow: active ? '0 2px 10px rgba(45,90,75,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
-                }}
-              >
-                <div style={{
-                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                  background: active ? 'var(--primary)' : 'var(--secondary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.18s',
-                }}>
-                  <ZoneIcon zone={zone} size={22} color={active ? 'white' : 'var(--primary)'} />
-                </div>
-                <span style={{ flex: 1 }}>{label}</span>
-                {active && (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 const DEMO_DB: BilanRecord[] = [
   { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet' },
@@ -617,7 +511,6 @@ function App() {
   // Origine attachée au PDF auto-sauvegardé dans le dossier patient.
   const [pdfPreviewSource, setPdfPreviewSource] = useState<Exclude<PatientDocumentSource, 'upload'>>('analyse-ia')
   const [pdfPreviewPatientKey, setPdfPreviewPatientKey] = useState<string>('')
-  const [profileEditDraft, setProfileEditDraft] = useState<ProfileData>(profile)
   // apiKeyDraft removed — Vertex AI, no client key needed
 
   const [formData, setFormData] = useState({
@@ -639,8 +532,6 @@ function App() {
   const bilanIntermediaireRef = useRef<BilanIntermediaireHandle>(null)
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
-  const photoInputRef         = useRef<HTMLInputElement>(null)
-  const importDataRef         = useRef<HTMLInputElement>(null)
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const updateField = useCallback((field: keyof typeof formData, value: string) =>
@@ -2108,9 +1999,7 @@ Mobilité articulaire lombaire
     showToast('Données exportées', 'success')
   }
 
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleImportFile = (file: File) => {
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
@@ -2137,15 +2026,27 @@ Mobilité articulaire lombaire
       }
     }
     reader.readAsText(file)
-    e.target.value = ''
   }
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setProfileEditDraft(p => ({ ...p, photo: ev.target?.result as string }))
-    reader.readAsDataURL(file)
+  const handleSaveProfile = (next: ProfileData) => {
+    setProfile(next)
+    showToast('Profil enregistré', 'success')
+    setStep('settings')
+  }
+
+  const handleExportRegister = async () => {
+    const { generateAuditPDF } = await import('./utils/pdfGenerator')
+    generateAuditPDF({
+      praticien: {
+        nom: profile.nom, prenom: profile.prenom,
+        profession: profile.profession, rcc: profile.rcc,
+        adresse: profile.adresse, ville: profile.ville,
+        codePostal: profile.codePostal,
+      },
+      entries: dbLetterAudit,
+      aiCallEntries: dbAICallAudit,
+    })
+    showToast('Registre exporté', 'success')
   }
 
   // testApiKey function removed — Vertex AI, no client key needed
@@ -2246,96 +2147,26 @@ Mobilité articulaire lombaire
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* ── Dashboard ──────────────────────────────────────────────────────────── */}
-      {step === 'dashboard' && (() => {
-        const now = new Date()
-        const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-        const initials = `${(profile.nom || 'W')[0]}${(profile.prenom || '')[0] || ''}`.toUpperCase()
-        return (
-          <div className={slideEntry || swipedNav.current ? '' : 'fade-in'} style={{ ...swipeDragStyle, ...slideEntryStyle, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-            <div className="scroll-area" style={{ flex: 1, padding: '0.5rem 0.35rem 0' }}>
-              {/* Header — centered with settings */}
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.25rem', paddingTop: '0.3rem' }}>
-                <button onClick={() => setStep('settings')} style={{ position: 'absolute', top: '0.3rem', right: 0, width: 30, height: 30, borderRadius: 'var(--radius-full)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                </button>
-                <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-full)', overflow: 'hidden', flexShrink: 0, background: profile.photo ? 'transparent' : 'color-mix(in srgb, var(--primary) 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
-                  {profile.photo
-                    ? <img src={profile.photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Profil" />
-                    : <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary)' }}>{initials}</span>}
-                </div>
-                <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>{dateStr}</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.02em' }}>Bonjour, {profile.nom || profile.prenom}</div>
-              </div>
-
-              {/* Hero card — dernière activité */}
-              {(() => {
-                const parseFR = (d: string) => { const [dd, mm, yy] = d.split('/'); return new Date(`${yy}-${mm}-${dd}`).getTime() || 0 }
-                const activities: { patientKey: string; date: number; dateStr: string; type: string; zone?: string }[] = [
-                  ...db.filter(r => r.status === 'complet' || r.bilanData).map(r => ({ patientKey: `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim(), date: parseFR(r.dateBilan), dateStr: r.dateBilan, type: 'Bilan initial', zone: r.zone })),
-                  ...dbIntermediaires.map(r => ({ patientKey: r.patientKey, date: parseFR(r.dateBilan), dateStr: r.dateBilan, type: 'Bilan intermédiaire', zone: r.zone })),
-                  ...dbNotes.map(r => ({ patientKey: r.patientKey, date: parseFR(r.dateSeance), dateStr: r.dateSeance, type: 'Séance', zone: r.zone })),
-                ]
-                const last = activities.sort((a, b) => b.date - a.date)[0]
-                if (!last) return null
-                const diff = Math.floor((Date.now() - last.date) / 86400000)
-                const ago = diff === 0 ? "Aujourd'hui" : diff === 1 ? 'Hier' : `Il y a ${diff}j`
-                const totalThisWeek = activities.filter(a => Date.now() - a.date < 7 * 86400000).length
-                return (
-                  <div
-                    onClick={() => { setSelectedPatient(last.patientKey); setStep('database') }}
-                    style={{ background: 'var(--primary-dark)', borderRadius: 'var(--radius-xl)', padding: '1.1rem 1.15rem', marginBottom: '1rem', cursor: 'pointer', color: 'white', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15,23,42,0.18)' }}
-                  >
-                    <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-                    <div style={{ position: 'absolute', bottom: -30, right: 40, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
-                    <div style={{ fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6, marginBottom: '0.6rem' }}>Dernière activité</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.2rem', letterSpacing: '-0.01em' }}>{last.patientKey}</div>
-                    <div style={{ fontSize: '0.78rem', opacity: 0.7, marginBottom: '0.75rem' }}>
-                      {last.type}{last.zone ? ` · ${last.zone}` : ''} · {ago}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}>
-                        Ouvrir le dossier
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                      </span>
-                      {totalThisWeek > 0 && (
-                        <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>{totalThisWeek} activité{totalThisWeek > 1 ? 's' : ''} cette semaine</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Stats */}
-              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
-
-            </div>
-            {/* Action buttons — sticky bottom */}
-            <div style={{ flexShrink: 0, padding: '0.6rem 0.75rem', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--base-bg) 70%, transparent)', display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
-                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
-                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
-                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                Mes patients
-              </button>
-              <button
-                data-tutorial="new-patient-btn"
-                onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(15,23,138,0.15)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
-                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
-                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
-                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Nouveau patient
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+      {step === 'dashboard' && (
+        <DashboardPage
+          profile={profile}
+          db={db}
+          dbIntermediaires={dbIntermediaires}
+          dbNotes={dbNotes}
+          dbClosedTreatments={dbClosedTreatments}
+          slideEntry={slideEntry}
+          swipedNav={swipedNav}
+          swipeDragStyle={swipeDragStyle}
+          slideEntryStyle={slideEntryStyle}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onOpenSettings={() => setStep('settings')}
+          onOpenPatient={(key) => { setSelectedPatient(key); setStep('database') }}
+          onAllPatients={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
+          onNewPatient={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
+        />
+      )}
 
       {/* ── Database ───────────────────────────────────────────────────────────── */}
       {step === 'database' && (
@@ -4158,660 +3989,37 @@ Mobilité articulaire lombaire
 
       {/* ── Profile Tab ─────────────────────────────────────────────── */}
       {step === 'profile' && (
-          <div className="general-info-screen fade-in">
-            <header className="screen-header">
-              <button className="btn-back" onClick={() => setStep('settings')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-              </button>
-              <h2 className="title-section">Modifier le profil</h2>
-              <div style={{ width: 24 }} />
-            </header>
-            <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
-
-              <div className="fade-in">
-                  {/* Photo */}
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.75rem', marginBottom:'2rem' }}>
-                    <div onClick={() => photoInputRef.current?.click()}
-                      style={{ position:'relative', width:96, height:96, borderRadius:'50%', overflow:'hidden', cursor:'pointer', boxShadow:'var(--shadow-lg)', background: profileEditDraft.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      {profileEditDraft.photo
-                        ? <img src={profileEditDraft.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
-                        : <span style={{ fontSize:'2.2rem', fontWeight:700, color:'white' }}>{(profileEditDraft.nom || profileEditDraft.prenom || 'W')[0]}</span>}
-                      <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:'0.4rem' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                          <circle cx="12" cy="13" r="4"/>
-                        </svg>
-                      </div>
-                    </div>
-                    <input ref={photoInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handlePhotoUpload} />
-                    <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Appuyez pour changer la photo</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Prénom / Nom affiché</label>
-                    <input type="text" className="input-luxe" value={profileEditDraft.nom}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, nom: e.target.value }))} placeholder="Renseignez votre nom" />
-                  </div>
-                  <div className="form-group">
-                    <label>Profession</label>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                      {(['Kinésithérapeute', 'Physiothérapeute'] as const).map(opt => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setProfileEditDraft(p => ({ ...p, profession: opt }))}
-                          style={{
-                            flex: 1,
-                            padding: '0.65rem 0.75rem',
-                            borderRadius: 'var(--radius-md)',
-                            border: profileEditDraft.profession === opt ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                            background: profileEditDraft.profession === opt ? 'var(--info-soft)' : 'var(--surface)',
-                            color: profileEditDraft.profession === opt ? 'var(--primary-dark)' : 'var(--text-main)',
-                            fontWeight: profileEditDraft.profession === opt ? 700 : 500,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {opt}
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: 2 }}>
-                            {opt === 'Kinésithérapeute' ? '🇫🇷 France' : '🇨🇭 Suisse / 🇧🇪 Belgique'}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Compétences & Équipements */}
-                  {(() => {
-                    const chipStyle = (active: boolean): React.CSSProperties => ({
-                      padding: '0.45rem 0.75rem',
-                      borderRadius: 'var(--radius-full)',
-                      border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                      background: active ? 'var(--info-soft)' : 'transparent',
-                      color: active ? 'var(--primary-dark)' : 'var(--text-muted)',
-                      fontWeight: active ? 600 : 400,
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.18s',
-                    })
-                    const sectionTitle: React.CSSProperties = { fontWeight: 700, color: 'var(--primary)', fontSize: '0.95rem', marginBottom: 8 }
-                    return (
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={sectionTitle}>Compétences & Équipements</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Les propositions de prise en charge seront adaptées en fonction de vos compétences et équipements.
-                    </p>
-
-                    {/* Spécialités */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={sectionTitle}>Spécialités</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Thérapie manuelle', 'McKenzie (MDT)', 'Sport', 'Pédiatrie', 'Neurologie', 'Vestibulaire', 'Périnéologie', 'Respiratoire', 'Rhumatologie', 'Gériatrie', 'Orthopédie'].map(s => (
-                          <button key={s} type="button" style={chipStyle((profileEditDraft.specialites ?? []).includes(s))}
-                            onClick={() => setProfileEditDraft(p => ({
-                              ...p,
-                              specialites: (p.specialites ?? []).includes(s)
-                                ? (p.specialites ?? []).filter(x => x !== s)
-                                : [...(p.specialites ?? []), s]
-                            }))}>{s}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Techniques */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={sectionTitle}>Techniques maîtrisées</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Dry needling', 'Mulligan', 'Maitland', 'Cupping', 'Taping / K-Tape', 'PNF (Kabat)', 'Chaînes musculaires (GDS/Busquet)', 'Éducation neurosciences douleur', 'Crochetage / IASTM', 'Drainage lymphatique', 'Trigger points', 'Ventouses', 'Stretching global actif'].map(t => (
-                          <button key={t} type="button" style={chipStyle((profileEditDraft.techniques ?? []).includes(t))}
-                            onClick={() => setProfileEditDraft(p => ({
-                              ...p,
-                              techniques: (p.techniques ?? []).includes(t)
-                                ? (p.techniques ?? []).filter(x => x !== t)
-                                : [...(p.techniques ?? []), t]
-                            }))}>{t}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Équipements */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={sectionTitle}>Équipements au cabinet</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Ondes de choc', 'TENS', 'Tecarthérapie (Winback/Indiba)', 'Ultrasons', 'Laser', 'Isocinétisme', 'Plateforme proprioceptive', 'Huber / LPG', 'Pressothérapie', 'Électrostimulation', 'Cryothérapie', 'Traction cervicale/lombaire', 'Vélo / Elliptique', 'Presse'].map(e => (
-                          <button key={e} type="button" style={chipStyle((profileEditDraft.equipements ?? []).includes(e))}
-                            onClick={() => setProfileEditDraft(p => ({
-                              ...p,
-                              equipements: (p.equipements ?? []).filter(x => x !== e).length === (p.equipements ?? []).length
-                                ? [...(p.equipements ?? []), e]
-                                : (p.equipements ?? []).filter(x => x !== e)
-                            }))}>{e}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Autres compétences (texte libre) */}
-                    <div>
-                      <div style={sectionTitle}>Autres (non listés ci-dessus)</div>
-                      <textarea
-                        value={profileEditDraft.autresCompetences ?? ''}
-                        onChange={e => setProfileEditDraft(p => ({ ...p, autresCompetences: e.target.value }))}
-                        placeholder="Ex : méthode Schroth, rééducation maxillo-faciale, posturologie, biofeedback, Game Ready..."
-                        rows={2}
-                        className="input-luxe"
-                        style={{ fontSize: '0.82rem', resize: 'vertical' }}
-                      />
-                    </div>
-                  </div>
-                    )
-                  })()}
-
-                  {/* En-tête Courriers */}
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 8 }}>En-tête des courriers</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Ces informations apparaîtront en en-tête de vos courriers PDF (fin de PEC, demande d'imagerie, etc.).
-                    </p>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid var(--border-color)' }}>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Prénom (si différent du nom affiché)</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.prenom ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, prenom: e.target.value }))}
-                          placeholder="Ex : Marie" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Spécialisations (libellé affiché)</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.specialisationsLibelle ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, specialisationsLibelle: e.target.value }))}
-                          placeholder="Ex : Thérapie manuelle, Rééducation du sportif" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Numéro RCC / ADELI</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.rcc ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, rcc: e.target.value }))}
-                          placeholder="Ex : 123456789" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Adresse</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.adresse ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, adresse: e.target.value }))}
-                          placeholder="Ex : 12 rue des Lilas" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Complément (bâtiment, étage)</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.adresseComplement ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, adresseComplement: e.target.value }))}
-                          placeholder="Ex : Cabinet 2B" />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10, marginBottom: 10 }}>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label style={{ fontSize: '0.82rem' }}>CP</label>
-                          <input type="text" className="input-luxe" value={profileEditDraft.codePostal ?? ''}
-                            onChange={e => setProfileEditDraft(p => ({ ...p, codePostal: e.target.value }))}
-                            placeholder="75001" />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label style={{ fontSize: '0.82rem' }}>Ville</label>
-                          <input type="text" className="input-luxe" value={profileEditDraft.ville ?? ''}
-                            onChange={e => setProfileEditDraft(p => ({ ...p, ville: e.target.value }))}
-                            placeholder="Paris" />
-                        </div>
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Téléphone</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.telephone ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, telephone: e.target.value }))}
-                          placeholder="01 23 45 67 89" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Email</label>
-                        <input type="email" className="input-luxe" value={profileEditDraft.email ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, email: e.target.value }))}
-                          placeholder="contact@cabinet.fr" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Signature manuscrite (image)</label>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          onChange={e => {
-                            const f = e.target.files?.[0]
-                            if (!f) return
-                            const reader = new FileReader()
-                            reader.onload = () => setProfileEditDraft(p => ({ ...p, signatureImage: reader.result as string }))
-                            reader.readAsDataURL(f)
-                          }}
-                          style={{ fontSize: '0.8rem', marginTop: 4 }}
-                        />
-                        {profileEditDraft.signatureImage && (
-                          <div style={{ marginTop: 8, padding: 8, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 6, display: 'inline-block' }}>
-                            <img src={profileEditDraft.signatureImage} alt="Signature" style={{ maxHeight: 50, maxWidth: 180 }} />
-                            <button
-                              onClick={() => setProfileEditDraft(p => ({ ...p, signatureImage: null }))}
-                              style={{ display: 'block', marginTop: 6, background: 'none', border: 'none', color: '#dc2626', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}>
-                              Retirer
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Confidentialité & conformité */}
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 8 }}>Confidentialité & conformité RGPD</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Mention d'information à intégrer dans votre livret d'accueil, salle d'attente ou politique de confidentialité, ainsi que le registre des traitements effectués.
-                    </p>
-                    <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: 14 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', marginBottom: 6 }}>
-                        Mention d'information patient (à afficher)
-                      </div>
-                      <div style={{
-                        fontSize: '0.78rem', color: '#064e3b', lineHeight: 1.55,
-                        background: 'var(--surface)', padding: '10px 12px', borderRadius: 8,
-                        border: '1px solid #bbf7d0', fontFamily: 'Georgia, serif',
-                        whiteSpace: 'pre-line',
-                      }}>
-{`Dans le cadre de votre prise en charge, des outils informatiques incluant des modèles d'intelligence artificielle peuvent être utilisés pour assister la rédaction de vos documents médicaux (courriers aux médecins, synthèses, comptes rendus).
-
-Aucune donnée personnelle identifiante vous concernant (nom, prénom, date de naissance, coordonnées) n'est transmise à ces outils. Seules des informations médicales anonymisées (âge, pathologie, données cliniques) le sont, et uniquement à des fins d'aide à la rédaction. Le contenu final est systématiquement relu et validé par votre thérapeute avant tout envoi.
-
-Vos données médicales sont stockées exclusivement sur l'équipement informatique du praticien, ne sont jamais partagées avec des tiers en dehors du strict cadre du parcours de soins, et restent sous le contrôle du thérapeute qui en est le responsable du traitement au sens du RGPD.
-
-Pour toute question, exercer vos droits (accès, rectification, effacement) ou signaler une préoccupation, adressez-vous directement à votre thérapeute.`}
-                      </div>
-                      <button
-                        onClick={() => {
-                          const text = `Dans le cadre de votre prise en charge, des outils informatiques incluant des modèles d'intelligence artificielle peuvent être utilisés pour assister la rédaction de vos documents médicaux (courriers aux médecins, synthèses, comptes rendus).
-
-Aucune donnée personnelle identifiante vous concernant (nom, prénom, date de naissance, coordonnées) n'est transmise à ces outils. Seules des informations médicales anonymisées (âge, pathologie, données cliniques) le sont, et uniquement à des fins d'aide à la rédaction. Le contenu final est systématiquement relu et validé par votre thérapeute avant tout envoi.
-
-Vos données médicales sont stockées exclusivement sur l'équipement informatique du praticien, ne sont jamais partagées avec des tiers en dehors du strict cadre du parcours de soins, et restent sous le contrôle du thérapeute qui en est le responsable du traitement au sens du RGPD.
-
-Pour toute question, exercer vos droits (accès, rectification, effacement) ou signaler une préoccupation, adressez-vous directement à votre thérapeute.`
-                          if (navigator.clipboard?.writeText) {
-                            navigator.clipboard.writeText(text).then(() => showToast('Mention copiée', 'success'))
-                          }
-                        }}
-                        style={{ marginTop: 10, width: '100%', padding: '0.55rem', borderRadius: 8, background: 'var(--surface)', border: '1px solid #86efac', color: '#065f46', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
-                        Copier le texte
-                      </button>
-                    </div>
-
-                    <div style={{ background: 'var(--info-soft)', border: '1px solid var(--border-soft)', borderRadius: 12, padding: 14, marginTop: 10 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>
-                        Registre des traitements
-                      </div>
-                      {(() => {
-                        const totalCount = dbLetterAudit.length + dbAICallAudit.length
-                        const suspiciousCount = dbAICallAudit.filter(e => e.scrubReplacements > 0).length
-                        const withDocsCount = dbAICallAudit.filter(e => e.hasDocuments).length
-                        if (totalCount === 0) {
-                          return <p style={{ fontSize: '0.75rem', color: 'var(--primary)', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
-                        }
-                        return (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginBottom: 10, lineHeight: 1.5 }}>
-                            <div>• <strong>{dbLetterAudit.length}</strong> courrier{dbLetterAudit.length > 1 ? 's' : ''} généré{dbLetterAudit.length > 1 ? 's' : ''}</div>
-                            <div>• <strong>{dbAICallAudit.length}</strong> autre{dbAICallAudit.length > 1 ? 's' : ''} analyse{dbAICallAudit.length > 1 ? 's' : ''} (bilans, fiches exos…)</div>
-                            {withDocsCount > 0 && (
-                              <div style={{ color: '#92400e', marginTop: 4 }}>⚠ {withDocsCount} appel{withDocsCount > 1 ? 's' : ''} avec documents joints (non pseudonymisés automatiquement)</div>
-                            )}
-                            {suspiciousCount > 0 && (
-                              <div style={{ color: '#b91c1c', marginTop: 4, fontWeight: 600 }}>⚠ {suspiciousCount} appel{suspiciousCount > 1 ? 's' : ''} où le scrub wrapper a intercepté un nom — à examiner</div>
-                            )}
-                          </div>
-                        )
-                      })()}
-                      <button
-                        disabled={dbLetterAudit.length === 0 && dbAICallAudit.length === 0}
-                        onClick={async () => {
-                          const { generateAuditPDF } = await import('./utils/pdfGenerator')
-                          generateAuditPDF({
-                            praticien: {
-                              nom: profile.nom, prenom: profile.prenom,
-                              profession: profile.profession, rcc: profile.rcc,
-                              adresse: profile.adresse, ville: profile.ville,
-                              codePostal: profile.codePostal,
-                            },
-                            entries: dbLetterAudit,
-                            aiCallEntries: dbAICallAudit,
-                          })
-                          showToast('Registre exporté', 'success')
-                        }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid var(--border-soft)', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : 'var(--primary)', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
-                        Exporter le registre (PDF)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Sauvegarde multi-appareils */}
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.5rem', fontSize:'0.92rem' }}>Sauvegarde multi-appareils</div>
-                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>Exporte tes données depuis ce navigateur, puis importe le fichier sur un autre appareil (téléphone, tablette…).</p>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <button type="button" onClick={handleExportData}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', border:'none', color:'white', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="7 10 12 15 17 10"/>
-                          <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        Exporter mes données (.json)
-                      </button>
-                      <button type="button" onClick={() => importDataRef.current?.click()}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'var(--surface)', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="17 8 12 3 7 8"/>
-                          <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Importer un fichier de sauvegarde
-                      </button>
-                      <input ref={importDataRef} type="file" accept=".json" style={{ display:'none' }} onChange={handleImportData} />
-                    </div>
-                  </div>
-
-                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
-                    onClick={() => {
-                      setProfile(profileEditDraft)
-                      showToast('Profil enregistré', 'success')
-                      setStep('settings')
-                    }}>
-                    Enregistrer
-                  </button>
-                </div>
-            </div>
-          </div>
+        <ProfilePage
+          profile={profile}
+          onSave={handleSaveProfile}
+          onBack={() => setStep('settings')}
+          onExportData={handleExportData}
+          onImportFile={handleImportFile}
+          letterAuditCount={dbLetterAudit.length}
+          aiAuditCount={dbAICallAudit.length}
+          aiAuditWithDocsCount={dbAICallAudit.filter(e => e.hasDocuments).length}
+          aiAuditSuspiciousCount={dbAICallAudit.filter(e => e.scrubReplacements > 0).length}
+          onExportRegister={handleExportRegister}
+          onShowToast={showToast}
+        />
       )}
 
-      {/* ── Settings ──────────────────────────────────────────────────────────── */}
       {step === 'settings' && (
-        <div className="general-info-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('dashboard')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Réglages</h2>
-            <div style={{ width: 24 }} />
-          </header>
-          <div className="scroll-area" style={{ paddingBottom: '2rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {/* Profil */}
-              <button
-                onClick={() => { setProfileEditDraft(profile); setStep('profile') }}
-                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Profil</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Nom, photo, profession, compétences</div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-
-              {/* Apparence — sélecteur de thème */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.9rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Apparence</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Choisissez le thème visuel</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {([
-                    { id: 'soft' as const, label: 'Soft', desc: 'Vert & beige', swatch: ['#2D5A4B', '#F0EBE1'] },
-                    { id: 'medical' as const, label: 'Médical', desc: 'Bleu & blanc', swatch: ['#1e3a8a', '#f8fafc'] },
-                  ]).map(t => {
-                    const active = theme === t.id
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => setTheme(t.id)}
-                        style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8,
-                          padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                          border: active ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                          background: active ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--surface)',
-                          cursor: 'pointer', textAlign: 'left',
-                          transition: 'border-color 0.15s, background 0.15s',
-                        }}
-                      >
-                        <div style={{ display: 'flex', gap: 4, height: 24, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                          <div style={{ flex: 1, background: t.swatch[0] }} />
-                          <div style={{ flex: 1, background: t.swatch[1] }} />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.85rem' }}>{t.label}</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{t.desc}</div>
-                        </div>
-                        {active && (
-                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            ✓ Actif
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Tutoriel */}
-              <button
-                onClick={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
-                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.1rem' }}>🎓</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Relancer le tutoriel</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Revoir le guide de prise en main</div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-
-              {/* Préférences */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Préférences</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Langue, notifications, thème</div>
-                  </div>
-                </div>
-
-                {/* Langue */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Langue</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                    {([
-                      { id: 'fr' as const, flag: '🇫🇷', label: 'Français' },
-                      { id: 'de' as const, flag: '🇩🇪', label: 'Deutsch' },
-                      { id: 'en' as const, flag: '🇬🇧', label: 'English' },
-                    ]).map(lang => {
-                      const active = language === lang.id
-                      return (
-                        <button
-                          key={lang.id}
-                          onClick={() => setLanguage(lang.id)}
-                          style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                            padding: '0.6rem 0.4rem',
-                            borderRadius: 'var(--radius-md)',
-                            border: active ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                            background: active ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--secondary)',
-                            cursor: 'pointer',
-                            transition: 'border-color 0.15s, background 0.15s',
-                          }}
-                        >
-                          <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>{lang.flag}</span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: active ? 700 : 500, color: active ? 'var(--primary)' : 'var(--text-muted)' }}>{lang.label}</span>
-                          {active && <span style={{ fontSize: '0.6rem', color: 'var(--primary)', fontWeight: 700 }}>✓</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Notifications */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0', borderTop: '1px solid var(--border-color)' }}>
-                  <div>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Notifications</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
-                      {notificationsEnabled ? 'Activées — rappels et alertes patients' : 'Désactivées'}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-                    style={{
-                      width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
-                      background: notificationsEnabled ? 'var(--primary)' : 'var(--border-color)',
-                      position: 'relative', flexShrink: 0,
-                      transition: 'background 0.2s',
-                    }}
-                  >
-                    <span style={{
-                      position: 'absolute', top: 3,
-                      left: notificationsEnabled ? 23 : 3,
-                      width: 22, height: 22, borderRadius: '50%',
-                      background: 'white',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                      transition: 'left 0.2s',
-                    }} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Plan & Facturation */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan & Facturation</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement actuel et options</div>
-                  </div>
-                </div>
-
-                {/* Abonnement actuel */}
-                <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', marginBottom: '1rem', color: 'white' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Plan actuel</div>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(255,255,255,0.2)', padding: '0.15rem 0.5rem', borderRadius: 99, border: '1px solid rgba(255,255,255,0.3)' }}>
-                      ✓ Actif
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 2 }}>Basique</div>
-                  <div style={{ fontSize: '0.8rem', opacity: 0.85, marginBottom: 8 }}>
-                    {billingType === 'annual'
-                      ? '290 CHF / an · soit 24.15 CHF/mois'
-                      : '29 CHF / mois'}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
-                    <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
-                      Facturation {billingType === 'annual' ? 'annuelle' : 'mensuelle'} · Renouvellement le 22 mai 2026
-                    </span>
-                  </div>
-                </div>
-
-                {/* Inclus dans Basique */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Inclus dans votre plan</div>
-                  {[
-                    'Bilans illimités (toutes zones)',
-                    'Analyse IA par bilan (Claude)',
-                    'Génération PDF & courriers',
-                    'Stockage local sécurisé',
-                    'Fiche d\'exercices IA',
-                  ].map((feature, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.3rem 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
-                      <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>✓</span>
-                      {feature}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Plans disponibles */}
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.6rem' }}>Changer de plan</div>
-                  {([
-                    { name: 'Pro', price: '49', desc: 'IA vocale ElevenLabs + sync cloud + statistiques avancées', highlight: false },
-                    { name: 'Équipe', price: '79', desc: 'Multi-praticiens, dashboard cabinet, accès collaborateur', highlight: true },
-                  ]).map(plan => (
-                    <div key={plan.name} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-md)',
-                      border: `1px solid ${plan.highlight ? 'var(--primary)' : 'var(--border-color)'}`,
-                      background: plan.highlight ? 'color-mix(in srgb, var(--primary) 5%, var(--surface))' : 'var(--secondary)',
-                      marginBottom: 8, cursor: 'pointer',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{plan.name}</span>
-                          {plan.highlight && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>Populaire</span>}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>{plan.desc}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>{plan.price} CHF</div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>/mois</div>
-                      </div>
-                    </div>
-                  ))}
-                  <p style={{ fontSize: '0.68rem', color: 'var(--text-faint)', textAlign: 'center', marginTop: '0.4rem', lineHeight: 1.4 }}>
-                    Mise à niveau disponible après intégration Supabase
-                  </p>
-                </div>
-              </div>
-
-              {/* Synchronisation cloud */}
-              {(() => {
-                const statusConfig = {
-                  idle: { color: 'var(--text-muted)', bg: 'var(--secondary)', label: 'En attente' },
-                  syncing: { color: '#f59e0b', bg: 'color-mix(in srgb, #f59e0b 10%, transparent)', label: 'Synchronisation...' },
-                  done: { color: '#22c55e', bg: 'color-mix(in srgb, #22c55e 10%, transparent)', label: 'Synchronisé' },
-                  error: { color: '#dc2626', bg: 'color-mix(in srgb, #dc2626 10%, transparent)', label: 'Erreur de sync' },
-                }[syncStatus]
-                return (
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
-                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusConfig.color }} />
-                        <span style={{ fontSize: '0.72rem', color: statusConfig.color, fontWeight: 500 }}>{isOnline ? statusConfig.label : 'Hors ligne'}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Déconnexion */}
-              <button
-                onClick={() => signOut()}
-                style={{ background: 'var(--surface)', border: '1px solid #fecaca', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', marginTop: '0.5rem' }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #dc2626 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: '#dc2626', fontSize: '0.9rem' }}>Se déconnecter</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
+        <SettingsPage
+          theme={theme}
+          onChangeTheme={setTheme}
+          language={language}
+          onChangeLanguage={setLanguage}
+          notificationsEnabled={notificationsEnabled}
+          onToggleNotifications={setNotificationsEnabled}
+          billingType={billingType}
+          syncStatus={syncStatus}
+          isOnline={isOnline}
+          onBack={() => setStep('dashboard')}
+          onProfile={() => setStep('profile')}
+          onRelaunchTutorial={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
+          onSignOut={() => signOut()}
+        />
       )}
 
       {/* ── Résumé bilan modal ─────────────────────────────────────────────────── */}
@@ -5275,159 +4483,41 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
       {/* ── Identity step ──────────────────────────────────────────────────────── */}
       {step === 'identity' && (
-        <div className="identity-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('dashboard')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Identité du patient</h2>
-            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
-          <div className="scroll-area">
-            <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '0.4rem', marginBottom: '1.5rem', width: '100%', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.06)' }}>
-              {(['new', 'existing'] as const).map(mode => (
-                <button key={mode} onClick={() => setPatientMode(mode)}
-                  style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-lg)', background: patientMode === mode ? '#ffffff' : 'transparent', color: patientMode === mode ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: patientMode === mode ? 600 : 400, boxShadow: patientMode === mode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>
-                  {mode === 'new' ? 'Nouveau patient' : 'Patient existant'}
-                </button>
-              ))}
-            </div>
-            {patientMode === 'existing' && (
-              <div className="form-group" style={{background: 'var(--secondary)', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem'}}>
-                <label style={{fontSize: '1.1rem', color: 'var(--primary-dark)', fontWeight: 600}}>Pour quel patient ?</label>
-                <select className="input-luxe" defaultValue=""
-                  onChange={(e) => { if(e.target.value) { try { const val = JSON.parse(e.target.value); setFormData(prev => ({...prev, nom: val.nom, prenom: val.prenom, dateNaissance: val.dateNaissance})) } catch { /* select value is self-generated JSON */ } }}}>
-                  <option value="" disabled>-- Dossiers récents --</option>
-                  {Array.from(new Map(db.map(r => [`${(r.nom||'').toUpperCase()} ${r.prenom}`, r])).values()).map(r => (
-                    <option key={r.id} value={JSON.stringify({nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance})}>
-                      {(r.nom || '').toUpperCase()} {r.prenom}
-                    </option>
-                  ))}
-                </select>
-                {formData.nom && (
-                  <div style={{marginTop: '1rem', padding: '1rem', background: 'var(--surface)', borderRadius: 'var(--radius-md)', color: 'var(--primary)', fontWeight: 600, border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8}}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    Dossier actif : {(formData.nom || '').toUpperCase()} {formData.prenom}
-                  </div>
-                )}
-              </div>
-            )}
-            {patientMode === 'new' && (
-              <>
-                <div className="form-group">
-                  <label>Nom</label>
-                  <input type="text" placeholder="Ex: Dupont" className="input-luxe" value={formData.nom} onChange={e => updateField('nom', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Prénom</label>
-                  <input type="text" placeholder="Ex: Jean" className="input-luxe" value={formData.prenom} onChange={e => updateField('prenom', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Date de naissance</label>
-                  <input type="date" className="input-luxe" value={formData.dateNaissance} onChange={(e) => updateField('dateNaissance', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Sexe <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {([
-                      { value: 'masculin', label: 'Masculin' },
-                      { value: 'feminin', label: 'Féminin' },
-                    ] as const).map(opt => (
-                      <button key={opt.value} type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, sexe: opt.value }))}
-                        style={{ flex: 1, padding: '0.6rem 0.85rem', borderRadius: 'var(--radius-full)', border: formData.sexe === opt.value ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: formData.sexe === opt.value ? 'var(--secondary)' : 'var(--input-bg)', color: formData.sexe === opt.value ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: formData.sexe === opt.value ? 600 : 400, fontSize: '0.88rem', cursor: 'pointer' }}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
-              <button
-                onClick={() => setShowZonePopup(true)}
-                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? 'var(--info-soft)' : 'var(--input-bg)', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {selectedBodyZone && (
-                    <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <ZoneIcon zone={selectedBodyZone} size={16} color="white" />
-                    </span>
-                  )}
-                  {selectedBodyZone ? ZONE_PICKER_ITEMS.find(z => z.zone === selectedBodyZone)?.label ?? selectedBodyZone : 'Sélectionner une zone…'}
-                </span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-            </div>
-          </div>
-          <div className="fixed-bottom">
-            <button className="btn-primary-luxe"
-              disabled={!selectedBodyZone}
-              style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
-              onClick={() => {
-                if (patientMode === 'existing') { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
-                else setStep('general_info')
-              }}>
-              Étape suivante
-            </button>
-          </div>
-        </div>
+        <IdentityStep
+          formData={formData}
+          updateField={updateField}
+          onSelectSexe={(sexe) => setFormData(prev => ({ ...prev, sexe }))}
+          onPickExistingPatient={(p) => setFormData(prev => ({ ...prev, nom: p.nom, prenom: p.prenom, dateNaissance: p.dateNaissance }))}
+          patientMode={patientMode}
+          setPatientMode={setPatientMode}
+          selectedBodyZone={selectedBodyZone}
+          setShowZonePopup={setShowZonePopup}
+          stepProgress={stepProgress}
+          db={db}
+          onBack={() => setStep('dashboard')}
+          onQuit={handleQuitBilan}
+          onNext={() => {
+            if (patientMode === 'existing') { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
+            else setStep('general_info')
+          }}
+        />
       )}
 
       {/* ── General info step ──────────────────────────────────────────────────── */}
       {step === 'general_info' && (
-        <div className="general-info-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('identity')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Infos générales</h2>
-            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
-          <div className="scroll-area">
-            <div className="form-group">
-              <label>Activité professionnelle</label>
-              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Activité physique / sportive</label>
-              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Antécédents familiaux</label>
-              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Antécédents chirurgicaux</label>
-              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Notes complémentaires</label>
-              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-          </div>
-          <div className="fixed-bottom">
-            <button
-              className="btn-primary-luxe"
-              disabled={!selectedBodyZone}
-              style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
-              onClick={() => {
-                if (!selectedBodyZone) return
-                setBilanZoneBackStep('general_info')
-                setStep('bilan_zone')
-              }}>
-              {selectedBodyZone
-                ? `Commencer le bilan → ${BILAN_ZONE_LABELS[getBilanType(selectedBodyZone)]}`
-                : 'Sélectionnez une zone dans l\'étape précédente'}
-            </button>
-          </div>
-        </div>
+        <GeneralInfoStep
+          formData={formData}
+          updateField={updateField}
+          selectedBodyZone={selectedBodyZone}
+          stepProgress={stepProgress}
+          onBack={() => setStep('identity')}
+          onQuit={handleQuitBilan}
+          onStartBilan={() => {
+            if (!selectedBodyZone) return
+            setBilanZoneBackStep('general_info')
+            setStep('bilan_zone')
+          }}
+        />
       )}
 
       {/* ── Bilan zone step — toujours monté pour préserver l'état lors du retour arrière ── */}
@@ -5661,7 +4751,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             onAudit={recordAIAudit}
             onBack={() => { setEvolutionZoneType(null); setStep('database') }}
             onClose={() => { setEvolutionZoneType(null); setStep('database') }}
-            onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+            onGoToProfile={() => setStep('profile')}
             onExportPDF={(evolution) => {
               const hasText = (v: string | undefined | null): v is string => !!v && v.trim().length > 0
               const sanitizeCell = (v: string) => v.replace(/\|/g, '/').replace(/\s+/g, ' ').trim()
@@ -5987,7 +5077,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             showToast('Note diagnostique générée', 'success')
           }}
           onBack={() => setStep('database')}
-          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+          onGoToProfile={() => setStep('profile')}
           onFicheExercice={() => {
             setFicheBackStep('database')
             setStep('fiche_exercice')
@@ -6081,7 +5171,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           }}
           onExport={handleExportPDF}
           exporting={exportingPDF}
-          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+          onGoToProfile={() => setStep('profile')}
           onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
         />
         </Suspense>
@@ -6150,7 +5240,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           }}
           onBack={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setStep(ficheBackStep) }}
           onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}
-          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+          onGoToProfile={() => setStep('profile')}
         />
         </Suspense>
       )}
