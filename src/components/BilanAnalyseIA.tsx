@@ -99,7 +99,11 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
 
       const raw = await callWithDocGuard({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.`,
+        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige ton analyse clinique, tes 3 hypothèses et ton plan de traitement impérativement en français médical professionnel. Si le thérapeute a laissé des observations pré-analyse, tiens-en compte prioritairement — il a vu le patient.
+
+INTERDICTION ABSOLUE de stigmatiser le clinicien : aucune mention d'absence de tests objectifs, de scores manquants, de mesures non tracées, de défaut de documentation. Quand une donnée n'est pas dans les entrées, le champ correspondant ne la mentionne pas — pas de "Non documenté", "Non renseigné", "Aucune donnée". Les "alertes" sont CLINIQUES (red flag, signe d'alerte médicale) — jamais méthodologiques. Aucun "point" de priseEnCharge ne recommande de produire des données futures (HOOS/Oxford/WOMAC/KOOS/DASH/objectivation systématique) — les actions sont THÉRAPEUTIQUES (technique, exercice, conseil, éducation).
+
+Accord grammatical strict selon SEXE_PATIENT en tête de prompt utilisateur — jamais d'inclusif, jamais d'inférence depuis le prénom.`,
         userPrompt: buildClinicalPrompt(mergedContext),
         maxOutputTokens: 8192,
         jsonMode: true,
@@ -155,7 +159,9 @@ export function BilanAnalyseIA({ apiKey, context, patientKey, profession, docume
 
       const raw = await callWithDocGuard({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une analyse clinique, mais le thérapeute qui a vu le patient te donne des corrections basées sur son examen clinique réel. Tu DOIS intégrer ces corrections et ajuster ton analyse en conséquence. Rédige en français médical professionnel.`,
+        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une analyse clinique, mais le thérapeute qui a vu le patient te donne des corrections basées sur son examen clinique réel. Tu DOIS intégrer ces corrections et ajuster ton analyse en conséquence. Rédige en français médical professionnel.
+
+INTERDICTION ABSOLUE de stigmatiser le clinicien : pas de "Non documenté", "Aucune donnée", "Absence de mesures objectives". Les "alertes" sont CLINIQUES uniquement. Les "points" de priseEnCharge sont THÉRAPEUTIQUES (technique, exercice, dose, conseil) — JAMAIS méthodologiques (pas de HOOS/Oxford/WOMAC/KOOS/DASH, pas d'objectivation systématique). Accord grammatical strict selon SEXE_PATIENT — pas d'inclusif.`,
         userPrompt: `${buildClinicalPrompt(context)}
 
 ${prevAnalyse}

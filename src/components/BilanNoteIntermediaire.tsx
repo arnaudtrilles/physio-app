@@ -48,7 +48,9 @@ export function BilanNoteIntermediaire({
       const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession, closedAntecedents)
       const raw = await callClaudeSecure({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige impérativement en français médical professionnel.`,
+        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Rédige impérativement en français médical professionnel.
+
+INTERDICTION ABSOLUE de stigmatiser le clinicien : pas de "Non documenté", "Aucune donnée", "Absence de mesures objectives". Les "alertes" sont CLINIQUES uniquement (red flag, évolution défavorable nécessitant réorientation). Les "points" de priseEnChargeAjustee sont THÉRAPEUTIQUES (technique, exercice, ajustement de dose, conseil) — JAMAIS méthodologiques (pas de HOOS/Oxford/WOMAC/KOOS/DASH, pas d'objectivation systématique). Accord grammatical strict selon SEXE_PATIENT — pas d'inclusif, pas d'inférence depuis le prénom.`,
         userPrompt: prompt,
         maxOutputTokens: 8192,
         jsonMode: true,
@@ -91,7 +93,9 @@ export function BilanNoteIntermediaire({
       const prompt = buildIntermediairePrompt(patient, zone, bilanType, intermData, historique, seances, profession, closedAntecedents)
       const raw = await callClaudeSecure({
         apiKey,
-        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.`,
+        systemPrompt: `Agis comme un ${roleTitle(profession)} expert. Tu as déjà produit une note diagnostique intermédiaire, mais le thérapeute te donne des corrections basées sur son examen. Tu DOIS intégrer ces corrections et ajuster ta note. Rédige en français médical professionnel.
+
+INTERDICTION ABSOLUE de stigmatiser le clinicien : pas de "Non documenté", "Aucune donnée", "Absence de mesures objectives". Alertes CLINIQUES uniquement. Points de priseEnChargeAjustee THÉRAPEUTIQUES (technique, exercice, dose, conseil) — JAMAIS méthodologiques. Accord grammatical strict selon SEXE_PATIENT — pas d'inclusif.`,
         userPrompt: `${prompt}
 
 ${prevNote}
