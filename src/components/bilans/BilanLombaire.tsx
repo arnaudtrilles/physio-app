@@ -6,6 +6,7 @@ import { OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
 import { TestResultInput, ClusterLaslettInput } from './testInputs'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 import {
   DouleurSection, RedFlagsSection, YellowFlagsSection, BlueBlackFlagsSection,
   ContratKineSection, ConseilsSection, PSFSCards,
@@ -119,7 +120,7 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
   )
   const questionnaires = useQuestionnaires(updScore, qAnswers, setQAnswers, qResults, setQResults)
 
-  const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ infosGenerales: true, douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   // ── Cauda equina alert ───────────────────────────────────────────────────
@@ -173,6 +174,7 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
   // Yellow/Blue flags : en Noyau, version dépistage rapide (déjà filtré dans les sections partagées).
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'infosGenerales',title: 'Infos générales',                  color: '#1A1A1A', priority: 'noyau' },
     { id: 'douleur',       title: 'Douleur',                          color: '#1A1A1A', priority: 'noyau' },
     { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                   color: '#d97706',        priority: 'noyau' },
@@ -209,6 +211,8 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
+
+              {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
 
               {sec.id === 'douleur' && (
                 <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} coreMode={coreMode} />

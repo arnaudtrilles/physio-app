@@ -3,6 +3,7 @@ import type { BilanMode, NarrativeReport } from '../../types'
 import { BilanVocalMode } from './BilanVocalMode'
 import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { OuiNon, SectionHeader, ScoreRow, BilanModeToggle, EVASlider } from './shared'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { Chrono } from './Chrono'
 import { SPPBInteractiveModal } from './SPPBInteractiveModal'
@@ -188,7 +189,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   const questionnaires = useQuestionnaires(updScore, qAnswers, setQAnswers, qResults, setQResults)
 
   // ── Sections collapsibles ────────────────────────────────────────────────
-  const [open, setOpen] = useState<Record<string, boolean>>({ contexte: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ infosGenerales: true, contexte: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   // ── Interpretations rapides ──────────────────────────────────────────────
@@ -294,6 +295,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   // MNA-SF, Fried, SPPB, Tinetti) → approfondissement.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'infosGenerales',title: '0. Infos générales',                    color: '#1A1A1A', priority: 'noyau' },
     { id: 'contexte',     title: '1. Contexte de vie & autonomie',         color: '#1A1A1A', priority: 'noyau' },
     { id: 'chutes',       title: '2. Chutes & Red Flags 🚩',                color: '#991b1b',        priority: 'noyau' },
     { id: 'douleur',      title: '3. Douleur',                              color: '#1A1A1A', priority: 'noyau' },
@@ -315,6 +317,8 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
+
+              {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
 
               {/* ── 1. Contexte ────────────────────────────────────── */}
               {sec.id === 'contexte' && (

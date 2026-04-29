@@ -69,10 +69,10 @@ import { DatabaseProvider } from './components/database/DatabaseContext'
 import { DatabasePage } from './components/database/DatabasePage'
 import { ZonePickerSheet } from './components/shared/ZonePicker'
 import { IdentityStep } from './components/wizard/IdentityStep'
-import { GeneralInfoStep } from './components/wizard/GeneralInfoStep'
+import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -127,8 +127,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   { id: 'welcome', emoji: '🏥', title: 'Créons votre premier bilan', description: 'Je vous guide pas à pas dans la création d\'un dossier patient complet. Ça prend 2 minutes !', selector: null, tooltip: 'center' },
   { id: 'new-patient', emoji: '➕', title: 'Nouveau patient', description: 'Appuyez sur ce bouton pour créer votre premier dossier et démarrer le bilan initial.', selector: '[data-tutorial="new-patient-btn"]', tooltip: 'top', padding: 10 },
   { id: 'identity', emoji: '👤', title: 'Identité', description: 'À cette étape, renseignez les informations d\'identité de votre patient.', selector: null, tooltip: 'center' },
-  { id: 'general-info', emoji: '📋', title: 'Bilan clinique', description: 'C\'est ici que vous devrez saisir les informations cliniques. Quand vous avez fini, enregistrez votre bilan.', selector: null, tooltip: 'center' },
-  { id: 'bilan', emoji: '🔍', title: 'Bilan clinique 2/2', description: 'Ici vous trouverez votre bilan clinique optimisé pour la zone concernée.', selector: null, tooltip: 'center' },
+  { id: 'bilan', emoji: '🔍', title: 'Bilan clinique', description: 'Ici, votre bilan clinique optimisé pour la zone concernée — infos générales, douleur, examen et conseils. Enregistrez à la fin.', selector: null, tooltip: 'center' },
   { id: 'done', emoji: '🎉', title: 'Bilan créé avec succès !', description: 'Excellent travail. Que souhaitez-vous faire avec ce bilan ?', selector: null, tooltip: 'center', isActionStep: true },
 ]
 
@@ -355,7 +354,7 @@ function App() {
   const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
   const [ficheExerciceContextOverride, setFicheExerciceContextOverride] = useState<{ notesLibres: string; bilanData: Record<string, unknown>; zone: string } | null>(null)
   const [ficheExerciceSource, setFicheExerciceSource] = useState<{ type: 'note' | 'intermediaire'; id: number } | null>(null)
-  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database'>('general_info')
+  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'database'>('general_info')
   const [deletingBilanId, setDeletingBilanId] = useState<number | null>(null)
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
@@ -473,7 +472,7 @@ function App() {
     setBilanNotes('')
     setCurrentBilanId(null)
     setCurrentBilanDataOverride(null)
-    setBilanZoneBackStep('general_info')
+    setBilanZoneBackStep('identity')
   }, [])
 
   const getIntermediairePreFill = (patKey: string, zone: string): Record<string, unknown> => {
@@ -1960,7 +1959,7 @@ Mobilité articulaire lombaire
   // ── Input with mic helper ─────────────────────────────────────────────────────
 
   // ── Step progress ─────────────────────────────────────────────────────────────
-  const STEP_ORDER: Step[] = ['identity', 'general_info', 'bilan_zone', 'analyse_ia']
+  const STEP_ORDER: Step[] = ['identity', 'bilan_zone', 'analyse_ia']
   const stepProgress = STEP_ORDER.indexOf(step) >= 0 ? ((STEP_ORDER.indexOf(step) + 1) / STEP_ORDER.length) * 100 : 0
 
   // ── Tutorial ──────────────────────────────────────────────────────────────────
@@ -1981,9 +1980,8 @@ Mobilité articulaire lombaire
       setPatientMode('new')
       setStep('identity')
     }
-    else if (tutorialIdx === 2) setStep('general_info')
-    else if (tutorialIdx === 3) { setBilanZoneBackStep('general_info'); setStep('bilan_zone') }
-    else if (tutorialIdx === 4) setStep('database')
+    else if (tutorialIdx === 2) { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
+    else if (tutorialIdx === 3) setStep('database')
     setTutorialIdx(next)
   }
 
@@ -2788,24 +2786,7 @@ Mobilité articulaire lombaire
           onBack={() => setStep('dashboard')}
           onQuit={handleQuitBilan}
           onNext={() => {
-            if (patientMode === 'existing') { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
-            else setStep('general_info')
-          }}
-        />
-      )}
-
-      {/* ── General info step ──────────────────────────────────────────────────── */}
-      {step === 'general_info' && (
-        <GeneralInfoStep
-          formData={formData}
-          updateField={updateField}
-          selectedBodyZone={selectedBodyZone}
-          stepProgress={stepProgress}
-          onBack={() => setStep('identity')}
-          onQuit={handleQuitBilan}
-          onStartBilan={() => {
-            if (!selectedBodyZone) return
-            setBilanZoneBackStep('general_info')
+            setBilanZoneBackStep('identity')
             setStep('bilan_zone')
           }}
         />
@@ -2813,6 +2794,14 @@ Mobilité articulaire lombaire
 
       {/* ── Bilan zone step — toujours monté pour préserver l'état lors du retour arrière ── */}
       {selectedBodyZone && (
+        <GeneralInfoProvider value={{
+          profession: formData.profession,
+          sport: formData.sport,
+          famille: formData.famille,
+          chirurgie: formData.chirurgie,
+          notes: formData.notes,
+          updateField: (field, value) => updateField(field, value),
+        }}>
         <div className="general-info-screen" style={{ display: step === 'bilan_zone' ? 'flex' : 'none', flexDirection: 'column' }}>
           <header className="screen-header">
             <button className="btn-back" onClick={() => { if (bilanZoneBackStep === 'database') { setCurrentBilanId(null); setCurrentBilanDataOverride(null) } setStep(bilanZoneBackStep) }}>
@@ -2970,7 +2959,7 @@ Mobilité articulaire lombaire
             </button>
             <button className="btn-primary-luxe"
               style={{ marginBottom: 0, background: 'var(--primary-dark)' }}
-              onClick={() => { saveBilan('complet'); setCurrentBilanId(null); setCurrentBilanDataOverride(null); setBilanZoneBackStep('general_info'); goToPatientRecord() }}>
+              onClick={() => { saveBilan('complet'); setCurrentBilanId(null); setCurrentBilanDataOverride(null); setBilanZoneBackStep('identity'); goToPatientRecord() }}>
               Enregistrer uniquement
             </button>
             <button className="btn-primary-luxe"
@@ -2990,6 +2979,7 @@ Mobilité articulaire lombaire
             </div>
           </div>
         </div>
+        </GeneralInfoProvider>
       )}
 
       {/* ── Evolution IA step ─────────────────────────────────────────────────── */}
@@ -3448,7 +3438,7 @@ Mobilité articulaire lombaire
             if (bilanZoneBackStep === 'database') {
               setCurrentBilanId(null)
               setCurrentBilanDataOverride(null)
-              setBilanZoneBackStep('general_info')
+              setBilanZoneBackStep('identity')
               setStep('database')
             } else {
               setStep('bilan_zone')
@@ -3457,7 +3447,7 @@ Mobilité articulaire lombaire
           onClose={() => {
             setCurrentBilanId(null)
             setCurrentBilanDataOverride(null)
-            setBilanZoneBackStep('general_info')
+            setBilanZoneBackStep('identity')
             goToPatientRecord()
           }}
           onExport={handleExportPDF}

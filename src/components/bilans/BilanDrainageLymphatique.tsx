@@ -9,6 +9,7 @@ import {
   type ContratState, type PsfsItem,
 } from './bilanSections'
 import { DictableTextarea } from '../VoiceMic'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 import {
   StepTypeSelection, StepContreIndications, StepAnamnese,
   StepExamenClinique, StepMesures, StepStade, StepFonctionICF,
@@ -34,6 +35,7 @@ export interface BilanDrainageLymphatiqueHandle {
 // collapsibles à la manière des autres bilans, pas en wizard linéaire — cohérence
 // UX avec BilanGeriatrique / BilanCheville. Le clinicien navigue librement.
 type SectionId =
+  | 'infosGenerales'
   | 'type'
   | 'contreIndications'
   | 'anamnese'
@@ -83,6 +85,7 @@ export const BilanDrainageLymphatique = forwardRef<
 
   // ─── Sections collapsibles ────────────────────────────────────────────────
   const [open, setOpen] = useState<Record<SectionId, boolean>>({
+    infosGenerales: true,
     type: true, contreIndications: false, anamnese: false, examen: false,
     mesures: false, stade: false, icf: false, dx: false, plan: false,
     psfs: false, contrat: false, conseils: false,
@@ -111,6 +114,7 @@ export const BilanDrainageLymphatique = forwardRef<
 
   // ─── Sections ─── Le noyau couvre l'essentiel EBP ; ICF + dx élargi en complet ─
   const allSections: SectionDef[] = useMemo(() => ([
+    { id: 'infosGenerales',    title: '0. Infos générales',                   color: '#1A1A1A', priority: 'noyau' },
     { id: 'type',              title: '1. Type d\'œdème, côté & topographie', color: '#7c3aed', priority: 'noyau' },
     { id: 'contreIndications', title: blockingCI
         ? '2. Contre-indications — ALERTE'
@@ -265,6 +269,7 @@ export const BilanDrainageLymphatique = forwardRef<
               />
               {open[sec.id] && (
                 <div style={{ paddingTop: 12, paddingBottom: 8 }}>
+                  {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
                   {sec.id === 'type' && (
                     <StepTypeSelection
                       oedemeTypes={data.oedemeTypes}

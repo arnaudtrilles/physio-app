@@ -22,7 +22,7 @@ test('app boots to dashboard without crashing', async ({ page }) => {
   expect(fatal, `unexpected console errors: ${fatal.join('\n')}`).toEqual([])
 })
 
-test('patient creation wizard reaches general info step', async ({ page }) => {
+test('patient creation wizard reaches bilan with infos générales section', async ({ page }) => {
   await page.goto('/')
 
   await page.getByRole('button', { name: /Nouveau patient/i }).first().click()
@@ -41,10 +41,6 @@ test('patient creation wizard reaches general info step', async ({ page }) => {
   await expect(nextBtn).toBeEnabled()
   await nextBtn.click()
 
-  await expect(page.getByRole('heading', { name: /Infos générales/i })).toBeVisible()
-  await expect(page.getByPlaceholder(/Employé de bureau/i)).toBeVisible()
-
-  const startBtn = page.getByRole('button', { name: /Commencer le bilan/i })
-  await expect(startBtn).toBeVisible()
-  await expect(startBtn).toBeEnabled()
+  await expect(page.getByRole('button', { name: /Infos générales/i })).toBeVisible()
+  await expect(page.getByPlaceholder(/employé de bureau/i)).toBeVisible()
 })

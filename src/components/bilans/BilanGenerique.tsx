@@ -3,6 +3,7 @@ import type { BilanMode, NarrativeReport } from '../../types'
 import { BilanVocalMode } from './BilanVocalMode'
 import { DictableInput, DictableTextarea } from '../VoiceMic'
 import { SectionHeader, ScoreRow, BilanModeToggle } from './shared'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import {
   DouleurSection, RedFlagsSection, YellowFlagsSection, BlueBlackFlagsSection,
@@ -71,7 +72,7 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
   const questionnaires = useQuestionnaires(updScore, qAnswers, setQAnswers, qResults, setQResults)
 
   // ── Sections collapsibles ────────────────────────────────────────────────
-  const [open, setOpen] = useState<Record<string, boolean>>({ intro: true, douleur: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ intro: true, infosGenerales: true, douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   useImperativeHandle(ref, () => ({
@@ -115,6 +116,7 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
   // Bilan générique : déjà court (~17 champs). Noyau EBP minimal.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'infosGenerales', title: 'Infos générales',                  color: '#1A1A1A', priority: 'noyau' },
     { id: 'douleur',        title: 'Douleur',                          color: '#1A1A1A', priority: 'noyau' },
     { id: 'redFlags',       title: 'Red Flags 🚩',                      color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',    title: 'Yellow Flags 🟡',                   color: '#d97706',        priority: 'noyau' },
@@ -147,6 +149,7 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
+              {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
               {sec.id === 'douleur' && (
                 <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} options={{ hasFacteurDeclenchant: true, hasMecanismeLesionnel: true }} coreMode={coreMode} />
               )}

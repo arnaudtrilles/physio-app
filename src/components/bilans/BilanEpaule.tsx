@@ -8,6 +8,7 @@ import { inputStyle, boolToStr, DouleurSection, mergeDouleur, type DouleurState 
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
 import { TestResultInput } from './testInputs'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 
 export type BilanEpauleHandle = BilanHandle
 
@@ -24,7 +25,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   const _ts = (initialData?.testsSpecifiques as Record<string, unknown>) ?? {}
   const _cn = (initialData?.conseils      as Record<string, unknown>) ?? {}
 
-  const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ infosGenerales: true, douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   // Mode Noyau EBP (JOSPT 2025 Rotator Cuff) activé par défaut.
@@ -369,6 +370,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   // Blue/Black flags → approfondissement.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'infosGenerales',title: 'Infos générales',                      color: '#1A1A1A', priority: 'noyau' },
     { id: 'douleur',       title: 'Douleur',                              color: '#1A1A1A', priority: 'noyau' },
     { id: 'redFlags',      title: 'Red Flags 🚩',                          color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                       color: '#d97706',        priority: 'noyau' },
@@ -393,6 +395,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
+              {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
               {sec.id === 'douleur' && (
                 <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} coreMode={coreMode} />
               )}
