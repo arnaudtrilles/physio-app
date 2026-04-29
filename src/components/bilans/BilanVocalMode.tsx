@@ -27,7 +27,7 @@ const BAR_COUNT = 32
 // mono, 10 min ≈ 1.7 Mo → bien sous toutes les limites + transcription rapide en BG.
 const CHUNK_MAX_SECONDS = 10 * 60
 const AUDIO_BITRATE = 24000
-const WARN_SECONDS = 60 * 60 // alerte douce à 1h, pas de blocage
+const WARN_SECONDS = 45 * 60 // alerte douce à 45 min, pas de blocage
 
 interface Props {
   zone: string
