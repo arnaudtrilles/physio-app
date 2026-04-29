@@ -348,6 +348,8 @@ export interface EvolutionContext {
   /** Résumés 1-ligne des PEC clôturées dans d'autres zones — contexte d'arrière-plan uniquement. */
   closedAntecedents?: string[]
   therapistProfession?: string
+  /** Note libre du thérapeute saisie avant génération — observations cliniques prioritaires à intégrer. */
+  therapistNote?: string
 }
 
 // Parse dd/mm/yyyy → timestamp (stable sort key)
@@ -448,7 +450,18 @@ Plan : ${scrub(d.notePlan ?? 'N/R')}`
     ? `\n\nANTÉCÉDENTS D'AUTRES PEC CLÔTURÉES (contexte patient uniquement, NE PAS mélanger à l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
     : ''
 
-  return `${sexeLine}
+  const noteThera = ctx.therapistNote && ctx.therapistNote.trim()
+    ? `
+
+========================================
+SECTION 0 — OBSERVATIONS DU THÉRAPEUTE (PRIORITÉ ABSOLUE)
+========================================
+Le thérapeute qui a vu le patient en consultation transmet les observations suivantes. Tu DOIS les intégrer prioritairement dans le rapport quand elles éclairent ou nuancent les données chronologiques de la section 3. Elles priment sur toute interprétation par défaut. Si la note contredit une donnée brute, tu suis la note (le thérapeute a vu, l'IA non). Tu ne reproduis JAMAIS la note verbatim — tu en intègres la substance dans les blocs narratifs appropriés (tableauInitial, evolutionClinique, etatActuel, conclusion). Aucun champ ne doit citer "note du thérapeute" ou équivalent.
+
+${scrub(ctx.therapistNote.trim())}`
+    : ''
+
+  return `${sexeLine}${noteThera}
 
 ========================================
 SECTION 1 — DONNÉES PATIENT

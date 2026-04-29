@@ -34,6 +34,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
   const [error, setError] = useState<string | null>(null)
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [therapistNote, setTherapistNote] = useState('')
 
   // Cleanup : annule le retry timeout et bloque les setState après unmount
   const isMountedRef = useRef(true)
@@ -76,7 +77,7 @@ Tu rédiges en français médical professionnel, en prose articulée (phrases co
 Tu respectes la terminologie clinique verbatim (noms de tests, articulations, acronymes du référentiel Knode). Aucune hypothèse diagnostique n'est chiffrée en pourcentage. Ton ton est concis, factuel, sans pathos, sans qualificatifs subjectifs : le rapport doit pouvoir être lu en 2 minutes par un médecin et donner une image fidèle de la prise en charge.
 
 Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en section 5 du prompt utilisateur. Aucun markdown, aucun texte en dehors du JSON.`,
-        userPrompt: buildEvolutionPrompt(context),
+        userPrompt: buildEvolutionPrompt({ ...context, therapistNote: therapistNote.trim() || undefined }),
         maxOutputTokens: 8192,
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'bilan_evolution',
@@ -469,6 +470,26 @@ Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en se
               <div className="ai-dot" />
               <p>Ce rapport est fourni à titre indicatif et ne remplace pas le jugement clinique du professionnel de santé.</p>
             </div>
+          </div>
+        )}
+
+        {/* Note libre du thérapeute — visible avant génération uniquement */}
+        {!evolution && !loading && apiKey && !error && (
+          <div style={{ marginBottom: 12, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 14, padding: 14 }}>
+            <label htmlFor="therapist-note" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
+              Vos observations cliniques (optionnel)
+            </label>
+            <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.45 }}>
+              Notes libres intégrées prioritairement au rapport — précisions cliniques, nuances, observations non capturées dans les bilans/séances. Vous avez vu le patient, l'IA non.
+            </p>
+            <textarea
+              id="therapist-note"
+              value={therapistNote}
+              onChange={e => setTherapistNote(e.target.value)}
+              placeholder="Ex : la patiente rapporte une nette amélioration depuis la dernière séance après reprise du sport. Tolérance excellente. Plan : poursuite en autonomie."
+              rows={4}
+              style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'white', fontSize: '0.86rem', color: 'var(--text-main)', fontFamily: 'inherit', resize: 'vertical', minHeight: 80, lineHeight: 1.5, boxSizing: 'border-box' }}
+            />
           </div>
         )}
 
