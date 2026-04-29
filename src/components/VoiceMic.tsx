@@ -138,6 +138,12 @@ function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
     if (state !== 'idle' && state !== 'error') return
     setErrorMsg('')
     try {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        throw new DOMException(
+          window.isSecureContext ? 'API micro indisponible' : 'Contexte non sécurisé (HTTPS requis)',
+          'NotSupportedError'
+        )
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       const ctx = new AudioContext()
@@ -214,12 +220,26 @@ function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
       tick()
     } catch (err) {
       console.error('[VoiceMic] Mic access error:', err)
-      setErrorMsg('Micro non disponible')
+      const e = err as DOMException & { message?: string }
+      const name = e?.name ?? ''
+      let msg = 'Micro non disponible'
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        msg = 'Accès micro refusé — autorise-le dans le navigateur'
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        msg = 'Aucun micro détecté'
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        msg = 'Micro utilisé par une autre app'
+      } else if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+        msg = 'Micro incompatible'
+      } else if (name === 'SecurityError' || name === 'NotSupportedError') {
+        msg = e?.message || 'Contexte non sécurisé (HTTPS requis)'
+      }
+      setErrorMsg(msg)
       setState('error')
       setTimeout(() => {
         setState(s => s === 'error' ? 'idle' : s)
         setErrorMsg('')
-      }, 3000)
+      }, 4500)
     }
   }, [state, stopAll])
 
