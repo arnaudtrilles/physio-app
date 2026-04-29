@@ -7,6 +7,7 @@ import {
   newRecoveryId,
   concatChunkBlobs,
   concatChunkTranscriptions,
+  recoveryHasAudio,
   type VocalRecovery,
   type VocalContext,
 } from '../../utils/vocalRecoveryDB'
@@ -169,7 +170,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
   }, [])
 
   // ── Sauvegarde du chunk courant + rotation ─────────────────────────────
-  // Appelé soit par le timer de rotation (toutes les 18 min), soit par stopRecording final.
+  // Appelé soit par le timer de rotation (toutes les 10 min), soit par stopRecording final.
   const finalizeCurrentChunk = useCallback((isFinal: boolean) => {
     const mr = currentRecorderRef.current
     if (!mr) return
@@ -276,12 +277,20 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       const fullTranscription = concatChunkTranscriptions(rec)
       rec.fullTranscription = fullTranscription
       rec.status = 'transcribed'
+
+      // Audio plus nécessaire — on libère IDB. Si Claude échoue ensuite, le
+      // retry s'appuiera uniquement sur le texte (chunk.transcription préservé).
+      // Une séance de 45 min = ~10 Mo d'audio qui partent ici.
+      for (const c of rec.chunks) c.blob = undefined
+      rec.totalSizeBytes = 0
       await persistRecovery(rec)
 
       setState('generating')
       setPhaseDetail('Claude rédige les 7 sections cliniques…')
 
-      const sections = await generateNarrativeReport(fullTranscription, zone, context)
+      const sections = await generateReportWithRetry(fullTranscription, zone, context, (attempt) => {
+        setPhaseDetail(`Claude rédige (tentative ${attempt + 1})…`)
+      })
 
       const newReport: NarrativeReport = {
         sections,
@@ -482,6 +491,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
   if (state === 'recovery-prompt' && pendingRecovery) {
     const rec = pendingRecovery
     const hasTranscription = rec.chunks.some(c => c.transcription)
+    const hasAudio = recoveryHasAudio(rec)
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '1rem 0 0.5rem' }}>
         <div style={{ background: '#fef3c7', border: '1.5px solid #f59e0b', borderRadius: 12, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -490,7 +500,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
           </div>
           <div style={{ fontSize: '0.78rem', color: '#92400e', lineHeight: 1.5 }}>
             Zone : <b>{rec.zone}</b> · Mode : <b>{rec.context === 'seance' ? 'Séance complète' : 'Dictée'}</b><br/>
-            Durée : <b>{fmtTime(rec.totalDurationSec)}</b> · Taille : <b>{fmtSize(rec.totalSizeBytes)}</b> · Chunks : <b>{rec.chunks.length}</b><br/>
+            Durée : <b>{fmtTime(rec.totalDurationSec)}</b>{hasAudio && <> · Taille : <b>{fmtSize(rec.totalSizeBytes)}</b></>} · Chunks : <b>{rec.chunks.length}</b><br/>
             Statut : <b>{rec.status === 'transcribed' ? 'Transcription OK, analyse Claude à refaire' : hasTranscription ? 'Transcription partielle' : 'Audio enregistré, transcription à faire'}</b>
             {rec.errorMsg && <><br/>Erreur précédente : <i>{rec.errorMsg.slice(0, 150)}</i></>}
           </div>
@@ -502,12 +512,14 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
           >
             ▶ Reprendre {hasTranscription ? "l'analyse Claude" : 'la transcription'}
           </button>
-          <button
-            onClick={() => downloadAudio(rec)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.65rem 1rem', background: 'var(--surface)', color: 'var(--text-main)', border: '1.5px solid var(--border-color)', borderRadius: 10, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-          >
-            📥 Télécharger l'audio (.webm)
-          </button>
+          {hasAudio && (
+            <button
+              onClick={() => downloadAudio(rec)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.65rem 1rem', background: 'var(--surface)', color: 'var(--text-main)', border: '1.5px solid var(--border-color)', borderRadius: 10, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+            >
+              📥 Télécharger l'audio (.webm)
+            </button>
+          )}
           <button
             onClick={dismissRecovery}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0.55rem 1rem', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 10, cursor: 'pointer', fontSize: '0.75rem' }}
@@ -557,7 +569,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
         <MicIcon /> Démarrer l'enregistrement
       </button>
       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
-        Audio découpé automatiquement en chunks de 18 min — pas de limite de durée.<br/>
+        Audio découpé automatiquement en chunks de 10 min — pas de limite de durée.<br/>
         Sauvegarde progressive : aucune perte possible même en cas d'erreur.
       </div>
     </div>
@@ -571,7 +583,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '1rem 0 0.5rem' }}>
         {warned && (
           <div style={{ background: '#dbeafe', border: '1px solid #60a5fa', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.72rem', color: '#1e40af', textAlign: 'center' }}>
-            ℹ Enregistrement de plus d'1h en cours — pas de limite, sauvegarde toutes les 18 min.
+            ℹ Enregistrement de plus de 45 min en cours — pas de limite, sauvegarde toutes les 10 min.
           </div>
         )}
         <div style={{ background: 'var(--input-bg)', border: '1.5px solid var(--primary)', borderRadius: 14, padding: '1rem 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
@@ -624,7 +636,10 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
 
   // ── ERROR ─────────────────────────────────────────────────────────────────
   if (state === 'error') {
-    const hasRecovery = recoveryRef.current && recoveryRef.current.chunks.length > 0
+    const rec = recoveryRef.current
+    const hasRecovery = !!rec && rec.chunks.length > 0
+    const hasAudio = !!rec && recoveryHasAudio(rec)
+    const hasTranscription = !!rec?.fullTranscription
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '1rem 0 0.5rem' }}>
         <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, padding: '0.75rem 1rem', fontSize: '0.8rem', color: '#991b1b' }}>
@@ -632,7 +647,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
           <div style={{ lineHeight: 1.5 }}>{error}</div>
           {hasRecovery && (
             <div style={{ marginTop: 8, fontSize: '0.72rem', color: '#7f1d1d', fontStyle: 'italic' }}>
-              ✓ Audio préservé dans la base locale — vous pouvez réessayer ou télécharger.
+              ✓ {hasTranscription ? 'Transcription préservée' : 'Audio préservé'} dans la base locale — vous pouvez réessayer{hasAudio ? ' ou télécharger' : ''}.
             </div>
           )}
         </div>
@@ -642,14 +657,16 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
               onClick={retryFromError}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0.7rem 1.2rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}
             >
-              ↻ Réessayer la transcription/analyse
+              ↻ Réessayer {hasTranscription ? "l'analyse Claude" : 'la transcription'}
             </button>
-            <button
-              onClick={() => downloadAudio(null)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0.6rem 1.2rem', background: 'var(--surface)', color: 'var(--text-main)', border: '1.5px solid var(--border-color)', borderRadius: 10, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
-            >
-              📥 Télécharger l'audio brut (.webm)
-            </button>
+            {hasAudio && (
+              <button
+                onClick={() => downloadAudio(null)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0.6rem 1.2rem', background: 'var(--surface)', color: 'var(--text-main)', border: '1.5px solid var(--border-color)', borderRadius: 10, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+              >
+                📥 Télécharger l'audio brut (.webm)
+              </button>
+            )}
             <button
               onClick={restart}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0.5rem 1rem', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 10, cursor: 'pointer', fontSize: '0.72rem' }}
@@ -711,6 +728,34 @@ async function transcribeWithRetry(blob: Blob, retries: number): Promise<string>
     }
   }
   throw lastErr ?? new Error('Transcription échouée')
+}
+
+// ─── Génération Claude avec retry — protège des 503/529/timeouts ──────────
+// On retente uniquement sur les erreurs transitoires (overload, timeout, réseau).
+// Les erreurs définitives (400 mauvais payload, 401 auth) sont propagées immédiatement.
+async function generateReportWithRetry(
+  transcription: string,
+  zone: string,
+  context: VocalContext,
+  onAttempt: (attempt: number) => void,
+): Promise<NarrativeSection[]> {
+  const MAX_ATTEMPTS = 3
+  let lastErr: Error | null = null
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    onAttempt(attempt)
+    try {
+      return await generateNarrativeReport(transcription, zone, context)
+    } catch (e) {
+      lastErr = e as Error
+      const msg = lastErr.message
+      // Erreurs définitives → on s'arrête tout de suite
+      if (/API 4(00|01|03|04)/.test(msg)) break
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+      }
+    }
+  }
+  throw lastErr ?? new Error('Génération Claude échouée')
 }
 
 // ─── NarrativeSectionEditor ────────────────────────────────────────────────

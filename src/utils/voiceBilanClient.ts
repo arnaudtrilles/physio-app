@@ -303,6 +303,7 @@ RÈGLES STRICTES :
 13. Les mouvements améliorant la symptomatologie (marqueursAvant, mvtAmelMouvement, mvtAmelNbRep, mvtAmelContraction, resultatsMvtRep) sont sous "forceMusculaire", pas sous "examClinique".
 14. Contrat kiné — frequenceDuree : si le kiné mentionne un nombre de séances par semaine, une fréquence ou une durée de traitement (ex: "2 fois par semaine pendant 6 semaines", "3 séances/semaine sur 8 semaines", "rythme bihebdomadaire"), mets-le dans contratKine.frequenceDuree. Cherche aussi des formulations comme "je le vois X fois par semaine" ou "séances prévues sur X semaines".
 15. Pour la neurologie ULNT/mécanosensibilité : si le kiné dit "positif" ou "négatif" pour un nerf (médian, radial, ulnaire), utilise exactement cette valeur avec les détails s'il y en a (ex: "Positif côté droit — reproduction des symptômes").
+16. AUTOCORRECTIONS — règle critique : la transcription est chronologique. Si le kiné revient sur une information précédemment dite et la modifie ou la corrige (formulations typiques : "non en fait", "je me reprends", "plutôt", "finalement", "pardon", "je rectifie", "non c'est plutôt", "je voulais dire", "je me suis trompé"), c'est TOUJOURS la version la plus récente qui prime. N'extrais QUE la version corrigée. Cela s'applique à tous les champs : EVN, amplitudes, MRC, tests positifs/négatifs, localisation, antécédents, etc.
 
 SCHÉMA CIBLE (type de bilan : ${bilanType}) :
 ${schema}
@@ -374,7 +375,8 @@ RÈGLES :
 6. Utilise les termes cliniques appropriés (EVN, PSFS, MRC, ROM, etc.) tels que mentionnés.
 7. Ne rajoute AUCUNE information absente de la transcription.
 8. Conserve toutes les valeurs numériques (EVN, amplitudes, scores) telles quelles.
-9. Style : phrases complètes, présent de l'indicatif, 3e personne (ex: "Le patient présente...", "L'examen révèle...").`
+9. Style : phrases complètes, présent de l'indicatif, 3e personne (ex: "Le patient présente...", "L'examen révèle...").
+10. AUTOCORRECTIONS — règle critique : la transcription est chronologique. Si le thérapeute revient sur une information précédemment mentionnée et la modifie ou la corrige (formulations typiques : "non en fait", "je me reprends", "plutôt", "finalement", "pardon", "je rectifie", "non c'est plutôt", "je voulais dire", "je me suis trompé"), c'est TOUJOURS la version la plus récente qui prime dans le compte rendu. Ne mentionne jamais l'ancienne version, ne fais aucune référence au changement, écris uniquement la version corrigée comme si elle avait été dite directement. Cela s'applique à TOUS les champs : valeurs numériques (EVN, amplitudes, MRC), tests cliniques, observations, mouvements aggravants/améliorants, diagnostic, etc.`
 
   const userPrompt = `Zone anatomique : ${zone}
 Mode : ${context === 'seance' ? 'Enregistrement séance complète (thérapeute + patient)' : 'Dictée thérapeute'}
