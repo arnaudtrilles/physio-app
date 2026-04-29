@@ -4101,8 +4101,8 @@ Mobilité articulaire lombaire
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100, padding: '1.5rem' }}>
           <div style={{ background: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius-xl)', width: '100%', maxWidth: '380px', boxShadow: 'var(--shadow-2xl)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Complétion requise</h3>
@@ -4139,7 +4139,7 @@ Mobilité articulaire lombaire
                 setSexeMigrationChoice('')
                 showToast('Sexe enregistré', 'success')
               }}
-              style={{ width: '100%', padding: '0.8rem', borderRadius: 'var(--radius-lg)', background: !sexeMigrationChoice ? '#d1d5db' : 'linear-gradient(135deg, #1e3a8a, #2563eb)', color: 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: !sexeMigrationChoice ? 'not-allowed' : 'pointer' }}>
+              style={{ width: '100%', padding: '0.8rem', borderRadius: 'var(--radius-lg)', background: !sexeMigrationChoice ? 'var(--border-color)' : 'var(--primary)', color: !sexeMigrationChoice ? 'var(--text-muted)' : 'white', fontWeight: 700, fontSize: '0.9rem', border: 'none', cursor: !sexeMigrationChoice ? 'not-allowed' : 'pointer' }}>
               Valider
             </button>
           </div>

@@ -22,9 +22,19 @@ export function useAuth() {
   useEffect(() => {
     if (!supabase) return
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setState({ user: session?.user ?? null, session, loading: false })
-    })
+    const timeout = setTimeout(() => {
+      setState(prev => ({ ...prev, loading: false }))
+    }, 5000)
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        clearTimeout(timeout)
+        setState({ user: session?.user ?? null, session, loading: false })
+      })
+      .catch(() => {
+        clearTimeout(timeout)
+        setState(prev => ({ ...prev, loading: false }))
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: string, session: Session | null) => {
