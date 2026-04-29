@@ -16,7 +16,7 @@ import {
 } from './drainageLymphatique/dlmSteps'
 import {
   mergeBilanDLM, hasBlockingCI,
-  OEDEME_LABELS,
+  OEDEME_LABELS, DLM_PRESETS,
 } from './drainageLymphatique/dlmTypes'
 import type {
   BilanDLMData, OedemeType, BodyRegion,
@@ -164,6 +164,24 @@ export const BilanDrainageLymphatique = forwardRef<
     return types || 'Aucun type sélectionné'
   })()
 
+  // Visibilité de la barre presets : quasi-vide (avant remplissage manuel).
+  const isFresh = data.oedemeTypes.length === 0 && data.regions.length === 0
+    && !data.examenClinique.stemmer && !data.examenClinique.godetGrade
+  const [presetsOpen, setPresetsOpen] = useState(false)
+  const applyPreset = (preset: typeof DLM_PRESETS[number]) => {
+    setData(prev => {
+      const partial = preset.apply()
+      // Merge profond pour les sous-objets (anamnese, plan, etc.)
+      return {
+        ...prev,
+        ...partial,
+        anamnese: partial.anamnese ?? prev.anamnese,
+        plan: partial.plan ?? prev.plan,
+      }
+    })
+    setPresetsOpen(false)
+  }
+
   return (
     <div>
       <BilanModeToggle mode={mode} onChange={setMode} />
@@ -190,6 +208,51 @@ export const BilanDrainageLymphatique = forwardRef<
               </span>
             )}
           </div>
+
+          {/* Barre de presets cliniques — visible uniquement si bilan vierge */}
+          {isFresh && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+              background: 'var(--surface)', border: '1px dashed var(--border-color)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Démarrer depuis un modèle clinique
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Pré-remplit le type d'œdème, l'anamnèse-cadre, les régions probables et le plan CDT par défaut. Vous validez et complétez.
+                  </div>
+                </div>
+                <button type="button" onClick={() => setPresetsOpen(o => !o)}
+                  style={{
+                    padding: '7px 16px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700,
+                    background: 'var(--primary)', color: '#fff', border: 'none', cursor: 'pointer',
+                  }}>
+                  {presetsOpen ? 'Fermer' : 'Choisir un modèle'}
+                </button>
+              </div>
+              {presetsOpen && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8, marginTop: 12 }}>
+                  {DLM_PRESETS.map(p => (
+                    <button key={p.id} type="button" onClick={() => applyPreset(p)}
+                      style={{
+                        textAlign: 'left', padding: '10px 12px', borderRadius: 8,
+                        background: 'var(--input-bg)', border: '1px solid var(--border-color)',
+                        cursor: 'pointer',
+                      }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 4 }}>
+                        {p.label}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                        {p.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {sections.map(sec => (
             <div key={sec.id} style={{ marginBottom: 4 }}>
@@ -224,7 +287,7 @@ export const BilanDrainageLymphatique = forwardRef<
                     <StepExamenClinique state={data.examenClinique} onChange={patchExamen} />
                   )}
                   {sec.id === 'mesures' && (
-                    <StepMesures state={data.mesures} onChange={patchMesures} />
+                    <StepMesures state={data.mesures} onChange={patchMesures} cote={data.cote} />
                   )}
                   {sec.id === 'stade' && (
                     <StepStade
@@ -237,6 +300,7 @@ export const BilanDrainageLymphatique = forwardRef<
                       onChangeTypeLipo={v => patch({ typeLipoDistribution: v })}
                       ceap={data.ceap}
                       onChangeCeap={(c: ClasseCEAP) => patch({ ceap: c })}
+                      examenClinique={data.examenClinique}
                     />
                   )}
                   {sec.id === 'icf' && (

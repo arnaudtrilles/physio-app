@@ -127,6 +127,9 @@ function ZoneIcon({ zone, size = 22, color = 'currentColor' }: { zone: string; s
     case 'Gériatrie': return (
       <svg viewBox="0 0 24 24" {...s}><circle cx="11" cy="4" r="2.5"/><path d="M11 6.5v6"/><path d="M8 9l-2 5"/><path d="M14 9l2 3"/><path d="M11 12.5l-3 9"/><path d="M11 12.5l2 5"/><path d="M16 12l4 3"/><line x1="20" y1="15" x2="20" y2="22"/></svg>
     )
+    case 'Drainage Lymphatique': return (
+      <svg viewBox="0 0 24 24" {...s}><path d="M12 2C9 6 7 9 7 12a5 5 0 0 0 10 0c0-3-2-6-5-10z"/><path d="M12 14v6"/><path d="M9 18h6"/></svg>
+    )
     default: return (
       <svg viewBox="0 0 24 24" {...s}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>
     )
@@ -141,6 +144,7 @@ const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
   { zone: 'Cervicales',      label: 'Rachis Cervical' },
   { zone: 'Rachis Lombaire', label: 'Rachis Lombaire' },
   { zone: 'Gériatrie',       label: 'Gériatrie' },
+  { zone: 'Drainage Lymphatique', label: 'Drainage Lymphatique' },
   { zone: 'Autre',           label: 'Bilan général' },
 ]
 

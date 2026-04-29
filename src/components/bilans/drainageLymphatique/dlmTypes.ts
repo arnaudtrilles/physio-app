@@ -24,38 +24,25 @@ export const OEDEME_COLORS: Record<OedemeType, { fg: string; bg: string; border:
 }
 
 // ─── Localisation ────────────────────────────────────────────────────────────
-// Couvre tous les territoires lymphatiques cliniquement pertinents.
+// On adopte une cartographie macro (~13 zones cliniquement pertinentes pour le
+// DLM) plutôt qu'une granularité segmentaire. La granularité fine est capturée
+// dans les annotations texte et la circométrie. Cette approche limite les
+// micro-tap sur tablette et les superpositions visuelles dans la silhouette.
 export type BodyRegion =
-  | 'tete' | 'cou' | 'visage'
-  | 'epauleD' | 'epauleG'
-  | 'brasD' | 'brasG'
-  | 'avantBrasD' | 'avantBrasG'
-  | 'mainD' | 'mainG'
-  | 'sein' | 'seinD' | 'seinG'
-  | 'thorax' | 'abdomen' | 'dos' | 'lombaire'
-  | 'pelvis' | 'genital'
-  | 'fesseD' | 'fesseG'
-  | 'cuisseD' | 'cuisseG'
-  | 'genouD' | 'genouG'
-  | 'molletD' | 'molletG'
-  | 'chevilleD' | 'chevilleG'
-  | 'piedD' | 'piedG'
+  | 'tete' | 'cou'
+  | 'MSD' | 'MSG'
+  | 'seinD' | 'seinG'
+  | 'thorax' | 'abdomen' | 'pelvis'
+  | 'MID' | 'MIG'
+  | 'dosHaut' | 'lombaire' | 'fesses'
 
 export const REGION_LABELS: Record<BodyRegion, string> = {
-  tete: 'Tête', cou: 'Cou', visage: 'Visage',
-  epauleD: 'Épaule D', epauleG: 'Épaule G',
-  brasD: 'Bras D', brasG: 'Bras G',
-  avantBrasD: 'Avant-bras D', avantBrasG: 'Avant-bras G',
-  mainD: 'Main D', mainG: 'Main G',
-  sein: 'Sein', seinD: 'Sein D', seinG: 'Sein G',
-  thorax: 'Thorax', abdomen: 'Abdomen', dos: 'Dos', lombaire: 'Lombaire',
-  pelvis: 'Pelvis', genital: 'Génital',
-  fesseD: 'Fesse D', fesseG: 'Fesse G',
-  cuisseD: 'Cuisse D', cuisseG: 'Cuisse G',
-  genouD: 'Genou D', genouG: 'Genou G',
-  molletD: 'Mollet D', molletG: 'Mollet G',
-  chevilleD: 'Cheville D', chevilleG: 'Cheville G',
-  piedD: 'Pied D', piedG: 'Pied G',
+  tete: 'Tête / face', cou: 'Cou',
+  MSD: 'Membre supérieur D', MSG: 'Membre supérieur G',
+  seinD: 'Sein D', seinG: 'Sein G',
+  thorax: 'Thorax', abdomen: 'Abdomen', pelvis: 'Pelvis / génital',
+  MID: 'Membre inférieur D', MIG: 'Membre inférieur G',
+  dosHaut: 'Dos haut', lombaire: 'Lombaire', fesses: 'Fesses',
 }
 
 export type Cote = 'D' | 'G' | 'bilateral'
@@ -552,6 +539,220 @@ export const emptyDlmPlanTraitement = (): DlmPlanTraitement => ({
   prochaineConsultation: '',
   notesPlan: '',
 })
+
+// ─── Auto-suggestion du stade ISL ────────────────────────────────────────────
+// À partir des signes cliniques (Stemmer + godet + fibrose + troubles
+// trophiques), propose un stade probable selon le référentiel ISL 2023.
+// Le clinicien valide ou modifie. Aucune décision n'est prise sans son aval.
+export interface StadeISLSuggestion {
+  stade: Exclude<StadeISL, ''>
+  rationale: string
+}
+
+export function suggestStadeISL(ex: DlmExamenClinique): StadeISLSuggestion | null {
+  const stemmerPos = ex.stemmer === 'positif'
+  const godet = ex.godetGrade
+  const godetPresent = godet === '1' || godet === '2' || godet === '3' || godet === '4'
+  const godetProfond = godet === '3' || godet === '4'
+  const fibrose = ex.fibrose === 'oui'
+  const trophicLower = (ex.troublesTrophiques || '').toLowerCase()
+  const signesEvolues = /papillom|peau\s*d.?orange|hyperker|élephant|elephant|verrue/.test(trophicLower)
+
+  // Aucun signe → pas de suggestion
+  if (!stemmerPos && !godetPresent && !fibrose && !signesEvolues) return null
+
+  // Stade III — éléphantiasique
+  if (stemmerPos && (signesEvolues || (fibrose && godetProfond))) {
+    return {
+      stade: 'III',
+      rationale: 'Stemmer+, signes éléphantiasiques (papillomatose / hyperkératose) ou fibrose extensive avec godet profond.',
+    }
+  }
+  // Stade IIb — fibrose qui réduit le godet
+  if (stemmerPos && fibrose) {
+    return {
+      stade: 'IIb',
+      rationale: 'Stemmer+ et fibrose palpable — godet typiquement diminué par induration tissulaire.',
+    }
+  }
+  // Stade IIa — godet positif sans fibrose
+  if (stemmerPos && godetPresent && !fibrose) {
+    return {
+      stade: 'IIa',
+      rationale: 'Stemmer+ et godet+ sans fibrose — œdème non spontanément réversible.',
+    }
+  }
+  // Stade I — godet+ mais Stemmer non franchement positif (réversible à l'élévation)
+  if (godetPresent && !stemmerPos && !fibrose) {
+    return {
+      stade: 'I',
+      rationale: 'Godet+ avec Stemmer non franchement positif et sans fibrose — œdème probablement spontanément réversible.',
+    }
+  }
+  // Stade 0 — Stemmer positif isolé, sans signes patents
+  if (stemmerPos && !godetPresent && !fibrose) {
+    return {
+      stade: '0',
+      rationale: 'Stemmer+ isolé sans godet ni fibrose — stade infra-clinique probable, surveillance recommandée.',
+    }
+  }
+  return null
+}
+
+// ─── Presets cliniques ───────────────────────────────────────────────────────
+// Templates pour les scénarios les plus fréquents. Chacun pré-remplit un
+// sous-ensemble cohérent (type d'œdème, anamnèse-cadre, régions probables,
+// composantes du plan CDT par défaut). Le clinicien complète et valide.
+export interface DlmPreset {
+  id: string
+  label: string
+  description: string
+  apply: () => Partial<BilanDLMData>
+}
+
+export const DLM_PRESETS: DlmPreset[] = [
+  {
+    id: 'lymph_ms_postmastectomie',
+    label: 'Lymphœdème MS post-mastectomie',
+    description: 'Curage axillaire + radiothérapie, MS atteint, CDT 2 phases.',
+    apply: () => ({
+      oedemeTypes: ['lymphoedeme'],
+      cote: 'D',
+      regions: ['MSD'],
+      anamnese: {
+        ...emptyDlmAnamnese(),
+        curageGanglionnaire: 'oui',
+        curageDetail: 'Axillaire',
+        radiotherapie: 'oui',
+        cancer: 'oui',
+        cancerType: 'Sein',
+        evolutionDecrite: 'progressive',
+      },
+      plan: {
+        ...emptyDlmPlanTraitement(),
+        phase1Active: 'oui',
+        phase1FrequenceHebdo: '5 séances/sem',
+        phase1Duree: '3-4 semaines',
+        phase1Composantes: {
+          dlm: true, bandesPeu: true, soinsPeau: true,
+          exercicesDecongestifs: true, education: true,
+          pressotherapie: false, bandagesNuit: false,
+        },
+        phase2Active: 'oui',
+        phase2Composantes: { contention: true, autoDLM: true, exercices: true, suivi: true, autobandage: false },
+        phase2FrequenceSuivi: '1×/mois pendant 6 mois',
+      },
+    }),
+  },
+  {
+    id: 'lipo_mi_bilateral',
+    label: 'Lipœdème stade II MI bilatéral',
+    description: 'Hanches → chevilles, Stemmer−, ATCD familiaux, prise en charge multidisciplinaire.',
+    apply: () => ({
+      oedemeTypes: ['lipoedeme'],
+      cote: 'bilateral',
+      regions: ['MID', 'MIG'],
+      stadeLipo: '2',
+      typeLipoDistribution: 'Type III — Hanches → chevilles',
+      anamnese: {
+        ...emptyDlmAnamnese(),
+        atcdFamiliauxLipoedeme: 'oui',
+        evolutionDecrite: 'progressive',
+        traitementsHormones: 'oui',
+        douleurEvn: '4',
+        lourdeur: 'oui',
+      },
+      plan: {
+        ...emptyDlmPlanTraitement(),
+        phase1Active: 'oui',
+        phase1Composantes: {
+          dlm: true, bandesPeu: false, soinsPeau: true,
+          exercicesDecongestifs: true, education: true,
+          pressotherapie: true, bandagesNuit: false,
+        },
+        phase2Active: 'oui',
+        phase2Composantes: { contention: true, autoDLM: false, exercices: true, suivi: true, autobandage: false },
+        lipoSpecifique: {
+          nutritionConseil: true, activitePhysique: true, psyAccompagnement: true,
+          chirurgieLiposuccionEnvisagee: 'a_discuter',
+        },
+      },
+    }),
+  },
+  {
+    id: 'phlebo_mi_unilateral',
+    label: 'Phlébœdème CEAP C3 unilatéral',
+    description: 'Insuffisance veineuse chronique, contention classe 2, élévation déclive.',
+    apply: () => ({
+      oedemeTypes: ['phleboedeme'],
+      cote: 'D',
+      regions: ['MID'],
+      ceap: 'C3',
+      anamnese: {
+        ...emptyDlmAnamnese(),
+        insuffisanceVeineuse: 'oui',
+        evolutionDecrite: 'progressive',
+        professionDebout: 'oui',
+        lourdeur: 'oui',
+      },
+      plan: {
+        ...emptyDlmPlanTraitement(),
+        phase1Active: 'oui',
+        phase1Composantes: {
+          dlm: true, bandesPeu: true, soinsPeau: true,
+          exercicesDecongestifs: true, education: true,
+          pressotherapie: true, bandagesNuit: false,
+        },
+        phase2Active: 'oui',
+        phase2Composantes: { contention: true, autoDLM: false, exercices: true, suivi: true, autobandage: false },
+        phleboSpecifique: {
+          contentionMedicaleDegre: '2',
+          avisAngiologique: 'oui',
+          elevation: true,
+          activeMobilisation: true,
+        },
+      },
+    }),
+  },
+  {
+    id: 'mixte_lipo_lymph',
+    label: 'Mixte lipo-lymphœdème',
+    description: 'Lipœdème évolué stade IV avec décompensation lymphatique secondaire.',
+    apply: () => ({
+      oedemeTypes: ['lipoedeme', 'lymphoedeme'],
+      cote: 'bilateral',
+      regions: ['MID', 'MIG'],
+      stadeLipo: '4',
+      stadeISL: 'IIa',
+      typeLipoDistribution: 'Type III — Hanches → chevilles',
+      anamnese: {
+        ...emptyDlmAnamnese(),
+        atcdFamiliauxLipoedeme: 'oui',
+        evolutionDecrite: 'progressive',
+        cellulites: 'oui',
+        lourdeur: 'oui',
+        tension: 'oui',
+      },
+      plan: {
+        ...emptyDlmPlanTraitement(),
+        phase1Active: 'oui',
+        phase1FrequenceHebdo: '5 séances/sem',
+        phase1Duree: '4 semaines',
+        phase1Composantes: {
+          dlm: true, bandesPeu: true, soinsPeau: true,
+          exercicesDecongestifs: true, education: true,
+          pressotherapie: true, bandagesNuit: true,
+        },
+        phase2Active: 'oui',
+        phase2Composantes: { contention: true, autoDLM: true, exercices: true, suivi: true, autobandage: true },
+        lipoSpecifique: {
+          nutritionConseil: true, activitePhysique: true, psyAccompagnement: true,
+          chirurgieLiposuccionEnvisagee: 'a_discuter',
+        },
+      },
+    }),
+  },
+]
 
 // ─── State principal ────────────────────────────────────────────────────────
 // Stockage final dans bilanData (parent owned via App.tsx).

@@ -12,7 +12,7 @@ import {
   CI_ABSOLUES_KEYS, CI_RELATIVES_KEYS,
   KUHNKE_DEFAULT_NIVEAUX_MS, KUHNKE_DEFAULT_NIVEAUX_MI,
   computeIMC, computeKuhnkeVolume,
-  hasBlockingCI,
+  hasBlockingCI, suggestStadeISL,
 } from './dlmTypes'
 import type {
   BilanDLMData, OedemeType, BodyRegion,
@@ -102,6 +102,7 @@ export function StepTypeSelection({
         onChangeRegions={onChangeRegions}
         annotations={bodyChartAnnotations}
         onChangeAnnotations={onChangeAnnotations}
+        oedemeTypes={oedemeTypes}
       />
     </div>
   )
@@ -434,10 +435,12 @@ export function StepExamenClinique({
 
 // ─── Step 5 — Mesures circométriques + bio-impédance ───────────────────────
 export function StepMesures({
-  state, onChange,
+  state, onChange, cote,
 }: {
   state: DlmMesures
   onChange: (patch: Partial<DlmMesures>) => void
+  /** Côté principal atteint — pilote la mise en avant des colonnes circométriques. */
+  cote: BilanDLMData['cote']
 }) {
   const set = <K extends keyof DlmMesures>(k: K, v: DlmMesures[K]) =>
     onChange({ [k]: v } as Partial<DlmMesures>)
@@ -498,6 +501,7 @@ export function StepMesures({
         volumeG={state.volumeMSGcm3}
         onVolumesChange={(d, g) => onChange({ volumeMSDcm3: d, volumeMSGcm3: g, ecartVolumiqueMS: ecartPct(d, g) })}
         ecart={state.ecartVolumiqueMS}
+        focusCote={cote === 'bilateral' ? '' : cote}
       />
 
       <CircoSection
@@ -510,6 +514,7 @@ export function StepMesures({
         volumeG={state.volumeMIGcm3}
         onVolumesChange={(d, g) => onChange({ volumeMIDcm3: d, volumeMIGcm3: g, ecartVolumiqueMI: ecartPct(d, g) })}
         ecart={state.ecartVolumiqueMI}
+        focusCote={cote === 'bilateral' ? '' : cote}
       />
 
       <div style={cardStyle}>
@@ -556,6 +561,7 @@ function CircoSection({
   set, onChange,
   volumeD, volumeG, onVolumesChange,
   ecart,
+  focusCote,
 }: {
   title: string
   defaultRepere: string
@@ -566,6 +572,8 @@ function CircoSection({
   volumeG: string
   onVolumesChange: (d: string, g: string) => void
   ecart: string
+  /** 'D' | 'G' = côté principal atteint, mis en avant. '' = bilatéral équivalent. */
+  focusCote: 'D' | 'G' | ''
 }) {
   const initRepere = set.repere || defaultRepere
   const niveaux = set.niveaux
@@ -600,11 +608,24 @@ function CircoSection({
     onChange({ repere: initRepere, niveaux: next })
   }
 
+  // Ratio de mise en avant — côté atteint en violet, côté contralatéral en gris.
+  const styleD = focusCote === 'D'
+    ? { background: 'rgba(124,58,237,0.05)', borderColor: 'rgba(124,58,237,0.45)' }
+    : focusCote === 'G' ? { background: 'var(--input-bg)', borderColor: 'rgba(148,163,184,0.4)' } : {}
+  const styleG = focusCote === 'G'
+    ? { background: 'rgba(124,58,237,0.05)', borderColor: 'rgba(124,58,237,0.45)' }
+    : focusCote === 'D' ? { background: 'var(--input-bg)', borderColor: 'rgba(148,163,184,0.4)' } : {}
+
   return (
     <div style={cardStyle}>
       <p style={sectionTitleStyle}>{title}</p>
       <label style={lblStyle}>Repère osseux distal</label>
       <DictableInput value={initRepere} onChange={e => onChange({ ...set, repere: e.target.value })} placeholder="ex: Malléole médiale" inputStyle={inputStyle} />
+      {focusCote && (
+        <p style={{ fontSize: '0.72rem', color: '#5b21b6', margin: '0 0 6px', fontWeight: 600 }}>
+          Côté atteint : {focusCote === 'D' ? 'Droit' : 'Gauche'} — la colonne contralatérale sert de comparatif.
+        </p>
+      )}
       {niveaux.length === 0 && (
         <button type="button" onClick={initLevels}
           style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
@@ -613,21 +634,35 @@ function CircoSection({
       )}
       {niveaux.length > 0 && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 1fr 1fr 32px', gap: 6, alignItems: 'center', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
-            <span>Niv (cm)</span><span>Périm. D (cm)</span><span>Périm. G (cm)</span><span>Note</span><span></span>
+          <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 60px 1fr 32px', gap: 6, alignItems: 'center', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+            <span>Niv (cm)</span>
+            <span style={{ color: focusCote === 'D' ? '#5b21b6' : undefined }}>Périm. D</span>
+            <span style={{ color: focusCote === 'G' ? '#5b21b6' : undefined }}>Périm. G</span>
+            <span>Δ%</span>
+            <span>Note</span>
+            <span></span>
           </div>
-          {niveaux.map((l, idx) => (
-            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 1fr 1fr 32px', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-              <input value={l.niveau} onChange={e => updateLevel(idx, { niveau: e.target.value })} placeholder="0" inputMode="numeric" style={{ ...inputStyle, marginBottom: 0, padding: '6px 8px', fontSize: '0.82rem' }} />
-              <input value={l.perimetreD} onChange={e => updateLevel(idx, { perimetreD: e.target.value })} placeholder="cm" inputMode="decimal" style={{ ...inputStyle, marginBottom: 0, padding: '6px 8px', fontSize: '0.82rem' }} />
-              <input value={l.perimetreG} onChange={e => updateLevel(idx, { perimetreG: e.target.value })} placeholder="cm" inputMode="decimal" style={{ ...inputStyle, marginBottom: 0, padding: '6px 8px', fontSize: '0.82rem' }} />
-              <input value={l.note} onChange={e => updateLevel(idx, { note: e.target.value })} placeholder="…" style={{ ...inputStyle, marginBottom: 0, padding: '6px 8px', fontSize: '0.78rem' }} />
-              <button type="button" onClick={() => removeLevel(idx)}
-                style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
-                title="Supprimer ce niveau"
-              >×</button>
-            </div>
-          ))}
+          {niveaux.map((l, idx) => {
+            const e = levelEcart(l.perimetreD, l.perimetreG)
+            return (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 60px 1fr 32px', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                <input value={l.niveau} onChange={ev => updateLevel(idx, { niveau: ev.target.value })} placeholder="0" inputMode="numeric" style={{ ...inputStyle, marginBottom: 0, padding: '6px 8px', fontSize: '0.82rem' }} />
+                <input value={l.perimetreD} onChange={ev => updateLevel(idx, { perimetreD: ev.target.value })} placeholder="cm" inputMode="decimal" style={{ ...inputStyle, ...styleD, marginBottom: 0, padding: '6px 8px', fontSize: '0.82rem' }} />
+                <input value={l.perimetreG} onChange={ev => updateLevel(idx, { perimetreG: ev.target.value })} placeholder="cm" inputMode="decimal" style={{ ...inputStyle, ...styleG, marginBottom: 0, padding: '6px 8px', fontSize: '0.82rem' }} />
+                <span style={{
+                  fontSize: '0.78rem', fontWeight: 700, textAlign: 'center',
+                  color: e == null ? 'var(--text-muted)' : ecartColor(e),
+                }}>
+                  {e == null ? '—' : `${e.toFixed(1)}`}
+                </span>
+                <input value={l.note} onChange={ev => updateLevel(idx, { note: ev.target.value })} placeholder="…" style={{ ...inputStyle, marginBottom: 0, padding: '6px 8px', fontSize: '0.78rem' }} />
+                <button type="button" onClick={() => removeLevel(idx)}
+                  style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+                  title="Supprimer ce niveau"
+                >×</button>
+              </div>
+            )
+          })}
           <button type="button" onClick={addLevel}
             style={{ background: 'transparent', color: 'var(--primary)', border: '1px dashed var(--primary)', borderRadius: 8, padding: '5px 14px', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
             + Ajouter un niveau
@@ -635,12 +670,27 @@ function CircoSection({
           <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', fontSize: '0.78rem', color: '#5b21b6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
             <span><strong>Volume D :</strong> {volumeD ? `${volumeD} cm³` : '—'}</span>
             <span><strong>Volume G :</strong> {volumeG ? `${volumeG} cm³` : '—'}</span>
-            <span><strong>Écart :</strong> {ecart ? `${ecart} %` : '—'}</span>
+            <span style={{ color: ecart ? ecartColor(Number(ecart)) : 'var(--text-muted)' }}>
+              <strong>Écart total :</strong> {ecart ? `${ecart} %` : '—'}
+            </span>
           </div>
         </>
       )}
     </div>
   )
+}
+
+function levelEcart(d: string, g: string): number | null {
+  const a = Number(d), b = Number(g)
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return null
+  const min = Math.min(a, b), max = Math.max(a, b)
+  return ((max - min) / min) * 100
+}
+
+function ecartColor(pct: number): string {
+  if (pct < 5) return '#059669'      // vert : différence négligeable
+  if (pct < 10) return '#d97706'     // ambre : à surveiller
+  return '#dc2626'                    // rouge : pathologique
 }
 
 // ─── Step 6 — Stade(s) ─────────────────────────────────────────────────────
@@ -650,6 +700,7 @@ export function StepStade({
   stadeLipo, onChangeStadeLipo,
   typeLipoDistribution, onChangeTypeLipo,
   ceap, onChangeCeap,
+  examenClinique,
 }: {
   oedemeTypes: OedemeType[]
   stadeISL: StadeISL
@@ -660,9 +711,12 @@ export function StepStade({
   onChangeTypeLipo: (v: string) => void
   ceap: ClasseCEAP
   onChangeCeap: (c: ClasseCEAP) => void
+  /** Pour proposer une suggestion ISL automatique à partir des signes cliniques. */
+  examenClinique?: DlmExamenClinique
 }) {
   const has = (t: OedemeType) => oedemeTypes.includes(t)
   const c = (t: OedemeType) => OEDEME_COLORS[t]
+  const suggestion = examenClinique ? suggestStadeISL(examenClinique) : null
   return (
     <div>
       {oedemeTypes.length === 0 && (
@@ -673,6 +727,29 @@ export function StepStade({
       {has('lymphoedeme') && (
         <div style={{ ...cardStyle, background: c('lymphoedeme').bg, borderColor: c('lymphoedeme').border }}>
           <p style={{ ...sectionTitleStyle, color: c('lymphoedeme').fg }}>Stade ISL — Lymphœdème</p>
+          {suggestion && stadeISL !== suggestion.stade && (
+            <div style={{
+              padding: '8px 10px', borderRadius: 8, marginBottom: 10,
+              background: '#fff', border: `1px dashed ${c('lymphoedeme').fg}`,
+              fontSize: '0.78rem', color: c('lymphoedeme').fg,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                  Suggestion à partir de l'examen : Stade {suggestion.stade}
+                </div>
+                <div style={{ fontSize: '0.72rem', opacity: 0.85 }}>{suggestion.rationale}</div>
+              </div>
+              <button type="button" onClick={() => onChangeStadeISL(suggestion.stade)}
+                style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: '0.74rem', fontWeight: 700,
+                  background: c('lymphoedeme').fg, color: '#fff', border: 'none', cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}>
+                Appliquer
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(Object.keys(STADE_ISL_LABELS) as Exclude<StadeISL, ''>[]).map(s => (
               <button key={s} type="button"
