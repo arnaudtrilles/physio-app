@@ -328,8 +328,8 @@ function claudeDevProxy(): Plugin {
               return
             }
 
-            const textBlock = response.content.find(b => b.type === 'text')
-            const result = textBlock && textBlock.type === 'text' ? textBlock.text : ''
+            const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
+            const result = textBlock ? textBlock.text : ''
 
             if (!result) {
               res.writeHead(503, { 'Content-Type': 'application/json' })
