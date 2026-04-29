@@ -23,6 +23,14 @@ export const ZONE_TO_BILAN: Record<string, BilanType> = {
   'Lombaire':        'lombaire',
   'Gériatrie':       'geriatrique',
   'Geriatrie':       'geriatrique',
+  'Drainage Lymphatique': 'drainage-lymphatique',
+  'DLM':                  'drainage-lymphatique',
+  'Lymphœdème':           'drainage-lymphatique',
+  'Lymphoedeme':          'drainage-lymphatique',
+  'Lipœdème':             'drainage-lymphatique',
+  'Lipoedeme':            'drainage-lymphatique',
+  'Phlébœdème':           'drainage-lymphatique',
+  'Phleboedeme':          'drainage-lymphatique',
 }
 
 export const BODY_ZONES = [
@@ -32,6 +40,7 @@ export const BODY_ZONES = [
   'Cheville',
   'Cervicales',
   'Lombaire',
+  'Drainage Lymphatique',
   'Gériatrie',
   'Autre',
 ]
@@ -49,6 +58,7 @@ export const BILAN_ZONE_LABELS: Record<BilanType, string> = {
   lombaire: 'Bilan Rachis Lombaire',
   generique:'Bilan Général',
   geriatrique:'Bilan Gériatrique',
+  'drainage-lymphatique': 'Bilan Drainage Lymphatique',
 }
 
 /** Libellé de zone par défaut pour un bilanType — utilisé pour créer une séance/intermédiaire
@@ -62,4 +72,5 @@ export const DEFAULT_ZONE_FOR_BILAN: Record<BilanType, string> = {
   lombaire:   'Rachis Lombaire',
   generique:  'Autre',
   geriatrique:'Gériatrie',
+  'drainage-lymphatique': 'Drainage Lymphatique',
 }

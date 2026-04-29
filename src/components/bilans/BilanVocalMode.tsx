@@ -95,7 +95,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
     const rec = recoveryRef.current
     if (!rec) return
     const chunk = rec.chunks.find(c => c.index === chunkIdx)
-    if (!chunk || chunk.transcription) return
+    if (!chunk || chunk.transcription || !chunk.blob) return
 
     try {
       const text = await transcribeWithRetry(chunk.blob, 1) // 1 retry seulement en BG (plus rapide pour libérer la queue)
@@ -265,6 +265,10 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
         if (chunk.transcription) {
           // déjà transcrit (cas reprise) — on saute
           setPhaseDetail(`${i + 1} / ${rec.chunks.length} chunks (déjà fait)`)
+          continue
+        }
+        if (!chunk.blob) {
+          // blob libéré après transcription — ne devrait pas arriver ici
           continue
         }
         setPhaseDetail(`Chunk ${i + 1} / ${rec.chunks.length} en cours…`)

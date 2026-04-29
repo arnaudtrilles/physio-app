@@ -21,6 +21,8 @@ import { BilanGenerique } from './components/bilans/BilanGenerique'
 import type { BilanGeneriqueHandle } from './components/bilans/BilanGenerique'
 import { BilanGeriatrique } from './components/bilans/BilanGeriatrique'
 import type { BilanGeriatriqueHandle } from './components/bilans/BilanGeriatrique'
+import { BilanDrainageLymphatique } from './components/bilans/BilanDrainageLymphatique'
+import type { BilanDrainageLymphatiqueHandle } from './components/bilans/BilanDrainageLymphatique'
 import { BilanIntermediaire } from './components/bilans/BilanIntermediaire'
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
 import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
@@ -629,6 +631,7 @@ function App() {
   const bilanLombaireRef = useRef<BilanLombaireHandle>(null)
   const bilanGeneriqueRef     = useRef<BilanGeneriqueHandle>(null)
   const bilanGeriatriqueRef   = useRef<BilanGeriatriqueHandle>(null)
+  const bilanDrainageLymphatiqueRef = useRef<BilanDrainageLymphatiqueHandle>(null)
   const bilanIntermediaireRef = useRef<BilanIntermediaireHandle>(null)
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
@@ -1274,6 +1277,7 @@ Règles :
       case 'cervical': return bilanCervicalRef.current?.getData() ?? null
       case 'lombaire': return bilanLombaireRef.current?.getData() ?? null
       case 'geriatrique': return bilanGeriatriqueRef.current?.getData() ?? null
+      case 'drainage-lymphatique': return bilanDrainageLymphatiqueRef.current?.getData() ?? null
       default:         return bilanGeneriqueRef.current?.getData() ?? null
     }
   }
@@ -2526,6 +2530,7 @@ Mobilité articulaire lombaire
                     lombaire: 'Rachis Lombaire',
                     generique: 'Autres bilans',
                     geriatrique: 'Gériatrie',
+                    'drainage-lymphatique': 'Drainage Lymphatique',
                   }
                   const zoneHasBilans = new Map<string, boolean>()
                   bilans.forEach(b => {
@@ -3054,6 +3059,7 @@ Mobilité articulaire lombaire
                             lombaire: 'Rachis Lombaire',
                             generique: 'Autres bilans',
                             geriatrique: 'Gériatrie',
+                            'drainage-lymphatique': 'Drainage Lymphatique',
                           }
                           const groupMap = new Map<string, typeof bilans>()
                           bilans.forEach(record => {
@@ -3500,7 +3506,7 @@ Mobilité articulaire lombaire
                                     {timeline.map(item => {
                                       if (item.kind === 'note') {
                                         const note = item.rec
-                                        const ZONE_LABELS: Record<string, string> = { epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche', cervical: 'Cervical', lombaire: 'Lombaire', generique: 'Général', geriatrique: 'Gériatrie' }
+                                        const ZONE_LABELS: Record<string, string> = { epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche', cervical: 'Cervical', lombaire: 'Lombaire', generique: 'Général', geriatrique: 'Gériatrie', 'drainage-lymphatique': 'Drainage Lymphatique' }
                                         const zt = note.bilanType ?? getBilanType(note.zone ?? '')
                                         const noteKey = `note-${note.id}`
                                         const noteOpen = openTimelineKey === noteKey
@@ -5446,6 +5452,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             {getBilanType(selectedBodyZone ?? '') === 'lombaire' && <BilanLombaire key={currentBilanId ?? 'new'} ref={bilanLombaireRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique key={currentBilanId ?? 'new'} ref={bilanGeneriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'geriatrique' && <BilanGeriatrique key={currentBilanId ?? 'new'} ref={bilanGeriatriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'drainage-lymphatique' && <BilanDrainageLymphatique key={currentBilanId ?? 'new'} ref={bilanDrainageLymphatiqueRef} initialData={currentBilanDataOverride ?? undefined} />}
 
             {/* ── Note de fin de bilan ── */}
             <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
@@ -5843,7 +5850,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         const bilanType = getBilanType(noteSeanceZone ?? '')
         const ZONE_LABELS: Record<string, string> = {
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
+          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique', 'drainage-lymphatique': 'Bilan Drainage Lymphatique',
         }
         const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
         const numSeance = currentNoteSeanceId !== null
@@ -5881,7 +5888,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         const bilanType = getBilanType(bilanIntermediaireZone ?? '')
         const ZONE_LABELS: Record<string, string> = {
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
+          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique', 'drainage-lymphatique': 'Bilan Drainage Lymphatique',
         }
         return (
           <div className="general-info-screen fade-in">
