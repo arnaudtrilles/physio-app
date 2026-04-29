@@ -24,8 +24,8 @@ type VocalState =
 
 const BAR_COUNT = 32
 // Durée max d'un chunk avant rotation du MediaRecorder. Avec un bitrate Opus 24 kbps
-// mono, 18 min ≈ 3.2 Mo → bien sous la limite 25 Mo de Whisper et compatible Vercel.
-const CHUNK_MAX_SECONDS = 18 * 60
+// mono, 10 min ≈ 1.7 Mo → bien sous toutes les limites + transcription rapide en BG.
+const CHUNK_MAX_SECONDS = 10 * 60
 const AUDIO_BITRATE = 24000
 const WARN_SECONDS = 60 * 60 // alerte douce à 1h, pas de blocage
 
@@ -43,6 +43,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
   const [bars, setBars] = useState<number[]>(Array(BAR_COUNT).fill(4))
   const [elapsed, setElapsed] = useState(0)
   const [chunkCount, setChunkCount] = useState(0)
+  const [transcribedCount, setTranscribedCount] = useState(0)
   const [warned, setWarned] = useState(false)
 
   // Progress detail pour les phases longues (transcription / génération)
@@ -83,6 +84,34 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       console.error('[vocal] persist failed', e)
     }
   }, [])
+
+  // ── Transcription en arrière-plan d'un chunk individuel ────────────────
+  // Lance la transcription d'un chunk dès qu'il est enregistré, sans bloquer
+  // l'UI ni l'enregistrement en cours. Le résultat est persisté en IDB et le
+  // compteur transcribedCount est mis à jour. Si l'appel échoue, on log mais
+  // on n'affiche pas d'erreur — le retry sera fait à l'arrêt.
+  const transcribeChunkInBackground = useCallback(async (chunkIdx: number) => {
+    const rec = recoveryRef.current
+    if (!rec) return
+    const chunk = rec.chunks.find(c => c.index === chunkIdx)
+    if (!chunk || chunk.transcription) return
+
+    try {
+      const text = await transcribeWithRetry(chunk.blob, 1) // 1 retry seulement en BG (plus rapide pour libérer la queue)
+      // Re-fetch recoveryRef au cas où d'autres chunks aient été ajoutés entre temps
+      const current = recoveryRef.current
+      if (!current) return
+      const target = current.chunks.find(c => c.index === chunkIdx)
+      if (target) {
+        target.transcription = text
+        await persistRecovery(current)
+        setTranscribedCount(prev => prev + 1)
+      }
+    } catch (e) {
+      // Pas grave — sera retenté au stop avec le retry x2 standard
+      console.warn(`[vocal] BG transcription failed for chunk ${chunkIdx}, will retry on stop:`, (e as Error).message)
+    }
+  }, [persistRecovery])
 
   // ── Cleanup helper ─────────────────────────────────────────────────────
   const stopAllAudio = useCallback(() => {
@@ -187,6 +216,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
         await persistRecovery(rec)
       }
 
+      const finalizedIdx = chunkIndexRef.current
       chunkIndexRef.current += 1
       setChunkCount(chunkIndexRef.current)
 
@@ -194,7 +224,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       currentChunksRef.current = []
 
       if (stoppingFinalRef.current) {
-        // Arrêt définitif demandé par l'utilisateur → on lance la transcription
+        // Arrêt définitif demandé par l'utilisateur → on lance la transcription finale
         stoppingFinalRef.current = false
         await runTranscriptionAndAnalysis()
       } else {
@@ -202,6 +232,9 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
         startNewChunkRecorder()
         // Reprogramme la prochaine rotation
         rotationTimerRef.current = setTimeout(() => finalizeCurrentChunk(false), CHUNK_MAX_SECONDS * 1000)
+        // Lance la transcription du chunk fraîchement finalisé en arrière-plan
+        // (le user ne voit que le compteur, l'UI reste réactive)
+        void transcribeChunkInBackground(finalizedIdx)
       }
     }
 
@@ -287,6 +320,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
     setError('')
     setWarned(false)
     setChunkCount(0)
+    setTranscribedCount(0)
     chunkIndexRef.current = 0
 
     try {
@@ -367,6 +401,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
     recoveryRef.current = rec
     chunkIndexRef.current = rec.chunks.length
     setChunkCount(rec.chunks.length)
+    setTranscribedCount(rec.chunks.filter(c => c.transcription).length)
     setContext(rec.context)
     setPendingRecovery(null)
     // Lance directement l'analyse depuis les chunks déjà enregistrés
@@ -415,6 +450,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
     setError('')
     setElapsed(0)
     setChunkCount(0)
+    setTranscribedCount(0)
     chunkIndexRef.current = 0
     recoveryIdRef.current = ''
     recoveryRef.current = null
@@ -551,7 +587,9 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
           </div>
           {(chunkCount > 0 || nextRotationIn < 60) && (
             <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-              {chunkCount > 0 && <>💾 {chunkCount} chunk{chunkCount > 1 ? 's' : ''} sauvegardé{chunkCount > 1 ? 's' : ''} · </>}
+              {chunkCount > 0 && (
+                <>💾 {chunkCount} sauvegardé{chunkCount > 1 ? 's' : ''} · ✨ {transcribedCount}/{chunkCount} transcrit{transcribedCount > 1 ? 's' : ''} · </>
+              )}
               Prochaine sauvegarde dans {fmtTime(nextRotationIn)}
             </div>
           )}
