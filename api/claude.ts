@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import fs from 'node:fs'
 import path from 'node:path'
 
-// Node.js Serverless — 60s timeout on Hobby plan
-export const config = { maxDuration: 60 }
+// Plan Vercel Pro : maxDuration jusqu'à 300s (transcriptions longues = beaucoup de tokens)
+export const config = { maxDuration: 300 }
 
 // ── Modèles ───────────────────────────────────────────────────────────────
 const DEFAULT_MODEL = 'claude-sonnet-4-6'

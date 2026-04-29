@@ -46,7 +46,8 @@ interface DossierDocumentsProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatSize(b64: string, mimeType: string): string {
+function formatSize(b64: string | undefined, mimeType: string): string {
+  if (!b64) return '—'
   // base64 size → approximate binary size (bytes)
   const header = `data:${mimeType};base64,`
   const raw = b64.startsWith('data:') ? b64.slice(b64.indexOf(',') + 1) : b64

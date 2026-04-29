@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const config = {
-  maxDuration: 60,
+  // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout Whisper sur audio long)
+  maxDuration: 300,
   api: {
     bodyParser: false,
   },
@@ -42,9 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Empty audio body' })
     }
 
-    // Limite raisonnable : ~25 Mo (même plafond que l'API OpenAI audio).
+    // Limite OpenAI Whisper : 25 Mo. Au-delà → erreur claire pour que le
+    // client splitte. Ce check garde-fou ne devrait jamais se déclencher si
+    // le client utilise le rolling MediaRecorder (chunks de ~3-4 Mo).
     if (audioBuffer.length > 25 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Audio too large (max 25 MB)' })
+      return res.status(413).json({ error: 'Audio chunk too large (max 25 MB) — split client-side' })
     }
 
     const incomingType = (req.headers['content-type'] as string) || 'audio/webm'
