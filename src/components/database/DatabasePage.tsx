@@ -1725,8 +1725,16 @@ export function DatabasePage() {
                               setDbPatientDocs(prev => prev.map(d => d.id === target.docId ? { ...d, name: newName } : d))
                             }
                           }}
-                          onDelete={(docId) => {
-                            setDbPatientDocs(prev => prev.filter(d => d.id !== docId))
+                          onDelete={(target) => {
+                            if (target.kind === 'standalone') {
+                              setDbPatientDocs(prev => prev.filter(d => d.id !== target.docId))
+                            } else {
+                              setDb(prev => prev.map(r => {
+                                if (r.id !== target.bilanId || !r.documents) return r
+                                const docs = r.documents.filter((_, i) => i !== target.docIndex)
+                                return { ...r, documents: docs }
+                              }))
+                            }
                           }}
                           onAddRaw={async (dataUrl, name, mimeType) => {
                             if (mimeType.startsWith('image/')) {
