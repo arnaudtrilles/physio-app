@@ -583,7 +583,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '1rem 0 0.5rem' }}>
         {warned && (
           <div style={{ background: '#dbeafe', border: '1px solid #60a5fa', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.72rem', color: '#1e40af', textAlign: 'center' }}>
-            ℹ Enregistrement de plus d'1h en cours — pas de limite, sauvegarde toutes les 10 min.
+            ℹ Enregistrement de plus de 45 min en cours — pas de limite, sauvegarde toutes les 10 min.
           </div>
         )}
         <div style={{ background: 'var(--input-bg)', border: '1.5px solid var(--primary)', borderRadius: 14, padding: '1rem 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
