@@ -10,8 +10,16 @@ interface PricingPageProps {
 }
 
 export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClose }: PricingPageProps) {
-  const [billing, setBilling] = useState<BillingInterval>('monthly')
+  const [billings, setBillings] = useState<Record<PlanId, BillingInterval>>({
+    basique: 'monthly',
+    pro: 'monthly',
+    cabinet: 'monthly',
+  })
   const [loading, setLoading] = useState<PlanId | null>(null)
+
+  function toggleBilling(planId: PlanId) {
+    setBillings(prev => ({ ...prev, [planId]: prev[planId] === 'monthly' ? 'annual' : 'monthly' }))
+  }
 
   async function handleChoose(planId: PlanId, priceId: string) {
     if (planId === currentPlan) return
@@ -47,34 +55,19 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
       </header>
 
       <div className="scroll-area" style={{ paddingBottom: '2rem' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
 
-          {/* Toggle mensuel / annuel */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '0.75rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Facturation annuelle</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>-10% sur Pro & Cabinet</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {billing === 'annual' && (
-                <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#10b981', background: 'color-mix(in srgb, #10b981 12%, transparent)', padding: '0.15rem 0.5rem', borderRadius: 99 }}>-10%</span>
-              )}
-              <button
-                onClick={() => setBilling(b => b === 'monthly' ? 'annual' : 'monthly')}
-                style={{ width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', background: billing === 'annual' ? 'var(--primary)' : 'var(--border-color)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}
-              >
-                <span style={{ position: 'absolute', top: 3, left: billing === 'annual' ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
-              </button>
-            </div>
-          </div>
-
-          {/* Les 3 forfaits */}
           {PLANS.map(plan => {
             const isCurrent = plan.id === currentPlan
             const isLoading = loading === plan.id
-            const price = billing === 'annual' ? plan.priceAnnual : plan.priceMonthly
-            const hasDiscount = billing === 'annual' && plan.id !== 'basique'
-            const perMonth = billing === 'annual' ? Math.round(plan.priceAnnual / 12) : null
+            const billing = billings[plan.id]
+            const isAnnual = billing === 'annual'
+
+            const monthlyPrice = plan.priceMonthly
+            const annualTotal = plan.priceAnnual
+            const annualPerMonth = Math.round(annualTotal / 12)
+
+            const displayedMonthlyPrice = isAnnual ? annualPerMonth : monthlyPrice
 
             return (
               <div
@@ -94,36 +87,54 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
                   </div>
                 )}
 
-                {/* En-tête plan */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{plan.name}</span>
-                      {isCurrent && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.4rem', borderRadius: 99 }}>✓ Actif</span>}
-                      {hasDiscount && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#10b981', background: 'color-mix(in srgb, #10b981 12%, transparent)', padding: '0.1rem 0.4rem', borderRadius: 99 }}>-10%</span>}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{plan.description}</div>
+                {/* En-tête : nom + badge actif + toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.9rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{plan.name}</span>
+                    {isCurrent && (
+                      <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.4rem', borderRadius: 99 }}>✓ Actif</span>
+                    )}
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary-dark)', letterSpacing: '-0.02em' }}>
-                      {price} <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>{plan.currency}</span>
-                    </div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                      {billing === 'annual' ? `/an · ${perMonth}/mois` : '/mois'}
-                    </div>
+
+                  {/* Toggle mensuel / annuel individuel */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: isAnnual ? 'var(--text-muted)' : 'var(--primary-dark)' }}>Mois</span>
+                    <button
+                      onClick={() => toggleBilling(plan.id)}
+                      style={{ width: 38, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', background: isAnnual ? 'var(--primary)' : 'var(--border-color)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}
+                    >
+                      <span style={{ position: 'absolute', top: 2, left: isAnnual ? 18 : 2, width: 18, height: 18, borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+                    </button>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: isAnnual ? 'var(--primary-dark)' : 'var(--text-muted)' }}>An</span>
                   </div>
+                </div>
+
+                {/* Prix */}
+                <div style={{ marginBottom: '0.9rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--primary-dark)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+                      {displayedMonthlyPrice}
+                    </span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-dark)' }}>{plan.currency}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>/mois</span>
+                  </div>
+                  {isAnnual && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 3 }}>
+                      soit {annualTotal} {plan.currency}/an
+                    </div>
+                  )}
                 </div>
 
                 {/* Features */}
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', marginBottom: '0.85rem' }}>
                   {plan.features.map((f, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.25rem 0', fontSize: '0.8rem', color: 'var(--text-main)' }}>
-                      <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0, marginTop: 1 }}>✓</span>
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.2rem 0', fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                      <span style={{ color: 'var(--primary)', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>✓</span>
                       {f}
                     </div>
                   ))}
                   {plan.notIncluded?.map((f, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.25rem 0', fontSize: '0.8rem', color: 'var(--text-muted)', opacity: 0.55 }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.2rem 0', fontSize: '0.8rem', color: 'var(--text-muted)', opacity: 0.5 }}>
                       <span style={{ flexShrink: 0, marginTop: 1 }}>✕</span>
                       {f}
                     </div>
@@ -135,14 +146,14 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
                   onClick={() => !isCurrent && !isLoading && handleChoose(plan.id, plan.priceId)}
                   disabled={isCurrent || isLoading}
                   style={{
-                    width: '100%', padding: '0.7rem', borderRadius: 'var(--radius-full)', border: 'none',
+                    width: '100%', padding: '0.7rem', borderRadius: 'var(--radius-full)',
+                    border: isCurrent ? '1px solid var(--border-color)' : 'none',
                     fontWeight: 700, fontSize: '0.82rem',
                     cursor: isCurrent ? 'default' : 'pointer',
                     background: isCurrent ? 'var(--secondary)' : plan.highlighted ? 'var(--primary)' : 'var(--primary-dark)',
                     color: isCurrent ? 'var(--text-muted)' : 'white',
                     opacity: isLoading ? 0.7 : 1,
                     transition: 'opacity 0.15s, transform 0.1s',
-                    outline: isCurrent ? '1px solid var(--border-color)' : 'none',
                   }}
                   onPointerDown={e => { if (!isCurrent) e.currentTarget.style.transform = 'scale(0.97)' }}
                   onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
