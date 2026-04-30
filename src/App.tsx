@@ -775,6 +775,26 @@ Règles :
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.nom, formData.prenom, db])
 
+  // Migration sexe au démarrage : si un patient a au moins un bilan avec sexe,
+  // propage ce sexe à tous ses bilans qui n'en ont pas encore.
+  useEffect(() => {
+    if (!dbLoaded) return
+    const needsPatch = db.some(r => !r.sexe && db.some(
+      other => `${(other.nom || 'Anonyme').toUpperCase()} ${other.prenom}`.trim() ===
+               `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() && other.sexe
+    ))
+    if (!needsPatch) return
+    setDb(prev => {
+      const sexeByKey: Record<string, 'masculin' | 'feminin'> = {}
+      prev.forEach(r => { if (r.sexe) sexeByKey[`${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()] = r.sexe })
+      return prev.map(r => {
+        if (r.sexe) return r
+        const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+        return sexeByKey[key] ? { ...r, sexe: sexeByKey[key] } : r
+      })
+    })
+  }, [dbLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Migration sexe : à l'ouverture d'une fiche patient existante, si aucun bilan
   // ne porte le sexe du patient, déclencher la popup bloquante. Pour un patient
   // nouvellement créé (formData.sexe rempli), on ne l'affiche pas.
@@ -2267,6 +2287,7 @@ Mobilité articulaire lombaire
                     ? { ...r, sexe: chosen }
                     : r
                 ))
+                setFormData(prev => ({ ...prev, sexe: chosen }))
                 setSexeMigrationTarget(null)
                 setSexeMigrationChoice('')
                 showToast('Sexe enregistré', 'success')
