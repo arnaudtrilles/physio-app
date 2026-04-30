@@ -146,6 +146,26 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
     ? `\nANTÉCÉDENTS DE PRISE EN CHARGE (autres zones, déjà clôturées — contexte général uniquement, NE PAS mélanger avec l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
     : ''
 
+  // Mode vocal : injecter narrativeReport (sections cliniques + transcription) — sinon les
+  // champs structurés sont vides et l'analyse n'a aucune donnée à exploiter.
+  const narrativeReport = bilanData.narrativeReport as { sections?: Array<{ id: string; titre: string; contenu: string }>; transcription?: string } | undefined
+  const narrativeBlock = (bilanData._mode === 'vocal' || !!narrativeReport) && narrativeReport
+    ? (() => {
+        const lines: string[] = ['', 'BILAN VOCAL — données cliniques saisies par enregistrement (les champs structurés ci-dessus sont vides : tout est dans les sections narratives + la transcription) :']
+        if (narrativeReport.sections && narrativeReport.sections.length > 0) {
+          for (const s of narrativeReport.sections) {
+            const c = scrub((s.contenu ?? '').trim())
+            if (!c || /^non renseigné/i.test(c)) continue
+            lines.push('', `[${s.titre}]`, c)
+          }
+        }
+        if (narrativeReport.transcription) {
+          lines.push('', 'TRANSCRIPTION BRUTE (référentiel ultime — utilise-la pour extraire les données cliniques précises absentes des sections narratives ci-dessus) :', scrub(narrativeReport.transcription).trim())
+        }
+        return lines.join('\n')
+      })()
+    : ''
+
   const role = roleTitle(ctx.therapistProfession)
   const isPhysio = /physio/i.test(ctx.therapistProfession ?? '')
   const adjMetier = isPhysio ? 'physiothérapique' : 'kinésithérapique'
@@ -175,6 +195,7 @@ YELLOW FLAGS positifs : ${flagsPositifs(yellowFlags)}
 TESTS CLINIQUES : ${testsStr}
 SCORES : ${scoresStr}
 ${notesLibresStr ? `\nNOTES CLINIQUES COMPLÉMENTAIRES : ${notesLibresStr}` : ''}
+${narrativeBlock}
 ${therapistSection}
 
 INSTRUCTIONS STRICTES :
@@ -981,6 +1002,29 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
   const ottawaStr = renderSection(ottawa)
   const cinqD3NStr = renderSection(cinqD3N)
 
+  // ── Mode vocal : injecter narrativeReport (7 sections cliniques + transcription brute) ──
+  // Sans cela, un bilan saisi en mode vocal aurait des sections « Non renseigné » dans le PDF
+  // (la donnée structurée n'a pas été remplie — tout est dans le rapport narratif).
+  const narrativeReport = bilanData.narrativeReport as { sections?: Array<{ id: string; titre: string; contenu: string }>; transcription?: string } | undefined
+  const isVocalMode = bilanData._mode === 'vocal' || !!narrativeReport
+  const narrativeBlock = isVocalMode && narrativeReport
+    ? (() => {
+        const lines: string[] = ['MODE : Bilan saisi par enregistrement vocal — les données cliniques sont distribuées dans les 7 sections narratives ci-dessous (et complétées par la transcription brute si besoin de récupérer un détail).']
+        if (narrativeReport.sections && narrativeReport.sections.length > 0) {
+          lines.push('', 'SECTIONS NARRATIVES (à redistribuer dans les sections 1→9 selon leur contenu clinique réel — l\'intitulé d\'une section narrative ne définit PAS sa destination dans le rapport) :')
+          for (const s of narrativeReport.sections) {
+            const c = scrub((s.contenu ?? '').trim())
+            if (!c || /^non renseigné/i.test(c)) continue
+            lines.push('', `[${s.titre}]`, c)
+          }
+        }
+        if (narrativeReport.transcription) {
+          lines.push('', 'TRANSCRIPTION BRUTE (référentiel ultime — extraire toute donnée non explicitement reformulée dans les sections narratives ci-dessus, en particulier symptomatologie douloureuse, examen clinique, tests spécifiques, drapeaux) :', scrub(narrativeReport.transcription).trim())
+        }
+        return lines.join('\n')
+      })()
+    : ''
+
   // Hypothèses : on passe un classement qualitatif (rang) SANS pourcentages — la section 7
   // de sortie doit être rédigée en langage médical argumenté, pas en statistiques chiffrées.
   const rangLabel = (r: number) => r === 1 ? 'Principale' : r === 2 ? 'Second plan' : r === 3 ? 'Troisième plan' : `Rang ${r}`
@@ -1044,6 +1088,7 @@ ${mecanoStr ? `\nMÉCANOSENSIBILITÉ :\n${mecanoStr}` : ''}
 ${testsStr ? `\nTESTS SPÉCIFIQUES :\n${testsStr}` : ''}
 ${scoresStr ? `\nSCORES FONCTIONNELS :\n${scoresStr}` : ''}
 ${contratStr ? `\nCONTRAT THÉRAPEUTIQUE :\n${contratStr}` : ''}
+${narrativeBlock ? `\n${narrativeBlock}` : ''}
 ${notesLibres ? `\nNOTES DU THÉRAPEUTE :\n${scrub(notesLibres)}` : ''}
 ${analyseSection}`
 }
