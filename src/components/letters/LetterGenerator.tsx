@@ -468,7 +468,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
         )}
       </header>
 
-      <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
+      <div className="scroll-area" style={{ paddingBottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }}>
 
         {/* ── Alerte config manquante ─── */}
         {phase === 'select' && (missingApiKey || missingPraticien) && (
@@ -616,7 +616,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
 
       {/* ── Footer fixe avec action principale ─── */}
       {phase === 'form' && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderTop: '1px solid var(--border-color)', padding: '0.9rem 1.2rem', boxShadow: '0 -4px 20px rgba(0,0,0,0.08)', zIndex: 100 }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderTop: '1px solid var(--border-color)', padding: '0.9rem 1.2rem calc(0.9rem + env(safe-area-inset-bottom)) 1.2rem', boxShadow: '0 -4px 20px rgba(0,0,0,0.08)', zIndex: 100 }}>
           {genError && (
             <div style={{ fontSize: '0.78rem', color: '#991b1b', marginBottom: 8 }}>{genError}</div>
           )}
