@@ -40,7 +40,7 @@ export const PLANS: PlanConfig[] = [
     id: 'basique',
     name: 'Basique',
     priceMonthly: 29,
-    priceAnnual: 29 * 12,   // pas de réduction sur Basique
+    priceAnnual: 324,   // 27 CHF/mois × 12 — réduction de 2 CHF/mois en annuel
     currency: 'CHF',
     description: 'Idéal pour démarrer',
     features: [
