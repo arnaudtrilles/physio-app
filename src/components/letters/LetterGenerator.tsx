@@ -8,7 +8,7 @@ import { pseudonymizeForm, rehydrateText } from '../../utils/pseudonymize'
 import { scanFormForPII, type PIIMatch } from '../../utils/piiScanner'
 import { LetterTypeIcon } from './LetterIcons'
 import { ConfectionButton } from './ConfectionButton'
-import { DictableInput, DictableTextarea } from '../VoiceMic'
+import { DictableTextarea } from '../VoiceMic'
 
 interface LetterGeneratorProps {
   profile: ProfileData
@@ -824,7 +824,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
       </select>
 
       <label style={labelStyle}>Nom du destinataire</label>
-      <DictableInput {...field('nomDestinataire')} placeholder="Ex : Dr DUPONT" inputStyle={inputStyle} />
+      <input {...field('nomDestinataire')} placeholder="Ex : Dr DUPONT" style={inputStyle} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: 8, marginTop: 10 }}>
         <div>
@@ -837,25 +837,25 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
         </div>
         <div>
           <label style={labelStyle}>Prénom</label>
-          <DictableInput {...field('prenomPatient')} inputStyle={inputStyle} />
+          <input {...field('prenomPatient')} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>Nom</label>
-          <DictableInput {...field('nomPatient')} inputStyle={inputStyle} />
+          <input {...field('nomPatient')} style={inputStyle} />
         </div>
       </div>
 
       <label style={labelStyle}>Indication de PEC</label>
-      <DictableInput {...field('indication')} inputStyle={inputStyle} />
+      <input {...field('indication')} style={inputStyle} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <div>
           <label style={labelStyle}>Début PEC</label>
-          <DictableInput {...field('dateDebutPec')} placeholder="jj/mm/aaaa" inputStyle={inputStyle} />
+          <input {...field('dateDebutPec')} placeholder="jj/mm/aaaa" style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>Fréquence</label>
-          <DictableInput {...field('frequence')} placeholder="2x/semaine" inputStyle={inputStyle} />
+          <input {...field('frequence')} placeholder="2x/semaine" style={inputStyle} />
         </div>
       </div>
 
@@ -867,11 +867,11 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
               <label style={labelStyle}>Date de fin PEC</label>
-              <DictableInput {...field('dateFinPec')} placeholder="jj/mm/aaaa" inputStyle={inputStyle} />
+              <input {...field('dateFinPec')} placeholder="jj/mm/aaaa" style={inputStyle} />
             </div>
             <div>
               <label style={labelStyle}>Nombre de séances</label>
-              <DictableInput {...field('nbSeances')} inputStyle={inputStyle} />
+              <input {...field('nbSeances')} style={inputStyle} />
             </div>
           </div>
         </>
@@ -898,7 +898,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
           {zone('Recommandations au patient', 'recommandations')}
           <DictableTextarea {...field('recommandations')} placeholder="Auto-rééducation, reprise sport…" textareaStyle={textareaStyle} />
           {zone('Suite proposée', 'suite')}
-          <DictableInput {...field('suite')} placeholder="Aucune / suivi espacé / à revoir si besoin" inputStyle={inputStyle} />
+          <input {...field('suite')} placeholder="Aucune / suivi espacé / à revoir si besoin" style={inputStyle} />
         </>
       )}
 
@@ -936,7 +936,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
             <option value="non">Non, à discuter</option>
           </select>
           <label style={labelStyle}>Professionnel recommandé (optionnel)</label>
-          <DictableInput {...field('nomProRecommande')} placeholder="Dr ... / structure" inputStyle={inputStyle} />
+          <input {...field('nomProRecommande')} placeholder="Dr ... / structure" style={inputStyle} />
         </>
       )}
 
@@ -952,7 +952,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
             <option value="Autre">Autre</option>
           </select>
           <label style={labelStyle}>Zone anatomique</label>
-          <DictableInput {...field('zoneAnatomique')} inputStyle={inputStyle} />
+          <input {...field('zoneAnatomique')} style={inputStyle} />
           {zone('Justification clinique', 'justification')}
           <DictableTextarea {...field('justification')} placeholder="Récidives multiples, absence d'imagerie préalable, guider la rééducation…" textareaStyle={textareaStyle} />
           {zone('Antécédents pertinents', 'antecedents')}
@@ -985,7 +985,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
             <option value="confrère">Confrère kinésithérapeute</option>
           </select>
           <label style={labelStyle}>Date du bilan intermédiaire</label>
-          <DictableInput {...field('dateBilanInterm')} placeholder="jj/mm/aaaa" inputStyle={inputStyle} />
+          <input {...field('dateBilanInterm')} placeholder="jj/mm/aaaa" style={inputStyle} />
           {zone('Évolution constatée', 'evolution')}
           <DictableTextarea {...field('evolution')} textareaStyle={textareaStyle} />
           {zone('Points positifs', 'pointsPositifs')}
