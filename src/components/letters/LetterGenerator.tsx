@@ -549,6 +549,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
             confectField={confectField}
             confectingField={confectingField}
             generating={generating}
+            profession={profile.profession || ''}
           />
         )}
 
@@ -757,6 +758,7 @@ interface LetterFormProps {
   confectField: (field: ConfectableField) => void
   confectingField: ConfectableField | null
   generating: boolean
+  profession: string
 }
 
 // Label + bouton "Confectionner" inline. Réutilisé pour chaque zone éditable
@@ -794,7 +796,8 @@ function ZoneLabel({
   )
 }
 
-function LetterForm({ type, form, update, confectField, confectingField, generating }: LetterFormProps) {
+function LetterForm({ type, form, update, confectField, confectingField, generating, profession }: LetterFormProps) {
+  const titreConfrere = /physio/i.test(profession || '') ? 'physiothérapeute' : 'kinésithérapeute'
   const field = (key: keyof LetterFormData) => ({
     value: form[key] ?? '',
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => update(key, e.target.value),
@@ -915,7 +918,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
 
       {type === 'demande_avis' && (
         <>
-          {zone('Résumé de la PEC kiné', 'resumePec')}
+          {zone('Résumé de la PEC', 'resumePec')}
           <DictableTextarea {...field('resumePec')} placeholder="Ce qui a été fait, résultats obtenus, limites rencontrées…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Type de professionnel suggéré</label>
           <select {...field('typePro')} style={inputStyle}>
@@ -982,7 +985,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
           <label style={labelStyle}>Type de destinataire</label>
           <select {...field('typeDest')} style={inputStyle}>
             <option value="médecin">Médecin</option>
-            <option value="confrère">Confrère kinésithérapeute</option>
+            <option value="confrère">Confrère {titreConfrere}</option>
           </select>
           <label style={labelStyle}>Date du bilan intermédiaire</label>
           <input {...field('dateBilanInterm')} placeholder="jj/mm/aaaa" style={inputStyle} />
