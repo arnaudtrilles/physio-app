@@ -152,6 +152,11 @@ export function buildPatientDossier(
 function zoneSystemPrompt(profession: string): string {
   const isPhysio = /physio/i.test(profession)
   const titre = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
+  const metier = isPhysio ? 'physiothérapie' : 'kinésithérapie'
+  const adjMetier = isPhysio ? 'physiothérapique' : 'kinésithérapique'
+  const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+  const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+  const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapique'
   const region = isPhysio ? 'Suisse / Belgique' : 'France'
   return `Tu es un ${titre} francophone expérimenté (${region}). Tu rédiges UNIQUEMENT le paragraphe demandé pour un courrier professionnel — pas le courrier entier, pas de salutation, pas de formule de politesse, pas de signature.
 
@@ -164,7 +169,8 @@ RÈGLES ABSOLUES :
 6. PROSE NARRATIVE — phrases articulées, pas de listes à puces, pas de markdown, pas de gras, pas de titres, pas de séparateur.
 7. TON CONFRATERNEL — concis, factuel, sans pathos, sans phrase de comblement (« comme convenu »).
 8. PLACEHOLDERS DE PSEUDONYMISATION — \`__PATIENT_PRENOM__\`, \`__PATIENT_NOM__\`, \`__DESTINATAIRE_NOM__\`, \`__PRO_RECOMMANDE_NOM__\` se reproduisent EXACTEMENT, sans modification.
-9. SORTIE PROPRE — uniquement le paragraphe brut demandé, sans préambule (« Voici… »), sans guillemets enveloppants, sans note hors-texte.`
+9. SORTIE PROPRE — uniquement le paragraphe brut demandé, sans préambule (« Voici… »), sans guillemets enveloppants, sans note hors-texte.
+10. VOCABULAIRE PROFESSION — Tu es ${titre}, donc tu emploies EXCLUSIVEMENT « ${titre} », « ${metier} », « ${adjMetier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que les abréviations « kiné » et « physio ». Aucune exception, aucune occurrence, même dans une citation ou un exemple.`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,7 +252,7 @@ const ZONE_SPECS: Record<ConfectableField, ZoneSpec> = {
     instruction: `Tableau clinique au moment présent — évolution depuis le bilan initial, niveau fonctionnel, symptômes résiduels. Ancré aux dernières notes de séance et bilans intermédiaires.`,
   },
   resumePec: {
-    label: 'Résumé de la PEC kiné',
+    label: 'Résumé de la PEC',
     range: '3 à 5 phrases (~80 mots)',
     instruction: `Synthèse condensée du parcours : indication, ce qui a été fait, résultats obtenus, limites rencontrées. C'est ce paragraphe qui justifie la demande qui suit (orientation, imagerie, prescription) — il doit être autosuffisant.`,
     contextFields: ['typePro', 'natureDemande', 'typeImagerie'],
@@ -254,7 +260,7 @@ const ZONE_SPECS: Record<ConfectableField, ZoneSpec> = {
   raisonOrientation: {
     label: "Raison de l'orientation",
     range: '2 à 4 phrases (~60 mots)',
-    instruction: `Justification clinique du recours à un autre professionnel — composante (psychologique, douleur chronique, problème non musculo-squelettique pur, etc.) qui dépasse le champ kinésithérapique. Pas de jugement.`,
+    instruction: `Justification clinique du recours à un autre professionnel — composante (psychologique, douleur chronique, problème non musculo-squelettique pur, etc.) qui dépasse le champ de compétence du rééducateur. Pas de jugement.`,
     contextFields: ['typePro'],
   },
   justification: {
@@ -306,7 +312,7 @@ const ZONE_SPECS: Record<ConfectableField, ZoneSpec> = {
   avisPersonnel: {
     label: 'Avis personnel',
     range: '1 à 3 phrases (~50 mots)',
-    instruction: `Lecture clinique du praticien : pourquoi à son sens cette PEC ne suffit plus dans le cadre kinésithérapique seul. Ton confraternel, sobre.`,
+    instruction: `Lecture clinique du praticien : pourquoi à son sens cette PEC ne suffit plus dans le cadre de la rééducation seule. Ton confraternel, sobre.`,
   },
 }
 

@@ -64,9 +64,14 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
     setError(null)
     let willRetry = false
     try {
+      const isPhysio = /physio/i.test(profession ?? '')
+      const role = roleTitle(profession)
+      const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+      const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+      const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapique'
       const raw = await callClaudeSecure({
         apiKey,
-        systemPrompt: `Tu es un ${roleTitle(profession)} expert en rédaction de rapports cliniques, chargé de produire un rapport d'évolution adressé à un médecin prescripteur.
+        systemPrompt: `Tu es un ${role} expert en rédaction de rapports cliniques, chargé de produire un rapport d'évolution adressé à un médecin prescripteur.
 
 Ton rapport est factuellement ancré sur les données transmises : aucune invention, aucune extrapolation, aucun mécanisme lésionnel non explicité. Quand une donnée manque, tu LAISSES LE CHAMP VIDE (chaîne vide "" ou tableau vide []) sans jamais imprimer de phrase indiquant l'absence de la donnée. INTERDICTION ABSOLUE d'écrire "Non documenté dans le suivi", "Non documenté", "Non renseigné", "Aucune donnée", "Absence de données" ou toute formulation équivalente — ces mentions disqualifient le rapport.
 
@@ -75,6 +80,8 @@ Tu n'écris JAMAIS de phrase qui souligne une lacune méthodologique du clinicie
 Tu rédiges en français médical professionnel, en prose articulée (phrases complètes, sujet + verbe + complément), jamais en style télégraphique dans les blocs narratifs. L'accord grammatical suit strictement la valeur SEXE_PATIENT transmise en tête de prompt : jamais de formulation inclusive ou neutre (pas de "(e)", "·e", "/" inclusive, "le/la patient·e", "cette personne"). Tu n'infères jamais le sexe depuis le prénom.
 
 Tu respectes la terminologie clinique verbatim (noms de tests, articulations, acronymes du référentiel Knode). Aucune hypothèse diagnostique n'est chiffrée en pourcentage. Ton ton est concis, factuel, sans pathos, sans qualificatifs subjectifs : le rapport doit pouvoir être lu en 2 minutes par un médecin et donner une image fidèle de la prise en charge.
+
+VOCABULAIRE PROFESSION — Tu rédiges en tant que ${role}. Tu emploies EXCLUSIVEMENT « ${role} » et ses dérivés. INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que des abréviations « kiné » et « physio ». Aucune exception, même dans une citation, un exemple ou un titre de section.
 
 Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en section 5 du prompt utilisateur. Aucun markdown, aucun texte en dehors du JSON.`,
         userPrompt: buildEvolutionPrompt({ ...context, therapistNote: therapistNote.trim() || undefined }),

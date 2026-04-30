@@ -1268,6 +1268,7 @@ Règles :
           bilanData,
           notesLibres: bilanNotes || undefined,
           analyseIA: currentAnalyseIA ?? null,
+          therapistProfession: profile.profession,
         })
         const report = await callClaudeWithDocGuard({
           apiKey,
@@ -1884,6 +1885,7 @@ Mobilité articulaire lombaire
           bilanData: record.bilanData,
           notesLibres: record.notes || undefined,
           analyseIA: null, // Bilan PDF = pas d'analyse IA
+          therapistProfession: profile.profession,
         })
         const report = await callClaudeWithDocGuard({
           apiKey,
