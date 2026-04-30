@@ -80,7 +80,7 @@ export const PLANS: PlanConfig[] = [
     id: 'cabinet',
     name: 'Cabinet',
     priceMonthly: 89,
-    priceAnnual: 961,   // -10% annuel (961 vs 1068)
+    priceAnnual: 948,   // 79 CHF/mois × 12 en annuel
     currency: 'CHF',
     description: 'Pour les cabinets multi-physios',
     features: [
