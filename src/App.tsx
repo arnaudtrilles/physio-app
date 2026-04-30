@@ -63,6 +63,7 @@ import { SplashScreen } from './components/SplashScreen'
 // ── Design system + patient command center ────────────────────────────────
 import { colors as c } from './design/tokens'
 import { ProfilePage } from './components/profile/ProfilePage'
+import { PricingPage } from './components/pricing/PricingPage'
 import { SettingsPage } from './components/settings/SettingsPage'
 import { DashboardPage } from './components/home/DashboardPage'
 import { DatabaseProvider } from './components/database/DatabaseContext'
@@ -72,7 +73,7 @@ import { IdentityStep } from './components/wizard/IdentityStep'
 import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'pricing' | 'identity' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -2313,6 +2314,17 @@ Mobilité articulaire lombaire
           aiAuditSuspiciousCount={dbAICallAudit.filter(e => e.scrubReplacements > 0).length}
           onExportRegister={handleExportRegister}
           onShowToast={showToast}
+          onUpgrade={() => setStep('pricing')}
+          currentPlan={(profile as Record<string, unknown>).plan as string | undefined}
+        />
+      )}
+
+      {step === 'pricing' && (
+        <PricingPage
+          currentPlan={((profile as Record<string, unknown>).plan as string | undefined) as 'basique' | 'pro' | 'cabinet' | undefined}
+          userId={user?.id}
+          userEmail={user?.email}
+          onClose={() => setStep('profile')}
         />
       )}
 

@@ -14,6 +14,8 @@ type ProfilePageProps = {
   aiAuditSuspiciousCount: number
   onExportRegister: () => void
   onShowToast: (message: string, type?: ToastType) => void
+  onUpgrade?: () => void
+  currentPlan?: string
 }
 
 const SPECIALITES = ['Thérapie manuelle', 'McKenzie (MDT)', 'Sport', 'Pédiatrie', 'Neurologie', 'Vestibulaire', 'Périnéologie', 'Respiratoire', 'Rhumatologie', 'Gériatrie', 'Orthopédie']
@@ -59,6 +61,8 @@ export function ProfilePage({
   aiAuditSuspiciousCount,
   onExportRegister,
   onShowToast,
+  onUpgrade,
+  currentPlan,
 }: ProfilePageProps) {
   const [draft, setDraft] = useState<ProfileData>(profile)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -370,7 +374,24 @@ export function ProfilePage({
             </div>
           </div>
 
-          <button className="btn-primary-luxe" style={{ marginBottom: '1rem', marginTop: '1.5rem' }} onClick={handleSubmit}>
+          {onUpgrade && (
+            <button
+              type="button"
+              onClick={onUpgrade}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0.85rem 1rem', borderRadius: 12, background: 'color-mix(in srgb, var(--primary) 8%, var(--surface))', border: '1.5px solid color-mix(in srgb, var(--primary) 25%, transparent)', cursor: 'pointer', marginTop: '1.5rem' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-dark)' }}>Mon forfait</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{currentPlan ?? 'Basique'}</div>
+                </div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          )}
+
+          <button className="btn-primary-luxe" style={{ marginBottom: '1rem', marginTop: '1rem' }} onClick={handleSubmit}>
             Enregistrer
           </button>
         </div>
