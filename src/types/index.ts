@@ -1,4 +1,4 @@
-export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique' | 'geriatrique'
+export type BilanType = 'epaule' | 'cheville' | 'genou' | 'hanche' | 'cervical' | 'lombaire' | 'generique' | 'geriatrique' | 'drainage-lymphatique'
 
 /**
  * Interface impérative exposée par tous les composants Bilan via forwardRef.

@@ -34,6 +34,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
   const [error, setError] = useState<string | null>(null)
   const [evolution, setEvolution] = useState<EvolutionIA | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [therapistNote, setTherapistNote] = useState('')
 
   // Cleanup : annule le retry timeout et bloque les setState après unmount
   const isMountedRef = useRef(true)
@@ -67,14 +68,16 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
         apiKey,
         systemPrompt: `Tu es un ${roleTitle(profession)} expert en rédaction de rapports cliniques, chargé de produire un rapport d'évolution adressé à un médecin prescripteur.
 
-Ton rapport est factuellement ancré sur les données transmises : aucune invention, aucune extrapolation, aucun mécanisme lésionnel non explicité. Quand une donnée manque, tu écris "Non documenté dans le suivi" (pour un champ texte) ou tu laisses un tableau vide ([]) — tu ne combles jamais par supposition.
+Ton rapport est factuellement ancré sur les données transmises : aucune invention, aucune extrapolation, aucun mécanisme lésionnel non explicité. Quand une donnée manque, tu LAISSES LE CHAMP VIDE (chaîne vide "" ou tableau vide []) sans jamais imprimer de phrase indiquant l'absence de la donnée. INTERDICTION ABSOLUE d'écrire "Non documenté dans le suivi", "Non documenté", "Non renseigné", "Aucune donnée", "Absence de données" ou toute formulation équivalente — ces mentions disqualifient le rapport.
+
+Tu n'écris JAMAIS de phrase qui souligne une lacune méthodologique du clinicien : aucune mention d'absence de tests objectifs, d'absence de scores fonctionnels, d'absence de mesures d'amplitude, d'absence d'information sur l'observance, ou de manque de documentation. Si l'information n'est pas dans les données, le champ correspondant reste vide — le médecin destinataire le constatera lui-même. Aucune recommandation ne porte sur la production de données futures (pas de "intégrer des mesures objectives", "réaliser des scores HOOS/Oxford", "documenter systématiquement", "objectivation clinique"). Les recommandations sont CLINIQUES (réévaluation à distance, ajustement thérapeutique, concertation médicale, orientation chirurgicale, etc.) — jamais MÉTHODOLOGIQUES.
 
 Tu rédiges en français médical professionnel, en prose articulée (phrases complètes, sujet + verbe + complément), jamais en style télégraphique dans les blocs narratifs. L'accord grammatical suit strictement la valeur SEXE_PATIENT transmise en tête de prompt : jamais de formulation inclusive ou neutre (pas de "(e)", "·e", "/" inclusive, "le/la patient·e", "cette personne"). Tu n'infères jamais le sexe depuis le prénom.
 
 Tu respectes la terminologie clinique verbatim (noms de tests, articulations, acronymes du référentiel Knode). Aucune hypothèse diagnostique n'est chiffrée en pourcentage. Ton ton est concis, factuel, sans pathos, sans qualificatifs subjectifs : le rapport doit pouvoir être lu en 2 minutes par un médecin et donner une image fidèle de la prise en charge.
 
 Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en section 5 du prompt utilisateur. Aucun markdown, aucun texte en dehors du JSON.`,
-        userPrompt: buildEvolutionPrompt(context),
+        userPrompt: buildEvolutionPrompt({ ...context, therapistNote: therapistNote.trim() || undefined }),
         maxOutputTokens: 8192,
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
         category: 'bilan_evolution',
@@ -467,6 +470,26 @@ Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en se
               <div className="ai-dot" />
               <p>Ce rapport est fourni à titre indicatif et ne remplace pas le jugement clinique du professionnel de santé.</p>
             </div>
+          </div>
+        )}
+
+        {/* Note libre du thérapeute — visible avant génération uniquement */}
+        {!evolution && !loading && apiKey && !error && (
+          <div style={{ marginBottom: 12, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 14, padding: 14 }}>
+            <label htmlFor="therapist-note" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
+              Vos observations cliniques (optionnel)
+            </label>
+            <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.45 }}>
+              Notes libres intégrées prioritairement au rapport — précisions cliniques, nuances, observations non capturées dans les bilans/séances. Vous avez vu le patient, l'IA non.
+            </p>
+            <textarea
+              id="therapist-note"
+              value={therapistNote}
+              onChange={e => setTherapistNote(e.target.value)}
+              placeholder="Ex : la patiente rapporte une nette amélioration depuis la dernière séance après reprise du sport. Tolérance excellente. Plan : poursuite en autonomie."
+              rows={4}
+              style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'white', fontSize: '0.86rem', color: 'var(--text-main)', fontFamily: 'inherit', resize: 'vertical', minHeight: 80, lineHeight: 1.5, boxSizing: 'border-box' }}
+            />
           </div>
         )}
 

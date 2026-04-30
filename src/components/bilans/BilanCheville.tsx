@@ -2,6 +2,7 @@ import { useState, useImperativeHandle, forwardRef } from 'react'
 import type { BilanMode, NarrativeReport } from '../../types'
 import { BilanVocalMode } from './BilanVocalMode'
 import { DictableInput, DictableTextarea } from '../VoiceMic'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, BilanModeToggle } from './shared'
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
@@ -201,7 +202,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
   )
   const questionnaires = useQuestionnaires(updScore, qAnswers, setQAnswers, qResults, setQResults)
 
-  const [open, setOpen] = useState<Record<string, boolean>>({ ottawa: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ infosGenerales: true, ottawa: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   useImperativeHandle(ref, () => ({
@@ -260,6 +261,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
   // tests spécifiques (ALTD + Reverse ALTD), force ciblée, équilibre (appui unipodal), scores (CAIT pour CAI).
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'infosGenerales',title: 'Infos générales',                  color: '#1A1A1A', priority: 'noyau' },
     { id: 'ottawa',        title: "Critères d'Ottawa",                color: '#991b1b',        priority: 'noyau' },
     { id: 'antecedents',   title: "Antécédents d'entorse",            color: '#1A1A1A', priority: 'noyau' },
     { id: 'douleur',       title: 'Douleur',                          color: '#1A1A1A', priority: 'noyau' },
@@ -307,6 +309,7 @@ export const BilanCheville = forwardRef<BilanChevilleHandle, { initialData?: Rec
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
+              {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
               {sec.id === 'ottawa' && (
                 <>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8 }}>

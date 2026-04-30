@@ -21,6 +21,8 @@ import { BilanGenerique } from './components/bilans/BilanGenerique'
 import type { BilanGeneriqueHandle } from './components/bilans/BilanGenerique'
 import { BilanGeriatrique } from './components/bilans/BilanGeriatrique'
 import type { BilanGeriatriqueHandle } from './components/bilans/BilanGeriatrique'
+import { BilanDrainageLymphatique } from './components/bilans/BilanDrainageLymphatique'
+import type { BilanDrainageLymphatiqueHandle } from './components/bilans/BilanDrainageLymphatique'
 import { BilanIntermediaire } from './components/bilans/BilanIntermediaire'
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
 import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
@@ -41,22 +43,16 @@ import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObje
 import { callClaudeSecure, UnmaskedDocumentsError } from './utils/claudeSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
 import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
-import { backupSchema, analyseSeanceMiniSchema } from './utils/validation'
+import { backupSchema } from './utils/validation'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
 import { pdfToImages } from './utils/pdfToImages'
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData, ExerciceDomicile } from './components/NoteSeance'
-import { DictableInput, DictableTextarea } from './components/VoiceMic'
+import { DictableTextarea } from './components/VoiceMic'
 import { PDFPreview } from './components/PDFPreview'
-import { DashboardStats } from './components/DashboardStats'
-import { EvolutionChart, type EvolutionPoint } from './components/EvolutionChart'
-import { ScoreEvolutionChart } from './components/ScoreEvolutionChart'
-import { TreatmentBodyChart } from './components/TreatmentBodyChart'
-import { DossierDocuments } from './components/DossierDocuments'
 import { BilanResumeModal } from './components/BilanResumeModal'
-import { SmartObjectifs } from './components/SmartObjectifs'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
@@ -66,12 +62,17 @@ import { Tutorial, type TutorialStep } from './components/Tutorial'
 import { SplashScreen } from './components/SplashScreen'
 // ── Design system + patient command center ────────────────────────────────
 import { colors as c } from './design/tokens'
-import { PatientHeader } from './components/patient/PatientHeader'
-import { PatientHeroCard } from './components/patient/PatientHeroCard'
-import { ConsultationChooser } from './components/patient/ConsultationChooser'
+import { ProfilePage } from './components/profile/ProfilePage'
+import { SettingsPage } from './components/settings/SettingsPage'
+import { DashboardPage } from './components/home/DashboardPage'
+import { DatabaseProvider } from './components/database/DatabaseContext'
+import { DatabasePage } from './components/database/DatabasePage'
+import { ZonePickerSheet } from './components/shared/ZonePicker'
+import { IdentityStep } from './components/wizard/IdentityStep'
+import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
 import './App.css'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'general_info' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'identity' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -101,113 +102,6 @@ class ErrorBoundary extends Component<{ children: ReactNode; onReset?: () => voi
 }
 
 // ── Zone picker : liste design avec icônes SVG anatomiques ───────────────
-function ZoneIcon({ zone, size = 22, color = 'currentColor' }: { zone: string; size?: number; color?: string }) {
-  const s = { width: size, height: size, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  switch (zone) {
-    case 'Épaule': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M12 8v4"/><path d="M8 9c-3 1-5 3.5-5 6"/><path d="M16 9c3 1 5 3.5 5 6"/><path d="M8 9l-2 7"/><path d="M16 9l2 7"/></svg>
-    )
-    case 'Genou': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v6"/><ellipse cx="12" cy="11" rx="4" ry="3"/><path d="M12 14v8"/><path d="M9 11c-1.5.5-2 2-1.5 3.5"/><path d="M15 11c1.5.5 2 2 1.5 3.5"/></svg>
-    )
-    case 'Hanche': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 3v5"/><ellipse cx="12" cy="11" rx="6" ry="4"/><path d="M8 14l-3 8"/><path d="M16 14l3 8"/><circle cx="12" cy="11" r="1.5"/></svg>
-    )
-    case 'Cheville': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v12"/><path d="M10 14c-2 1-3 3-3 5h10c0-2-1-4-3-5"/><path d="M7 19c-1 0-2 .5-2 2h14c0-1.5-1-2-2-2"/></svg>
-    )
-    case 'Cervicales': return (
-      <svg viewBox="0 0 24 24" {...s}><circle cx="12" cy="5" r="3"/><path d="M12 8v14"/><path d="M9 10h6"/><path d="M8 13h8"/><path d="M9 16h6"/></svg>
-    )
-    case 'Rachis Lombaire': return (
-      <svg viewBox="0 0 24 24" {...s}><path d="M12 2v20"/><path d="M8 5h8"/><path d="M7 8h10"/><path d="M6 11h12"/><path d="M7 14h10"/><path d="M8 17h8"/><path d="M9 20h6"/></svg>
-    )
-    case 'Gériatrie': return (
-      <svg viewBox="0 0 24 24" {...s}><circle cx="11" cy="4" r="2.5"/><path d="M11 6.5v6"/><path d="M8 9l-2 5"/><path d="M14 9l2 3"/><path d="M11 12.5l-3 9"/><path d="M11 12.5l2 5"/><path d="M16 12l4 3"/><line x1="20" y1="15" x2="20" y2="22"/></svg>
-    )
-    default: return (
-      <svg viewBox="0 0 24 24" {...s}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>
-    )
-  }
-}
-
-const ZONE_PICKER_ITEMS: Array<{ zone: string; label: string }> = [
-  { zone: 'Épaule',          label: 'Épaule' },
-  { zone: 'Genou',           label: 'Genou' },
-  { zone: 'Hanche',          label: 'Hanche' },
-  { zone: 'Cheville',        label: 'Cheville' },
-  { zone: 'Cervicales',      label: 'Rachis Cervical' },
-  { zone: 'Rachis Lombaire', label: 'Rachis Lombaire' },
-  { zone: 'Gériatrie',       label: 'Gériatrie' },
-  { zone: 'Autre',           label: 'Bilan général' },
-]
-
-interface ZonePickerSheetProps {
-  title: string
-  accent: string
-  accentBg: string
-  accentBorder: string
-  selectedZone?: string | null
-  onSelect: (zone: string) => void
-  onClose: () => void
-}
-
-function ZonePickerSheet({ title, selectedZone, onSelect, onClose }: ZonePickerSheetProps) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--base-bg)', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 430, boxShadow: '0 -8px 40px rgba(0,0,0,0.15)', padding: '0.5rem 1.1rem 2rem', maxHeight: '85vh', overflow: 'auto', animation: 'slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1)' }}>
-        {/* Handle bar */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border-color)' }} />
-        </div>
-        <div style={{ marginBottom: '1.1rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.01em' }}>{title}</h3>
-          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Choisissez la zone anatomique du bilan</p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {ZONE_PICKER_ITEMS.map(({ zone, label }) => {
-            const active = selectedZone === zone
-            return (
-              <button
-                key={zone}
-                onClick={() => onSelect(zone)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '0.85rem 1rem',
-                  borderRadius: 14,
-                  border: active ? '2px solid var(--primary)' : '1.5px solid transparent',
-                  background: active ? 'var(--info-soft)' : 'var(--input-bg)',
-                  color: active ? 'var(--primary-dark)' : 'var(--text-main)',
-                  fontWeight: active ? 600 : 500,
-                  fontSize: '0.88rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.18s ease',
-                  boxShadow: active ? '0 2px 10px rgba(45,90,75,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
-                }}
-              >
-                <div style={{
-                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                  background: active ? 'var(--primary)' : 'var(--secondary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.18s',
-                }}>
-                  <ZoneIcon zone={zone} size={22} color={active ? 'white' : 'var(--primary)'} />
-                </div>
-                <span style={{ flex: 1 }}>{label}</span>
-                {active && (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 const DEMO_DB: BilanRecord[] = [
   { id:1,  nom:'BERGER',   prenom:'Thomas', dateNaissance:'12/05/1982', dateBilan:'15/10/2025', zoneCount:1, evn:8, zone:'Épaule Droite', pathologie:'Tendinite de la coiffe des rotateurs', avatarBg:'var(--primary-light)', bilanType:'epaule', status:'complet', sexe:'masculin' },
@@ -229,100 +123,11 @@ const DEMO_DB: BilanRecord[] = [
 
 const DEFAULT_PROFILE: ProfileData = { nom: '', prenom: '', profession: 'Kinésithérapeute', photo: null }
 
-/** Glissement horizontal gauche révélant un bouton X rouge pour supprimer.
- *  Utilisé sur les cartes d'épisode clôturé — pas de bouton visible par défaut,
- *  le geste reste la seule affordance (mobile-first, pas de boutons partout).
- *  Pointer events pour supporter mouse + touch + pen ; touch-action: pan-y pour
- *  laisser le scroll vertical au navigateur tout en captant l'horizontal. */
-function SwipeToDelete({ children, onDelete, disabled = false }: {
-  children: React.ReactNode
-  onDelete: () => void
-  disabled?: boolean
-}) {
-  const REVEAL = 68
-  const [dx, setDx] = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const startXRef = useRef<number | null>(null)
-  const startYRef = useRef<number | null>(null)
-  const baselineRef = useRef(0)
-  const lockedRef = useRef<'none' | 'h' | 'v'>('none')
-  const pointerIdRef = useRef<number | null>(null)
-  if (disabled) return <>{children}</>
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    pointerIdRef.current = e.pointerId
-    startXRef.current = e.clientX
-    startYRef.current = e.clientY
-    baselineRef.current = dx
-    lockedRef.current = 'none'
-  }
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (startXRef.current === null || startYRef.current === null) return
-    if (pointerIdRef.current !== null && e.pointerId !== pointerIdRef.current) return
-    const rawX = e.clientX - startXRef.current
-    const rawY = e.clientY - startYRef.current
-    if (lockedRef.current === 'none') {
-      if (Math.abs(rawX) < 6 && Math.abs(rawY) < 6) return
-      lockedRef.current = Math.abs(rawX) > Math.abs(rawY) ? 'h' : 'v'
-      if (lockedRef.current === 'h') {
-        setDragging(true)
-        try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch { /* noop */ }
-      }
-    }
-    if (lockedRef.current !== 'h') return
-    const next = Math.max(-REVEAL, Math.min(0, baselineRef.current + rawX))
-    setDx(next)
-  }
-  const finishGesture = () => {
-    startXRef.current = null
-    startYRef.current = null
-    pointerIdRef.current = null
-    if (lockedRef.current === 'h') {
-      setDx(dx < -REVEAL / 2 ? -REVEAL : 0)
-    }
-    lockedRef.current = 'none'
-    setDragging(false)
-  }
-  return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 10 }}>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onDelete() }}
-        aria-label="Supprimer"
-        style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL,
-          background: '#dc2626', color: 'white', border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={finishGesture}
-        onPointerCancel={finishGesture}
-        style={{
-          transform: `translateX(${dx}px)`,
-          transition: dragging ? 'none' : 'transform 0.2s',
-          position: 'relative',
-          background: 'var(--surface)',
-          touchAction: 'pan-y',
-          cursor: dx < 0 ? 'grabbing' : 'auto',
-        }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 const TUTORIAL_STEPS: TutorialStep[] = [
   { id: 'welcome', emoji: '🏥', title: 'Créons votre premier bilan', description: 'Je vous guide pas à pas dans la création d\'un dossier patient complet. Ça prend 2 minutes !', selector: null, tooltip: 'center' },
   { id: 'new-patient', emoji: '➕', title: 'Nouveau patient', description: 'Appuyez sur ce bouton pour créer votre premier dossier et démarrer le bilan initial.', selector: '[data-tutorial="new-patient-btn"]', tooltip: 'top', padding: 10 },
   { id: 'identity', emoji: '👤', title: 'Identité', description: 'À cette étape, renseignez les informations d\'identité de votre patient.', selector: null, tooltip: 'center' },
-  { id: 'general-info', emoji: '📋', title: 'Bilan clinique', description: 'C\'est ici que vous devrez saisir les informations cliniques. Quand vous avez fini, enregistrez votre bilan.', selector: null, tooltip: 'center' },
-  { id: 'bilan', emoji: '🔍', title: 'Bilan clinique 2/2', description: 'Ici vous trouverez votre bilan clinique optimisé pour la zone concernée.', selector: null, tooltip: 'center' },
+  { id: 'bilan', emoji: '🔍', title: 'Bilan clinique', description: 'Ici, votre bilan clinique optimisé pour la zone concernée — infos générales, douleur, examen et conseils. Enregistrez à la fin.', selector: null, tooltip: 'center' },
   { id: 'done', emoji: '🎉', title: 'Bilan créé avec succès !', description: 'Excellent travail. Que souhaitez-vous faire avec ce bilan ?', selector: null, tooltip: 'center', isActionStep: true },
 ]
 
@@ -549,7 +354,7 @@ function App() {
   const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
   const [ficheExerciceContextOverride, setFicheExerciceContextOverride] = useState<{ notesLibres: string; bilanData: Record<string, unknown>; zone: string } | null>(null)
   const [ficheExerciceSource, setFicheExerciceSource] = useState<{ type: 'note' | 'intermediaire'; id: number } | null>(null)
-  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'general_info' | 'database'>('general_info')
+  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'database'>('identity')
   const [deletingBilanId, setDeletingBilanId] = useState<number | null>(null)
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')
@@ -611,7 +416,6 @@ function App() {
   // Origine attachée au PDF auto-sauvegardé dans le dossier patient.
   const [pdfPreviewSource, setPdfPreviewSource] = useState<Exclude<PatientDocumentSource, 'upload'>>('analyse-ia')
   const [pdfPreviewPatientKey, setPdfPreviewPatientKey] = useState<string>('')
-  const [profileEditDraft, setProfileEditDraft] = useState<ProfileData>(profile)
   // apiKeyDraft removed — Vertex AI, no client key needed
 
   const [formData, setFormData] = useState({
@@ -629,11 +433,10 @@ function App() {
   const bilanLombaireRef = useRef<BilanLombaireHandle>(null)
   const bilanGeneriqueRef     = useRef<BilanGeneriqueHandle>(null)
   const bilanGeriatriqueRef   = useRef<BilanGeriatriqueHandle>(null)
+  const bilanDrainageLymphatiqueRef = useRef<BilanDrainageLymphatiqueHandle>(null)
   const bilanIntermediaireRef = useRef<BilanIntermediaireHandle>(null)
   const bilanIntermediaireGeriatriqueRef = useRef<BilanIntermediaireGeriatriqueHandle>(null)
   const noteSeanceRef         = useRef<NoteSeanceHandle>(null)
-  const photoInputRef         = useRef<HTMLInputElement>(null)
-  const importDataRef         = useRef<HTMLInputElement>(null)
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const updateField = useCallback((field: keyof typeof formData, value: string) =>
@@ -669,7 +472,7 @@ function App() {
     setBilanNotes('')
     setCurrentBilanId(null)
     setCurrentBilanDataOverride(null)
-    setBilanZoneBackStep('general_info')
+    setBilanZoneBackStep('identity')
   }, [])
 
   const getIntermediairePreFill = (patKey: string, zone: string): Record<string, unknown> => {
@@ -1276,6 +1079,7 @@ Règles :
       case 'cervical': return bilanCervicalRef.current?.getData() ?? null
       case 'lombaire': return bilanLombaireRef.current?.getData() ?? null
       case 'geriatrique': return bilanGeriatriqueRef.current?.getData() ?? null
+      case 'drainage-lymphatique': return bilanDrainageLymphatiqueRef.current?.getData() ?? null
       default:         return bilanGeneriqueRef.current?.getData() ?? null
     }
   }
@@ -2102,9 +1906,7 @@ Mobilité articulaire lombaire
     showToast('Données exportées', 'success')
   }
 
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleImportFile = (file: File) => {
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
@@ -2131,15 +1933,27 @@ Mobilité articulaire lombaire
       }
     }
     reader.readAsText(file)
-    e.target.value = ''
   }
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setProfileEditDraft(p => ({ ...p, photo: ev.target?.result as string }))
-    reader.readAsDataURL(file)
+  const handleSaveProfile = (next: ProfileData) => {
+    setProfile(next)
+    showToast('Profil enregistré', 'success')
+    setStep('settings')
+  }
+
+  const handleExportRegister = async () => {
+    const { generateAuditPDF } = await import('./utils/pdfGenerator')
+    generateAuditPDF({
+      praticien: {
+        nom: profile.nom, prenom: profile.prenom,
+        profession: profile.profession, rcc: profile.rcc,
+        adresse: profile.adresse, ville: profile.ville,
+        codePostal: profile.codePostal,
+      },
+      entries: dbLetterAudit,
+      aiCallEntries: dbAICallAudit,
+    })
+    showToast('Registre exporté', 'success')
   }
 
   // testApiKey function removed — Vertex AI, no client key needed
@@ -2147,7 +1961,7 @@ Mobilité articulaire lombaire
   // ── Input with mic helper ─────────────────────────────────────────────────────
 
   // ── Step progress ─────────────────────────────────────────────────────────────
-  const STEP_ORDER: Step[] = ['identity', 'general_info', 'bilan_zone', 'analyse_ia']
+  const STEP_ORDER: Step[] = ['identity', 'bilan_zone', 'analyse_ia']
   const stepProgress = STEP_ORDER.indexOf(step) >= 0 ? ((STEP_ORDER.indexOf(step) + 1) / STEP_ORDER.length) * 100 : 0
 
   // ── Tutorial ──────────────────────────────────────────────────────────────────
@@ -2168,9 +1982,8 @@ Mobilité articulaire lombaire
       setPatientMode('new')
       setStep('identity')
     }
-    else if (tutorialIdx === 2) setStep('general_info')
-    else if (tutorialIdx === 3) { setBilanZoneBackStep('general_info'); setStep('bilan_zone') }
-    else if (tutorialIdx === 4) setStep('database')
+    else if (tutorialIdx === 2) { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
+    else if (tutorialIdx === 3) setStep('database')
     setTutorialIdx(next)
   }
 
@@ -2240,1819 +2053,136 @@ Mobilité articulaire lombaire
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* ── Dashboard ──────────────────────────────────────────────────────────── */}
-      {step === 'dashboard' && (() => {
-        const now = new Date()
-        const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-        const initials = `${(profile.nom || 'W')[0]}${(profile.prenom || '')[0] || ''}`.toUpperCase()
-        return (
-          <div className={slideEntry || swipedNav.current ? '' : 'fade-in'} style={{ ...swipeDragStyle, ...slideEntryStyle, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-            <div className="scroll-area" style={{ flex: 1, padding: '0.5rem 0.35rem 0' }}>
-              {/* Header — centered with settings */}
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.25rem', paddingTop: '0.3rem' }}>
-                <button onClick={() => setStep('settings')} style={{ position: 'absolute', top: '0.3rem', right: 0, width: 30, height: 30, borderRadius: 'var(--radius-full)', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                </button>
-                <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-full)', overflow: 'hidden', flexShrink: 0, background: profile.photo ? 'transparent' : 'color-mix(in srgb, var(--primary) 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
-                  {profile.photo
-                    ? <img src={profile.photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Profil" />
-                    : <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary)' }}>{initials}</span>}
-                </div>
-                <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>{dateStr}</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-dark)', letterSpacing: '-0.02em' }}>Bonjour, {profile.nom || profile.prenom}</div>
-              </div>
-
-              {/* Hero card — dernière activité */}
-              {(() => {
-                const parseFR = (d: string) => { const [dd, mm, yy] = d.split('/'); return new Date(`${yy}-${mm}-${dd}`).getTime() || 0 }
-                const activities: { patientKey: string; date: number; dateStr: string; type: string; zone?: string }[] = [
-                  ...db.filter(r => r.status === 'complet' || r.bilanData).map(r => ({ patientKey: `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim(), date: parseFR(r.dateBilan), dateStr: r.dateBilan, type: 'Bilan initial', zone: r.zone })),
-                  ...dbIntermediaires.map(r => ({ patientKey: r.patientKey, date: parseFR(r.dateBilan), dateStr: r.dateBilan, type: 'Bilan intermédiaire', zone: r.zone })),
-                  ...dbNotes.map(r => ({ patientKey: r.patientKey, date: parseFR(r.dateSeance), dateStr: r.dateSeance, type: 'Séance', zone: r.zone })),
-                ]
-                const last = activities.sort((a, b) => b.date - a.date)[0]
-                if (!last) return null
-                const diff = Math.floor((Date.now() - last.date) / 86400000)
-                const ago = diff === 0 ? "Aujourd'hui" : diff === 1 ? 'Hier' : `Il y a ${diff}j`
-                const totalThisWeek = activities.filter(a => Date.now() - a.date < 7 * 86400000).length
-                return (
-                  <div
-                    onClick={() => { setSelectedPatient(last.patientKey); setStep('database') }}
-                    style={{ background: 'var(--primary-dark)', borderRadius: 'var(--radius-xl)', padding: '1.1rem 1.15rem', marginBottom: '1rem', cursor: 'pointer', color: 'white', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15,23,42,0.18)' }}
-                  >
-                    <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-                    <div style={{ position: 'absolute', bottom: -30, right: 40, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
-                    <div style={{ fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6, marginBottom: '0.6rem' }}>Dernière activité</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.2rem', letterSpacing: '-0.01em' }}>{last.patientKey}</div>
-                    <div style={{ fontSize: '0.78rem', opacity: 0.7, marginBottom: '0.75rem' }}>
-                      {last.type}{last.zone ? ` · ${last.zone}` : ''} · {ago}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}>
-                        Ouvrir le dossier
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                      </span>
-                      {totalThisWeek > 0 && (
-                        <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>{totalThisWeek} activité{totalThisWeek > 1 ? 's' : ''} cette semaine</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Stats */}
-              <DashboardStats bilans={db} intermediaires={dbIntermediaires} notesSeance={dbNotes} closedTreatments={dbClosedTreatments} onSelectPatient={(key) => { setSelectedPatient(key); setStep('database') }} />
-
-            </div>
-            {/* Action buttons — sticky bottom */}
-            <div style={{ flexShrink: 0, padding: '0.6rem 0.75rem', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))', background: 'linear-gradient(to top, var(--base-bg) 70%, transparent)', display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--primary-dark)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
-                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
-                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
-                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                Mes patients
-              </button>
-              <button
-                data-tutorial="new-patient-btn"
-                onClick={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-full)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(15,23,138,0.15)', transition: 'transform 0.15s', whiteSpace: 'nowrap' }}
-                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
-                onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
-                onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Nouveau patient
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+      {step === 'dashboard' && (
+        <DashboardPage
+          profile={profile}
+          db={db}
+          dbIntermediaires={dbIntermediaires}
+          dbNotes={dbNotes}
+          dbClosedTreatments={dbClosedTreatments}
+          slideEntry={slideEntry}
+          swipedNav={swipedNav}
+          swipeDragStyle={swipeDragStyle}
+          slideEntryStyle={slideEntryStyle}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onOpenSettings={() => setStep('settings')}
+          onOpenPatient={(key) => { setSelectedPatient(key); setStep('database') }}
+          onAllPatients={() => { swipedNav.current = false; setSelectedPatient(null); setSearchQuery(''); setStep('database') }}
+          onNewPatient={() => { resetForm(); setSelectedBodyZone(null); setPatientMode('new'); setStep('identity') }}
+        />
+      )}
 
       {/* ── Database ───────────────────────────────────────────────────────────── */}
       {step === 'database' && (
-        <div className={`general-info-screen ${slideEntry || swipedNav.current ? '' : 'fade-in'}`} style={{ ...swipeDragStyle, ...slideEntryStyle, padding: '0 0.35rem' }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          {selectedPatient ? null : (
-            <header className="screen-header">
-              <button className="btn-back" onClick={() => setStep('dashboard')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-              </button>
-              <h2 className="title-section">Patients</h2>
-              <button
-                onClick={() => setShowAddPatientChoice(true)}
-                aria-label="Ajouter un patient"
-                style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--input-bg)', color: 'var(--primary)', border: '1px solid var(--border-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-            </header>
-          )}
-          <div className="scroll-area">
-            {!selectedPatient ? (
-              <>
-                <div style={{marginBottom: '1rem'}}>
-                  <div style={{ position: 'relative' }}>
-                    <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text" placeholder="Rechercher un nom…"
-                      value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.4rem', fontSize: '0.92rem', borderRadius: 999, border: `1px solid ${c.borderSoft}`, background: 'var(--input-bg)', color: c.text, outline: 'none', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)' }} />
-                  </div>
-                </div>
-                {(() => {
-                  const patientsMap = new Map<string, { key: string; nom: string; prenom: string; dateNaissance: string; pathologie?: string; avatarBg?: string; records: BilanRecord[] }>()
-                  db.forEach(r => {
-                    const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
-                    if (!patientsMap.has(key)) patientsMap.set(key, { key, nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance, pathologie: r.pathologie, avatarBg: r.avatarBg, records: [] })
-                    patientsMap.get(key)!.records.push(r)
-                  })
-                  const patients = Array.from(patientsMap.values()).filter(p => p.key.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => a.key.localeCompare(b.key, 'fr'))
-                  if (patients.length === 0) return <div className="empty-state"><p>Aucun dossier trouvé.</p></div>
-
-                  // Group patients by first letter
-                  const grouped = new Map<string, typeof patients>()
-                  patients.forEach(p => {
-                    const letter = (p.nom[0] || '?').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').charAt(0)
-                    const key = /[A-Z]/.test(letter) ? letter : '#'
-                    if (!grouped.has(key)) grouped.set(key, [])
-                    grouped.get(key)!.push(p)
-                  })
-                  const letters = Array.from(grouped.keys()).sort((a, b) => a === '#' ? 1 : b === '#' ? -1 : a.localeCompare(b))
-
-                  return (
-                    <div style={{ display: 'flex', position: 'relative' }}>
-                      {/* Patient list */}
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: '5rem' }}>
-                        {/* Patient count */}
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500, marginBottom: '0.75rem', letterSpacing: '0.02em' }}>
-                          {patients.length} patient{patients.length > 1 ? 's' : ''}
-                        </div>
-                        {letters.map(letter => (
-                          <div key={letter} id={`patient-section-${letter}`}>
-                            {/* Letter header */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', marginBottom: '0.15rem' }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>{letter}</span>
-                              <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                            </div>
-                            {/* Patients in this letter group */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                              {grouped.get(letter)!.map(p => {
-                                const score = patientGeneralScore(p.key)
-                                const scoreColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : score < 0 ? '#881337' : '#94a3b8'
-                                const age = computeAge(p.dateNaissance)
-                                const lastBilan = [...p.records].sort((a, b) => b.id - a.id)[0]
-                                const firstBilanLabel = [...p.records].sort((a, b) => a.id - b.id).find(r => r.customLabel)?.customLabel
-                                const pathoLabel = firstBilanLabel || lastBilan?.pathologie || lastBilan?.zone || ''
-                                // Count total séances (bilans + intermédiaires + notes)
-                                const nBilans = p.records.filter(r => r.status === 'complet' || r.bilanData).length
-                                const nInter = dbIntermediaires.filter(r => r.patientKey === p.key).length
-                                const nNotes = dbNotes.filter(r => r.patientKey === p.key).length
-                                const totalSeances = nBilans + nInter + nNotes
-                                // Last activity date across all record types
-                                const parseFR = (d: string) => { const [dd, mm, yy] = d.split('/'); return new Date(`${yy}-${mm}-${dd}`).getTime() || 0 }
-                                const allDates = [
-                                  ...p.records.map(r => parseFR(r.dateBilan)),
-                                  ...dbIntermediaires.filter(r => r.patientKey === p.key).map(r => parseFR(r.dateBilan)),
-                                  ...dbNotes.filter(r => r.patientKey === p.key).map(r => parseFR(r.dateSeance)),
-                                ].filter(d => d > 0)
-                                const lastDate = allDates.length ? new Date(Math.max(...allDates)) : null
-                                const timeAgo = (() => {
-                                  if (!lastDate) return ''
-                                  const diff = Date.now() - lastDate.getTime()
-                                  const days = Math.floor(diff / 86400000)
-                                  if (days === 0) return "Aujourd'hui"
-                                  if (days === 1) return 'Hier'
-                                  if (days < 7) return `Il y a ${days}j`
-                                  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem.`
-                                  if (days < 365) return `Il y a ${Math.floor(days / 30)} mois`
-                                  return `Il y a ${Math.floor(days / 365)} an(s)`
-                                })()
-                                return (
-                                  <div key={p.key} onClick={() => setSelectedPatient(p.key)}
-                                    style={{ background: 'var(--surface)', padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.15s', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)' }}
-                                    onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.98)')}
-                                    onPointerUp={e => (e.currentTarget.style.transform = 'scale(1)')}
-                                    onPointerLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
-                                    <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)', fontWeight: 600, fontSize: '0.65rem', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)' }}>
-                                      {(p.nom[0] || '?')}{(p.prenom[0] || '?')}
-                                    </span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem', marginBottom: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
-                                        {p.key}
-                                        {isBirthday(p.dateNaissance) && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="14" width="18" height="8" rx="2"/><rect x="6" y="11" width="12" height="3" rx="1"/><line x1="8.5" y1="11" x2="8.5" y2="7"/><line x1="12" y1="11" x2="12" y2="7"/><line x1="15.5" y1="11" x2="15.5" y2="7"/><path d="M7.5 5.5c1-1.5 1-1.5 2 0M11 5.5c1-1.5 1-1.5 2 0M14.5 5.5c1-1.5 1-1.5 2 0"/></svg>}
-                                      </div>
-                                      <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {age !== null && <>{age} ans</>}{age !== null && pathoLabel ? ' · ' : ''}{pathoLabel}
-                                      </div>
-                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                        {totalSeances > 0 && <span>{totalSeances} séance{totalSeances > 1 ? 's' : ''}</span>}
-                                        {totalSeances > 0 && timeAgo && <span>·</span>}
-                                        {timeAgo && <span>{timeAgo}</span>}
-                                        {totalSeances === 0 && !timeAgo && <span style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', color: 'var(--primary)', fontSize: '0.62rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)' }}>Nouveau</span>}
-                                      </div>
-                                    </div>
-                                    {score !== null
-                                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.78rem', color: scoreColor, flexShrink: 0 }}>
-                                          {score > 0 ? (
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                                          ) : score < 0 ? (
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                          ) : (
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                          )}
-                                          {Math.abs(score)}%
-                                        </span>
-                                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
-                                    }
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Alphabet sidebar */}
-                      {!searchQuery && letters.length > 1 && (
-                        <div
-                          style={{ position: 'sticky', top: 0, right: 0, height: 'fit-content', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '0.35rem 0.15rem', marginLeft: '0.85rem', zIndex: 20, alignSelf: 'flex-start', flexShrink: 0, width: 22 }}
-                          onTouchMove={e => {
-                            const touch = e.touches[0]
-                            const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
-                            if (el?.dataset?.letter) {
-                              const section = document.getElementById(`patient-section-${el.dataset.letter}`)
-                              section?.scrollIntoView({ behavior: 'auto', block: 'start' })
-                            }
-                          }}
-                        >
-                          {letters.map(l => (
-                            <button key={l} data-letter={l}
-                              onClick={() => {
-                                const section = document.getElementById(`patient-section-${l}`)
-                                section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                              }}
-                              style={{ width: 20, height: 20, borderRadius: 'var(--radius-full)', border: 'none', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.62rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'background 0.15s, color 0.15s' }}
-                              onPointerEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white' }}
-                              onPointerLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--primary)' }}
-                            >
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-              </>
-            ) : (
-              <>
-                {(() => {
-                  const allPatientRecords = getPatientBilans(selectedPatient)
-                  const firstR = allPatientRecords[0]
-                  const isPlaceholder = (r: BilanRecord) => r.status === 'incomplet' && !r.bilanData
-                  const bilans = allPatientRecords.filter(r => !isPlaceholder(r))
-                  // Hero card derivations
-                  const rxForHero = dbPrescriptions.find(p => p.patientKey === selectedPatient)
-                  const lastBilanForHero = bilans[bilans.length - 1]
-                  const notesSortedForHero = [...getPatientNotes(selectedPatient ?? '')].sort((a, b) => (a.dateSeance || '').localeCompare(b.dateSeance || ''))
-                  const lastNoteForHero = notesSortedForHero[notesSortedForHero.length - 1]
-                  // Zones available for the consultation chooser (excludes closed PECs)
-                  const ZONE_LABELS_SHORT: Record<string, string> = {
-                    epaule: 'Épaule',
-                    cheville: 'Cheville',
-                    genou: 'Genou',
-                    hanche: 'Hanche',
-                    cervical: 'Rachis Cervical',
-                    lombaire: 'Rachis Lombaire',
-                    generique: 'Autres bilans',
-                    geriatrique: 'Gériatrie',
-                  }
-                  const zoneHasBilans = new Map<string, boolean>()
-                  bilans.forEach(b => {
-                    const key = b.bilanType ?? getBilanType(b.zone ?? '')
-                    zoneHasBilans.set(key, true)
-                  })
-                  getPatientIntermediaires(selectedPatient ?? '').forEach(r => {
-                    const key = r.bilanType ?? getBilanType(r.zone ?? '')
-                    if (!zoneHasBilans.has(key)) zoneHasBilans.set(key, false)
-                  })
-                  getPatientNotes(selectedPatient ?? '').forEach(n => {
-                    const key = n.bilanType ?? getBilanType(n.zone ?? '')
-                    if (!zoneHasBilans.has(key)) zoneHasBilans.set(key, false)
-                  })
-                  // Zones créées depuis une prescription (même sans aucun bilan/séance)
-                  ;(rxForHero?.prescriptions ?? []).forEach(pr => {
-                    if (pr.bilanType && !zoneHasBilans.has(pr.bilanType)) zoneHasBilans.set(pr.bilanType, false)
-                  })
-                  const genericCustomLabel = (rxForHero?.prescriptions ?? []).find(pr => pr.bilanType === 'generique')?.customLabel
-                  const zonesForPicker = Array.from(zoneHasBilans.entries())
-                    .filter(([bt]) => !isTreatmentClosed(selectedPatient ?? '', bt as BilanType))
-                    .map(([bt, hasBilans]) => ({
-                      bilanType: bt,
-                      label: bt === 'generique' && genericCustomLabel ? genericCustomLabel : (ZONE_LABELS_SHORT[bt] ?? bt),
-                      accent: c.primary,
-                      hasBilans,
-                    }))
-                  const hasAnyBilanForPicker = bilans.length > 0
-                  return (
-                    <>
-                      <PatientHeader
-                        name={selectedPatient ?? ''}
-                        initials={`${firstR?.nom[0] || '?'}${firstR?.prenom[0] || '?'}`}
-                        avatarBg={firstR?.avatarBg}
-                        birthday={isBirthday(firstR?.dateNaissance)}
-                        infoLine={(() => {
-                          const parts: string[] = []
-                          if (firstR?.dateNaissance) {
-                            const age = computeAge(firstR.dateNaissance)
-                            if (age !== null) parts.push(`${age} ans`)
-                          }
-                          return parts.length > 0 ? parts.join(' · ') : undefined
-                        })()}
-                        stats={[
-                          { label: 'Depuis', value: (() => {
-                            const d = firstR?.dateBilan
-                            if (!d) return '—'
-                            const parts = d.includes('-') ? d.split('-') : d.split('/')
-                            const months = ['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.']
-                            const day = d.includes('-') ? parts[2] : parts[0]
-                            const monthIdx = parseInt(d.includes('-') ? parts[1] : parts[1], 10) - 1
-                            return `${parseInt(day, 10)} ${months[monthIdx] ?? ''}`
-                          })() },
-                          { label: 'Bilans', value: String(bilans.length) },
-                          { label: 'Séances', value: String(getPatientNotes(selectedPatient ?? '').length + bilans.length + getPatientIntermediaires(selectedPatient ?? '').length) },
-                        ]}
-                        onBack={() => setSelectedPatient(null)}
-                      />
-                      <PatientHeroCard
-                        activeZones={(() => {
-                          const zoneMap = new Map<string, number>()
-                          const allNotes = getPatientNotes(selectedPatient ?? '')
-                          const allInterms = getPatientIntermediaires(selectedPatient ?? '')
-                          for (const b of bilans) {
-                            const bt = b.bilanType ?? getBilanType(b.zone ?? '')
-                            if (isTreatmentClosed(selectedPatient ?? '', bt as BilanType)) continue
-                            zoneMap.set(bt, (zoneMap.get(bt) ?? 0) + 1)
-                          }
-                          for (const n of allNotes) {
-                            const bt = n.bilanType ?? getBilanType(n.zone ?? '')
-                            if (isTreatmentClosed(selectedPatient ?? '', bt as BilanType)) continue
-                            zoneMap.set(bt, (zoneMap.get(bt) ?? 0) + 1)
-                          }
-                          for (const i of allInterms) {
-                            const bt = i.bilanType ?? getBilanType(i.zone ?? '')
-                            if (isTreatmentClosed(selectedPatient ?? '', bt as BilanType)) continue
-                            zoneMap.set(bt, (zoneMap.get(bt) ?? 0) + 1)
-                          }
-                          return Array.from(zoneMap.entries()).map(([bt, count]) => ({
-                            label: bt === 'generique' && genericCustomLabel ? genericCustomLabel : (ZONE_LABELS_SHORT[bt] ?? bt),
-                            count,
-                          }))
-                        })()}
-                        lastConsultation={lastNoteForHero?.dateSeance ?? lastBilanForHero?.dateBilan ?? null}
-                        lastConsultationZone={(() => {
-                          const lastNote = lastNoteForHero
-                          const lastBilan = lastBilanForHero
-                          const noteDate = lastNote?.dateSeance ?? ''
-                          const bilanDate = lastBilan?.dateBilan ?? ''
-                          const lastRecord = noteDate >= bilanDate ? lastNote : lastBilan
-                          if (!lastRecord) return null
-                          const bt = ('bilanType' in lastRecord ? lastRecord.bilanType : undefined) ?? getBilanType(lastRecord.zone ?? '')
-                          return bt === 'generique' && genericCustomLabel ? genericCustomLabel : (ZONE_LABELS_SHORT[bt] ?? bt)
-                        })()}
-                        onAddConsultation={() => setConsultationChooserOpen(true)}
-                      />
-
-                      {/* ── Prescription tracking (hidden for v1 launch) ── */}
-                      {false && (() => {
-                        const rx = dbPrescriptions.find(p => p.patientKey === selectedPatient)
-                        const noteCount = getPatientNotes(selectedPatient ?? '').length
-                        const bilanCount = bilans.length
-                        const intermCount = getPatientIntermediaires(selectedPatient ?? '').length
-                        const anterieures = rx?.seancesAnterieures ?? 0
-                        const totalSeances = noteCount + bilanCount + intermCount + anterieures
-                        const rxListRaw: import('./types').PrescriptionEntry[] = rx?.prescriptions ?? (rx?.nbSeancesPrescrites ? [{ id: 1, nbSeances: rx!.nbSeancesPrescrites!, datePrescription: rx!.datePrescription ?? '', prescripteur: rx!.prescripteur ?? '' }] : [])
-                        // Ne garder que les prescriptions de l'épisode courant (après la dernière clôture)
-                        const rxList = rxListRaw.filter(pr => isPrescriptionCurrent(selectedPatient ?? '', pr))
-                        const totalPrescribed = rxList.reduce((s, r) => s + r.nbSeances, 0)
-                        const overLimit = totalPrescribed > 0 && totalSeances > totalPrescribed
-
-                        // Pool of completed sessions per bilanType (for zone-scoped prescriptions)
-                        const poolFor = (bt: BilanType) => {
-                          // Ne compter que les records de l'épisode courant (après la dernière clôture)
-                          const closureTimes = getClosureTimes(selectedPatient ?? '', bt)
-                          const cutoff = closureTimes.length > 0 ? closureTimes[closureTimes.length - 1] : 0
-                          const zNotes = getPatientNotes(selectedPatient ?? '').filter(n => (n.bilanType ?? getBilanType(n.zone ?? '')) === bt && n.id > cutoff).length
-                          const zBilans = bilans.filter(b => (b.bilanType ?? getBilanType(b.zone ?? '')) === bt && b.id > cutoff).length
-                          const zInterms = getPatientIntermediaires(selectedPatient ?? '').filter(i => (i.bilanType ?? getBilanType(i.zone ?? '')) === bt && i.id > cutoff).length
-                          return zNotes + zBilans + zInterms
-                        }
-                        const consumedByBt = new Map<string, number>()
-                        const rxProgress = rxList.map(r => {
-                          const key = r.bilanType ?? '__global__'
-                          const pool = r.bilanType ? poolFor(r.bilanType) : totalSeances
-                          const consumed = consumedByBt.get(key) ?? 0
-                          const start = consumed
-                          const done = Math.min(r.nbSeances, Math.max(0, pool - consumed))
-                          consumedByBt.set(key, consumed + r.nbSeances)
-                          return { ...r, done, start }
-                        })
-
-                        // Sessions hors prescription (only relevant si aucune prescription globale)
-                        const hasGlobalRx = rxList.some(r => !r.bilanType)
-                        const coveredBts = new Set<string>(rxList.map(r => r.bilanType).filter((x): x is BilanType => !!x))
-                        const orphanSessions = hasGlobalRx
-                          ? []
-                          : (() => {
-                              const out: { kind: 'bilan' | 'note' | 'interm'; bilanType: BilanType; date: string }[] = []
-                              bilans.forEach(b => {
-                                const bt = b.bilanType ?? getBilanType(b.zone ?? '')
-                                if (!coveredBts.has(bt)) out.push({ kind: 'bilan', bilanType: bt, date: b.dateBilan ?? '' })
-                              })
-                              getPatientNotes(selectedPatient ?? '').forEach(n => {
-                                const bt = n.bilanType ?? getBilanType(n.zone ?? '')
-                                if (!coveredBts.has(bt)) out.push({ kind: 'note', bilanType: bt, date: n.dateSeance ?? '' })
-                              })
-                              getPatientIntermediaires(selectedPatient ?? '').forEach(i => {
-                                const bt = i.bilanType ?? getBilanType(i.zone ?? '')
-                                if (!coveredBts.has(bt)) out.push({ kind: 'interm', bilanType: bt, date: i.dateBilan ?? '' })
-                              })
-                              return out
-                            })()
-
-                        const saveRx = (activePrescriptions: import('./types').PrescriptionEntry[], seancesAnt?: number) => {
-                          // Préserver les prescriptions des épisodes antérieurs (avant la dernière clôture) —
-                          // elles ne sont pas visibles dans rxList mais doivent rester en base pour l'historique.
-                          const archived = rxListRaw.filter(pr => !isPrescriptionCurrent(selectedPatient ?? '', pr))
-                          const prescriptions = [...archived, ...activePrescriptions]
-                          setDbPrescriptions(prev => {
-                            const idx = prev.findIndex(p => p.patientKey === selectedPatient)
-                            const base = idx >= 0 ? prev[idx] : { patientKey: selectedPatient ?? '', prescriptions: [] }
-                            const updated = { ...base, prescriptions, ...(seancesAnt !== undefined ? { seancesAnterieures: seancesAnt } : {}) }
-                            return idx >= 0 ? prev.map((p, i) => i === idx ? updated : p) : [...prev, updated]
-                          })
-                        }
-
-                        return (
-                          <div style={{ marginBottom: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {`${totalSeances} séance${totalSeances > 1 ? 's' : ''}`}
-                                {orphanSessions.length > 0 && (
-                                  <span
-                                    onClick={() => setOrphanPopupOpen(true)}
-                                    title="Voir les séances hors prescription"
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.65rem', fontWeight: 700, color: '#d97706', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 7px', cursor: 'pointer' }}>
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                    {orphanSessions.length} hors prescription
-                                  </span>
-                                )}
-                                {overLimit && (
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                                  </svg>
-                                )}
-                              </span>
-                              <button type="button" onClick={() => {
-                                setRxEditForm({ nbSeances: '', prescripteur: rxList[rxList.length - 1]?.prescripteur ?? '', datePrescription: new Date().toLocaleDateString('fr-FR'), seancesAnterieures: String(anterieures), bilanType: '', customLabel: '' })
-                                setRxEditDoc(null)
-                                setRxEditPopup({ mode: 'add' })
-                              }} style={{ fontSize: '0.68rem', color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                                + Prescription
-                              </button>
-                            </div>
-
-                            {rxList.length > 0 && (() => {
-                              // Group by bilanType: 2 ordonnances for the same zone merge into one combined bar
-                              const groupOrder: string[] = []
-                              const groupsMap = new Map<string, typeof rxProgress>()
-                              rxProgress.forEach(r => {
-                                const key = r.bilanType ?? '__global__'
-                                if (!groupsMap.has(key)) { groupsMap.set(key, []); groupOrder.push(key) }
-                                groupsMap.get(key)!.push(r)
-                              })
-                              return (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                  {groupOrder.map(key => {
-                                    const entries = groupsMap.get(key)!
-                                    const combinedDone = entries.reduce((s, e) => s + e.done, 0)
-                                    const combinedTotal = entries.reduce((s, e) => s + e.nbSeances, 0)
-                                    const pct = combinedTotal > 0 ? Math.min(100, Math.round((combinedDone / combinedTotal) * 100)) : 0
-                                    const latest = entries[entries.length - 1]
-                                    const defaultZoneLabel = key === '__global__' ? 'Prescription' : (ZONE_LABELS_SHORT[key] ?? key)
-                                    const label = key === 'generique' && latest.customLabel ? latest.customLabel : defaultZoneLabel
-                                    const hasMultiple = entries.length > 1
-                                    const anyDoc = entries.find(e => e.document)
-                                    return (
-                                      <div key={key} style={{ cursor: 'pointer' }}
-                                        onClick={() => {
-                                          if (entries.length === 1) {
-                                            const r = entries[0]
-                                            setRxEditForm({ nbSeances: String(r.nbSeances), prescripteur: r.prescripteur, datePrescription: r.datePrescription, seancesAnterieures: String(anterieures), bilanType: r.bilanType ?? '', customLabel: r.customLabel ?? '' })
-                                            setRxEditDoc(r.document ?? null)
-                                            setRxEditPopup({ mode: 'edit', entry: r })
-                                          } else {
-                                            setRxGroupPicker(entries)
-                                          }
-                                        }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                            {label} — {combinedDone}/{combinedTotal}
-                                            {latest.prescripteur ? ` · Dr ${latest.prescripteur}` : ''}
-                                            {hasMultiple && <span style={{ marginLeft: 4, fontWeight: 700, color: 'var(--primary)' }}>· {entries.length} ord.</span>}
-                                          </span>
-                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-                                            {latest.datePrescription}
-                                            {anyDoc && (
-                                              <button type="button" onClick={e => { e.stopPropagation(); setRxDocViewer(anyDoc.document!) }}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 1, display: 'flex', alignItems: 'center' }}
-                                                title="Voir l'ordonnance">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                                              </button>
-                                            )}
-                                          </span>
-                                        </div>
-                                        <div style={{ height: 4, background: 'var(--secondary)', borderRadius: 2, overflow: 'hidden' }}>
-                                          <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? '#16a34a' : pct >= 67 ? '#f59e0b' : 'var(--primary)', borderRadius: 2, transition: 'width 0.3s' }} />
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )
-                            })()}
-
-                            {/* Popup prescription */}
-                            {rxEditPopup && (
-                              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-                                onClick={() => setRxEditPopup(null)}>
-                                <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', width: '100%', maxWidth: 340, boxShadow: 'var(--shadow-2xl)' }}>
-                                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)', marginBottom: 12 }}>
-                                    {rxEditPopup!.mode === 'add' ? 'Nouvelle prescription' : 'Modifier la prescription'}
-                                  </div>
-
-                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Nombre de séances</label>
-                                  <input type="number" min="1" value={rxEditForm.nbSeances} onChange={e => setRxEditForm(f => ({ ...f, nbSeances: e.target.value }))}
-                                    placeholder="9" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
-
-                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Traitement concerné</label>
-                                  <select value={rxEditForm.bilanType} onChange={e => setRxEditForm(f => ({ ...f, bilanType: e.target.value as BilanType | '' }))}
-                                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }}>
-                                    <option value="">Toutes zones (global)</option>
-                                    {(Object.keys(ZONE_LABELS_SHORT) as BilanType[]).map(bt => (
-                                      <option key={bt} value={bt}>{ZONE_LABELS_SHORT[bt]}</option>
-                                    ))}
-                                  </select>
-
-                                  {rxEditForm.bilanType === 'generique' && (
-                                    <>
-                                      <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Nom du traitement</label>
-                                      <input value={rxEditForm.customLabel} onChange={e => setRxEditForm(f => ({ ...f, customLabel: e.target.value }))}
-                                        placeholder="Ex : ATM, poignet, coude…" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
-                                    </>
-                                  )}
-
-                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Prescripteur</label>
-                                  <input value={rxEditForm.prescripteur} onChange={e => setRxEditForm(f => ({ ...f, prescripteur: e.target.value }))}
-                                    placeholder="Dr Dupont" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
-
-                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Date de prescription</label>
-                                  <input value={rxEditForm.datePrescription} onChange={e => setRxEditForm(f => ({ ...f, datePrescription: e.target.value }))}
-                                    placeholder="12/04/2026" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
-
-                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Séances déjà effectuées</label>
-                                  <input type="number" min="0" value={rxEditForm.seancesAnterieures} onChange={e => setRxEditForm(f => ({ ...f, seancesAnterieures: e.target.value }))}
-                                    placeholder="0" style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.88rem', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 10, boxSizing: 'border-box', background: 'var(--secondary)' }} />
-
-                                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Ordonnance</label>
-                                  {rxEditDoc ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 10px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 'var(--radius-md)' }}>
-                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                      <span style={{ flex: 1, fontSize: '0.78rem', color: '#15803d', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rxEditDoc!.name}</span>
-                                      <button type="button" onClick={() => setRxDocViewer(rxEditDoc)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                      </button>
-                                      <button type="button" onClick={() => setRxEditDoc(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                                      {[
-                                        { label: 'Photo', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>, accept: 'image/*', capture: 'environment' as const },
-                                        { label: 'Galerie', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>, accept: 'image/*', capture: undefined },
-                                        { label: 'Fichier', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, accept: 'image/*,application/pdf', capture: undefined },
-                                      ].map(opt => (
-                                        <label key={opt.label} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 4px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary)', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
-                                          {opt.icon}
-                                          {opt.label}
-                                          <input type="file" accept={opt.accept} capture={opt.capture} hidden onChange={e => {
-                                            const file = e.target.files?.[0]
-                                            if (!file) return
-                                            const reader = new FileReader()
-                                            reader.onload = () => {
-                                              const dataUrl = reader.result as string
-                                              if (file.type.startsWith('image/')) {
-                                                setRxMaskingItem({ dataUrl, name: file.name, mimeType: file.type })
-                                              } else {
-                                                const base64 = dataUrl.split(',')[1]
-                                                setRxEditDoc({ data: base64, mimeType: file.type, name: file.name })
-                                              }
-                                            }
-                                            reader.readAsDataURL(file)
-                                            e.target.value = ''
-                                          }} />
-                                        </label>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  <div style={{ display: 'flex', gap: 8 }}>
-                                    <button onClick={() => {
-                                      const nb = parseInt(rxEditForm.nbSeances, 10)
-                                      if (isNaN(nb) || nb <= 0) { showToast('Nombre de séances invalide', 'error'); return }
-                                      const ant = parseInt(rxEditForm.seancesAnterieures, 10) || 0
-                                      const bt = rxEditForm.bilanType || undefined
-                                      const cl = bt === 'generique' ? (rxEditForm.customLabel.trim() || undefined) : undefined
-                                      if (rxEditPopup!.mode === 'add') {
-                                        const newEntry: import('./types').PrescriptionEntry = { id: Date.now(), nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, ...(rxEditDoc ? { document: rxEditDoc } : {}), ...(bt ? { bilanType: bt } : {}), ...(cl ? { customLabel: cl } : {}) }
-                                        // Propager le customLabel à TOUTES les prescriptions générique du patient (un seul label par patient pour cette zone)
-                                        const nextList = cl
-                                          ? [...rxList.map(pr => pr.bilanType === 'generique' ? { ...pr, customLabel: cl } : pr), newEntry]
-                                          : [...rxList, newEntry]
-                                        saveRx(nextList, ant)
-                                      } else if (rxEditPopup!.entry) {
-                                        saveRx(rxList.map(pr => {
-                                          if (pr.id === rxEditPopup!.entry!.id) {
-                                            return { ...pr, nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, document: rxEditDoc ?? undefined, bilanType: bt, customLabel: cl }
-                                          }
-                                          // Synchroniser le customLabel sur les autres prescriptions générique
-                                          if (bt === 'generique' && pr.bilanType === 'generique') {
-                                            return { ...pr, customLabel: cl }
-                                          }
-                                          return pr
-                                        }), ant)
-                                      }
-                                      setRxEditPopup(null)
-                                    }} style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-md)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                      {rxEditPopup!.mode === 'add' ? 'Ajouter' : 'Enregistrer'}
-                                    </button>
-                                    {rxEditPopup!.mode === 'edit' && (
-                                      <button onClick={() => {
-                                        const ant = parseInt(rxEditForm.seancesAnterieures, 10) || 0
-                                        saveRx(rxList.filter(pr => pr.id !== rxEditPopup!.entry!.id), ant)
-                                        setRxEditPopup(null)
-                                      }} style={{ padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-md)', background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                        Supprimer
-                                      </button>
-                                    )}
-                                    <button onClick={() => setRxEditPopup(null)}
-                                      style={{ padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                      Annuler
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Popup séances hors prescription */}
-                            {orphanPopupOpen && (
-                              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-                                onClick={() => setOrphanPopupOpen(false)}>
-                                <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', width: '100%', maxWidth: 360, boxShadow: 'var(--shadow-2xl)' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)' }}>Séances hors prescription</div>
-                                  </div>
-                                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-                                    Ces séances ne sont rattachées à aucune prescription. Ajoute une prescription pour la zone concernée.
-                                  </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '40vh', overflowY: 'auto', marginBottom: 12 }}>
-                                    {orphanSessions.map((o, i) => (
-                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.55rem 0.7rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)' }}>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.04em', minWidth: 56 }}>
-                                          {o.kind === 'bilan' ? 'Bilan' : o.kind === 'interm' ? 'Interm.' : 'Séance'}
-                                        </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>{o.bilanType === 'generique' && rxList.find(pr => pr.bilanType === 'generique')?.customLabel ? rxList.find(pr => pr.bilanType === 'generique')!.customLabel : (ZONE_LABELS_SHORT[o.bilanType] ?? o.bilanType)}</div>
-                                          {o.date && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{o.date.includes('-') ? o.date.split('-').reverse().join('/') : o.date}</div>}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div style={{ display: 'flex', gap: 8 }}>
-                                    <button onClick={() => {
-                                      const firstBt = orphanSessions[0]?.bilanType
-                                      setOrphanPopupOpen(false)
-                                      setRxEditForm({ nbSeances: '', prescripteur: rxList[rxList.length - 1]?.prescripteur ?? '', datePrescription: new Date().toLocaleDateString('fr-FR'), seancesAnterieures: String(anterieures), bilanType: firstBt ?? '', customLabel: '' })
-                                      setRxEditDoc(null)
-                                      setRxEditPopup({ mode: 'add' })
-                                    }} style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-md)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                      Ajouter une prescription
-                                    </button>
-                                    <button onClick={() => setOrphanPopupOpen(false)}
-                                      style={{ padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                      Fermer
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Popup choix d'ordonnance dans un groupe */}
-                            {rxGroupPicker && (
-                              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-                                onClick={() => setRxGroupPicker(null)}>
-                                <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', width: '100%', maxWidth: 340, boxShadow: 'var(--shadow-2xl)' }}>
-                                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)', marginBottom: 4 }}>
-                                    {rxGroupPicker![0].bilanType === 'generique' && rxGroupPicker![0].customLabel ? rxGroupPicker![0].customLabel : (rxGroupPicker![0].bilanType ? (ZONE_LABELS_SHORT[rxGroupPicker![0].bilanType!] ?? rxGroupPicker![0].bilanType) : 'Prescription')}
-                                  </div>
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-                                    {rxGroupPicker!.length} ordonnance{rxGroupPicker!.length > 1 ? 's' : ''} — sélectionne celle à modifier
-                                  </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                                    {rxGroupPicker!.map((r, i) => (
-                                      <button key={r.id} type="button" onClick={() => {
-                                        setRxEditForm({ nbSeances: String(r.nbSeances), prescripteur: r.prescripteur, datePrescription: r.datePrescription, seancesAnterieures: String(anterieures), bilanType: r.bilanType ?? '', customLabel: r.customLabel ?? '' })
-                                        setRxEditDoc(r.document ?? null)
-                                        setRxGroupPicker(null)
-                                        setRxEditPopup({ mode: 'edit', entry: r })
-                                      }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.7rem 0.85rem', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', textAlign: 'left' }}>
-                                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.78rem', flexShrink: 0 }}>{i + 1}</div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                                            {r.done}/{r.nbSeances} séances
-                                          </div>
-                                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                            {r.datePrescription}{r.prescripteur ? ` · Dr ${r.prescripteur}` : ''}
-                                          </div>
-                                        </div>
-                                        {r.document && (
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                        )}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  <button onClick={() => setRxGroupPicker(null)}
-                                    style={{ width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                    Fermer
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Viewer ordonnance */}
-                            {rxDocViewer && (
-                              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-                                onClick={() => setRxDocViewer(null)}>
-                                <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '1rem', maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto', boxShadow: 'var(--shadow-2xl)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--primary-dark)' }}>Ordonnance</span>
-                                    <button onClick={() => setRxDocViewer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    </button>
-                                  </div>
-                                  {rxDocViewer!.mimeType === 'application/pdf' ? (
-                                    <iframe src={`data:application/pdf;base64,${rxDocViewer!.data}`} style={{ width: '80vw', height: '75vh', border: 'none', borderRadius: 8 }} />
-                                  ) : (
-                                    <img src={`data:${rxDocViewer!.mimeType};base64,${rxDocViewer!.data}`} alt="Ordonnance" style={{ maxWidth: '80vw', maxHeight: '75vh', objectFit: 'contain', borderRadius: 8 }} />
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })()}
-
-                      {/* ── Banner sans bilan ────────────────── */}
-                      {bilans.length === 0 && (
-                        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius-lg)', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem', color: '#92400e' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                          <span>Aucun bilan initial — vous pouvez en créer un à tout moment via le bouton ci-dessous.</span>
-                        </div>
-                      )}
-
-                      {/* ── Objectifs SMART ────────────────── */}
-                      <div style={{ marginBottom: '0.75rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0.5rem', marginBottom: '0.5rem' }}>
-                          <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>OBJECTIFS SMART</span>
-                          <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                        </div>
-                        <SmartObjectifs objectifs={dbObjectifs} patientKey={selectedPatient ?? ''} onUpdate={setDbObjectifs} maxObjectifs={zonesForPicker.length} />
-                      </div>
-
-                      {/* Amélioration globale supprimée — pourcentage intégré dans le graphique */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingBottom: '5rem' }}>
-                        {(() => {
-                          const ZONE_SECTION_LABELS: Record<string, string> = {
-                            epaule: 'Épaule',
-                            cheville: 'Cheville',
-                            genou: 'Genou',
-                            hanche: 'Hanche',
-                            cervical: 'Rachis Cervical',
-                            lombaire: 'Rachis Lombaire',
-                            generique: 'Autres bilans',
-                            geriatrique: 'Gériatrie',
-                          }
-                          const groupMap = new Map<string, typeof bilans>()
-                          bilans.forEach(record => {
-                            const key = record.bilanType ?? getBilanType(record.zone ?? '')
-                            if (!groupMap.has(key)) groupMap.set(key, [])
-                            groupMap.get(key)!.push(record)
-                          })
-                          // Zones qui n'ont pas de bilan initial mais ont des intermédiaires ou des séances :
-                          // créer un groupe vide pour qu'elles apparaissent dans le rendu zone-scoped (avec boutons).
-                          getPatientIntermediaires(selectedPatient ?? '').forEach(r => {
-                            const key = r.bilanType ?? getBilanType(r.zone ?? '')
-                            if (!groupMap.has(key)) groupMap.set(key, [])
-                          })
-                          getPatientNotes(selectedPatient ?? '').forEach(n => {
-                            const key = n.bilanType ?? getBilanType(n.zone ?? '')
-                            if (!groupMap.has(key)) groupMap.set(key, [])
-                          })
-                          // Zones créées depuis une prescription (même sans bilan/séance) : section vide.
-                          // Inclut les zones clôturées avec seulement des prescriptions archivées
-                          // (pour afficher la barre verte "Prescription clôturée" sans avoir besoin d'un bilan).
-                          ;(dbPrescriptions.find(p => p.patientKey === selectedPatient)?.prescriptions ?? []).forEach(pr => {
-                            if (pr.bilanType && !groupMap.has(pr.bilanType)) {
-                              groupMap.set(pr.bilanType, [])
-                            }
-                          })
-                          const groups = Array.from(groupMap.entries())
-                          const showSections = groups.length > 1
-                          // Expansion en (zoneType × épisode) — chaque épisode rend sa propre carte.
-                          // Une PEC clôturée puis reprise (nouvelle ordo) donne 2 cartes distinctes :
-                          // une verte "PEC terminée" (ancien épisode) + une active (nouvel épisode).
-                          type ZoneEp = { zoneType: BilanType; zoneBilansAll: BilanRecord[]; episode: TreatmentEpisode; totalEpisodes: number }
-                          const zoneEps: ZoneEp[] = groups.flatMap(([zoneType, zoneBilansAll]) => {
-                            const eps = getTreatmentEpisodes(selectedPatient ?? '', zoneType as BilanType)
-                            if (eps.length === 0) return [{ zoneType: zoneType as BilanType, zoneBilansAll, episode: { idx: 0, startExclusive: Number.NEGATIVE_INFINITY, endInclusive: Number.POSITIVE_INFINITY, isActive: true } as TreatmentEpisode, totalEpisodes: 1 }]
-                            return eps.map(ep => ({ zoneType: zoneType as BilanType, zoneBilansAll, episode: ep, totalEpisodes: eps.length }))
-                          })
-                          zoneEps.sort((a, b) => (a.episode.isActive === b.episode.isActive ? 0 : a.episode.isActive ? -1 : 1))
-                          return zoneEps.map(({ zoneType, zoneBilansAll, episode, totalEpisodes }) => {
-                            const inEp = (id: number) => id > episode.startExclusive && id <= episode.endInclusive
-                            const zoneBilans = zoneBilansAll.filter(b => inEp(b.id))
-                            // ── Graphique d'évolution EVN/EVA pour cette zone ──
-                            const evolutionPoints: EvolutionPoint[] = (() => {
-                              const pts: EvolutionPoint[] = []
-                              // 1) Bilans initiaux
-                              for (const b of zoneBilans) {
-                                // evn peut être number, string-number, ou absent
-                                // Cascade : evn direct → douleur.evnPire → douleur.evnMoy → douleur.evnMvt → douleur.evnRepos → douleur.evnMieux
-                                const directEvn = b.evn != null ? parseFloat(String(b.evn)) : NaN
-                                const d = b.bilanData?.douleur as Record<string, unknown> | undefined
-                                const tryParse = (...keys: string[]) => {
-                                  for (const k of keys) {
-                                    const v = parseFloat(String(d?.[k] ?? ''))
-                                    if (!isNaN(v)) return v
-                                  }
-                                  return NaN
-                                }
-                                const fallbackEvn = tryParse('evnPire', 'evnMoy', 'evnMvt', 'evnRepos', 'evnMieux')
-                                const evnNum = !isNaN(directEvn) ? directEvn : (!isNaN(fallbackEvn) ? fallbackEvn : null)
-                                if (evnNum == null) continue
-                                pts.push({
-                                  date: b.dateBilan,
-                                  value: evnNum,
-                                  kind: 'bilan',
-                                  label: `Bilan initial · ${b.dateBilan}`,
-                                })
-                              }
-                              // 2) Intermédiaires de cette zone (épisode courant)
-                              const zoneInters = getPatientIntermediaires(selectedPatient ?? '')
-                                .filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id))
-                              for (const r of zoneInters) {
-                                const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}
-                                const evnObj = (tc.evn as Record<string, unknown>) ?? {}
-                                const v = parseFloat(String(evnObj.pireActuel ?? evnObj.moyActuel ?? ''))
-                                if (isNaN(v)) continue
-                                pts.push({
-                                  date: r.dateBilan,
-                                  value: v,
-                                  kind: 'intermediaire',
-                                  label: `Bilan intermédiaire · ${r.dateBilan}`,
-                                })
-                              }
-                              // 3) Notes de séance de cette zone (épisode courant)
-                              const zoneNotes = dbNotes
-                                .filter(n => n.patientKey === selectedPatient && (n.bilanType ?? getBilanType(n.zone ?? '')) === zoneType && inEp(n.id))
-                              for (const n of zoneNotes) {
-                                const v = parseFloat(String(n.data.eva ?? ''))
-                                if (isNaN(v)) continue
-                                pts.push({
-                                  date: n.dateSeance,
-                                  value: v,
-                                  kind: 'note',
-                                  label: `Séance n°${n.numSeance} · ${n.dateSeance}`,
-                                })
-                              }
-                              return pts
-                            })()
-                            const zoneClosed = !episode.isActive
-                            // Épisodes clôturés : repliés par défaut, mais dépliables via tap sur le header.
-                            // Épisodes actifs : dépliés par défaut, repliables via tap.
-                            const closedEpKey = episode.closure ? `${selectedPatient ?? ''}::${zoneType}::${episode.closure.id}` : ''
-                            const zoneCollapsed = zoneClosed
-                              ? !expandedClosedEpisodes.has(closedEpKey)
-                              : isZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
-                            const toggleThisEpisode = () => {
-                              if (zoneClosed) {
-                                setExpandedClosedEpisodes(prev => {
-                                  const next = new Set(prev)
-                                  if (next.has(closedEpKey)) next.delete(closedEpKey); else next.add(closedEpKey)
-                                  return next
-                                })
-                              } else {
-                                toggleZoneCollapsed(selectedPatient ?? '', zoneType as BilanType)
-                              }
-                            }
-                            const zoneIntermCount = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id)).length
-                            const zoneNotesCount = getPatientNotes(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id)).length
-                            // Prescriptions de CET épisode uniquement (id dans la fenêtre)
-                            const rxListForZone = (dbPrescriptions.find(p => p.patientKey === selectedPatient)?.prescriptions ?? []).filter(pr => pr.bilanType === zoneType && inEp(pr.id))
-                            // Le libellé "ATM"/custom vient d'une prescription de l'épisode
-                            const rxForZone = rxListForZone[0]
-                            const customZoneLabel = zoneType === 'generique' ? rxForZone?.customLabel : undefined
-                            const zoneLabel = customZoneLabel ?? (ZONE_SECTION_LABELS[zoneType] ?? zoneType)
-                            const closure = episode.closure
-                            // Pool de l'épisode = tous les records de l'épisode (pas seulement ≤ closure, puisqu'ils sont déjà filtrés)
-                            const zonePoolSize = zoneBilans.length + zoneIntermCount + zoneNotesCount
-                            let consumedZone = 0
-                            const rxZoneProgress = rxListForZone.map(r => {
-                              const done = Math.min(r.nbSeances, Math.max(0, zonePoolSize - consumedZone))
-                              consumedZone += r.nbSeances
-                              return { ...r, done }
-                            })
-                            const zoneTotalDone = rxZoneProgress.reduce((s, r) => s + r.done, 0)
-                            const zoneTotalPrescribed = rxZoneProgress.reduce((s, r) => s + r.nbSeances, 0)
-                            const latestRxForZone = rxListForZone[rxListForZone.length - 1]
-                            const isZoneEmpty = zoneBilans.length === 0 && zoneNotesCount === 0 && zoneIntermCount === 0
-                            // Suffixe d'épisode quand plusieurs épisodes coexistent pour une même zone
-                            const episodeSuffix = totalEpisodes > 1 ? ` · Épisode ${episode.idx + 1}` : ''
-                            return (
-                            <div key={`${zoneType}-ep${episode.idx}`} style={{ marginTop: '0.75rem' }}>
-                            <SwipeToDelete
-                              disabled={!zoneClosed}
-                              onDelete={() => {
-                                if (confirm(`Supprimer définitivement cet épisode clôturé de ${zoneLabel} ? Tous les bilans, séances, interm. et ordonnances de cet épisode seront perdus.`)) {
-                                  deleteClosedEpisode(selectedPatient ?? '', zoneType as BilanType, episode)
-                                }
-                              }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.5rem 0.75rem 0.85rem', borderRadius: 12, border: `1px solid ${zoneClosed ? c.borderSoft : `${c.primary}18`}`, background: zoneClosed ? '#f4f6f8' : 'var(--input-bg)', boxShadow: zoneClosed ? 'none' : '0 1px 6px rgba(0,0,0,0.05)' }}>
-                              <div
-                                onClick={toggleThisEpisode}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.4rem 0 0.4rem', cursor: 'pointer', userSelect: 'none' }}>
-                                <div style={{ width: 26, height: 26, borderRadius: 7, background: zoneClosed ? c.surfaceMuted : 'var(--secondary)', color: zoneClosed ? c.textFaint : c.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                  {zoneClosed ? (
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                  ) : (
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1"/></svg>
-                                  )}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 700, fontSize: '0.92rem', color: c.text, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {zoneLabel}{episodeSuffix && <span style={{ fontWeight: 500, color: c.textMuted, fontSize: '0.78rem' }}>{episodeSuffix}</span>}
-                                    {zoneClosed && (
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '0.15rem 0.5rem', borderRadius: 9999, background: c.successBg, color: c.success, fontSize: '0.68rem', fontWeight: 700 }}>
-                                        PEC terminée
-                                      </span>
-                                    )}
-                                    {zoneClosed && (
-                                      <button
-                                        type="button"
-                                        onClick={e => {
-                                          e.stopPropagation()
-                                          if (confirm(`Reprendre la prise en charge ${zoneLabel} ? L'épisode sera rouvert avec tout son historique.`)) {
-                                            reopenTreatment(selectedPatient ?? '', zoneType as BilanType, episode)
-                                          }
-                                        }}
-                                        style={{ padding: '0.15rem 0.55rem', borderRadius: 9999, background: c.infoSoft, border: `1px solid ${c.infoBg}`, color: c.primaryLight, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer' }}
-                                      >
-                                        Reprendre
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: '0.72rem', color: c.textMuted, marginTop: 2, display: 'flex', gap: 12 }}>
-                                    {zoneBilans.length > 0 && <span>{zoneBilans.length} bilan{zoneBilans.length > 1 ? 's' : ''}</span>}
-                                    {zoneNotesCount > 0 && <span>{zoneNotesCount} séance{zoneNotesCount > 1 ? 's' : ''}</span>}
-                                    {zoneIntermCount > 0 && <span>{zoneIntermCount} interm.</span>}
-                                    {zoneBilans.length === 0 && zoneNotesCount === 0 && zoneIntermCount === 0 && <span>Aucune activité</span>}
-                                  </div>
-                                </div>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.textMuted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: zoneCollapsed ? 'rotate(0)' : 'rotate(180deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
-                                  <polyline points="6 9 12 15 18 9"/>
-                                </svg>
-                              </div>
-                              {zoneClosed && zoneTotalPrescribed > 0 && (
-                                <div style={{ padding: '0.55rem 0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--radius-md)', margin: '0.2rem 0' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <span style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                      Prescription clôturée — {zoneTotalDone}/{zoneTotalPrescribed}
-                                      {latestRxForZone?.prescripteur ? ` · Dr ${latestRxForZone.prescripteur}` : ''}
-                                    </span>
-                                    <span style={{ fontSize: '0.62rem', color: '#166534' }}>{latestRxForZone?.datePrescription}</span>
-                                  </div>
-                                  <div style={{ height: 4, background: '#dcfce7', borderRadius: 2, overflow: 'hidden' }}>
-                                    <div style={{ height: '100%', width: `${zoneTotalPrescribed > 0 ? Math.min(100, Math.round((zoneTotalDone / zoneTotalPrescribed) * 100)) : 0}%`, background: '#16a34a', borderRadius: 2 }} />
-                                  </div>
-                                </div>
-                              )}
-                              {zoneClosed && closure && (
-                                <div style={{ fontSize: '0.72rem', color: '#166534', padding: '0 0.4rem', fontStyle: 'italic' }}>
-                                  Clôturée le {new Date(closure.closedAt).toLocaleDateString('fr-FR')} — cette PEC est ignorée par les analyses IA des autres zones (résumée en antécédent seulement).
-                                </div>
-                              )}
-                              {!zoneCollapsed && (<>
-                              {(() => {
-                                const initialBodyChart = (zoneBilans[0]?.bilanData?.douleur as Record<string, unknown> | undefined)?.bodyChart as string | undefined
-                                return initialBodyChart ? <TreatmentBodyChart drawing={initialBodyChart} /> : null
-                              })()}
-                              <EvolutionChart
-                                points={evolutionPoints}
-                                title={`Évolution EVN — ${zoneLabel}`}
-                                improvementPct={(() => {
-                                  if (evolutionPoints.length < 2) return null
-                                  const first = evolutionPoints[0].value
-                                  const last = evolutionPoints[evolutionPoints.length - 1].value
-                                  if (first === 0) return null
-                                  return Math.round(((first - last) / first) * 100)
-                                })()}
-                              />
-                              <ScoreEvolutionChart
-                                bilans={zoneBilans}
-                                intermediaires={dbIntermediaires.filter(r => r.patientKey === selectedPatient && (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id))}
-                              />
-                              {zoneBilans.map((record, index) => {
-                          const prevEvn = index > 0 ? zoneBilans[index - 1].evn : null
-                          const currEvn = record.evn
-                          const delta   = (prevEvn != null && currEvn != null) ? improvDelta(prevEvn, currEvn) : null
-                          const dColor  = delta === null ? '' : delta > 0 ? '#166534' : delta < 0 ? '#881337' : '#94a3b8'
-
-                          const incomplet = record.status === 'incomplet'
-                          const bilanKey = `bilan-${record.id}`
-                          const bilanOpen = openTimelineKey === bilanKey
-                          return (
-                            <div key={record.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: `1.5px solid ${bilanOpen ? 'var(--border-soft)' : 'var(--info-bg)'}`, boxShadow: bilanOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
-                              <div
-                                role="button"
-                                onClick={() => toggleTimeline(bilanKey)}
-                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0.55rem 0.9rem', cursor: 'pointer' }}
-                              >
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: '0.88rem', lineHeight: 1.35 }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Bilan n°{index + 1}</span>
-                                    {editingLabelBilanId === record.id ? (
-                                      <input
-                                        autoFocus
-                                        value={labelDraft}
-                                        onClick={e => e.stopPropagation()}
-                                        onChange={e => setLabelDraft(e.target.value)}
-                                        onBlur={() => {
-                                          const trimmed = labelDraft.trim()
-                                          setDb(prev => prev.map(r => r.id === record.id ? { ...r, customLabel: trimmed || undefined } : r))
-                                          setEditingLabelBilanId(null)
-                                        }}
-                                        onKeyDown={e => {
-                                          if (e.key === 'Enter') { (e.target as HTMLInputElement).blur() }
-                                          if (e.key === 'Escape') { setEditingLabelBilanId(null) }
-                                        }}
-                                        placeholder="Ex : tendinopathie coiffe des rotateurs"
-                                        style={{ display: 'inline', marginLeft: 4, fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-main)', padding: '2px 6px', border: '1.5px solid var(--primary)', borderRadius: 6, outline: 'none', background: 'var(--surface)', width: 'calc(100% - 90px)' }}
-                                      />
-                                    ) : (
-                                      <span
-                                        onClick={e => { e.stopPropagation(); setEditingLabelBilanId(record.id); setLabelDraft(record.customLabel ?? '') }}
-                                        title={record.customLabel ? 'Cliquer pour modifier' : 'Cliquer pour ajouter un titre'}
-                                        style={{ fontSize: '0.78rem', fontWeight: 500, color: record.customLabel ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: record.customLabel ? 'normal' : 'italic', cursor: 'pointer' }}
-                                      >
-                                        {record.customLabel ? <>&nbsp;: {record.customLabel}</> : (
-                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 4, verticalAlign: 'middle' }}>
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                            titre
-                                          </span>
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--primary-light)', marginTop: 1 }}>
-                                    {record.dateBilan}{currEvn != null ? ` · EVN ${currEvn}` : ''}{!showSections && record.zone ? ` · ${record.zone}` : ''}
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                  {incomplet ? (
-                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#991b1b' }}>Incomplet</span>
-                                  ) : delta !== null ? (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.76rem', color: dColor, letterSpacing: '-0.01em' }}>
-                                      {delta > 0 ? (
-                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                                      ) : delta < 0 ? (
-                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                      ) : (
-                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                      )}
-                                      {Math.abs(delta)}%
-                                    </span>
-                                  ) : null}
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--info-border-strong)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: bilanOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-                                </div>
-                              </div>
-                              {bilanOpen && (incomplet ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
-                                  <button
-                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                    onClick={() => {
-                                      setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
-                                      setSelectedBodyZone(record.zone ?? null)
-                                      setCurrentBilanId(record.id)
-                                      setCurrentBilanDataOverride(record.bilanData ?? null)
-                                      setBilanNotes(record.notes ?? '')
-                                      setSilhouetteData(record.silhouetteData ?? {})
-                                      setBilanDocuments(record.documents ?? [])
-                                      setBilanZoneBackStep('database')
-                                      setStep('bilan_zone')
-                                    }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 13 20 8 15 3"/><path d="M4 20v-3a5 5 0 0 1 5-5h11"/></svg>
-                                    Reprendre le bilan
-                                  </button>
-                                  <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
-                                    <button onClick={() => setDeletingBilanId(record.id)}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                                      Supprimer
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
-                                  {record.analyseIA && (
-                                    <div style={{ marginBottom: 2 }}>
-                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: 'var(--info-soft)', color: 'var(--primary)', border: '1px solid var(--border-soft)' }}>Analysé</span>
-                                    </div>
-                                  )}
-                                  {/* Rangée 1 : Bilan PDF + Analyse */}
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    <button
-                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.82rem', cursor: exportingRecordId === record.id ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: exportingRecordId === record.id ? 0.75 : 1 }}
-                                      onClick={() => exportBilanFromRecord(record)}
-                                      disabled={exportingRecordId === record.id}>
-                                      {exportingRecordId === record.id ? (
-                                        <span className="spinner-sm" />
-                                      ) : (
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                                        </svg>
-                                      )}
-                                      Bilan PDF
-                                    </button>
-                                    <button
-                                      style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 10, background: 'var(--info-soft)', border: '1.5px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                                      onClick={() => {
-                                        setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
-                                        setSelectedBodyZone(record.zone ?? null)
-                                        setCurrentBilanId(record.id)
-                                        setCurrentAnalyseIA(record.analyseIA ?? null)
-                                        setCurrentBilanDataOverride(record.bilanData ?? null)
-                                        setBilanDocuments(record.documents ?? [])
-                                        setStep('analyse_ia')
-                                      }}>
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
-                                      </svg>
-                                      Analyser
-                                    </button>
-                                  </div>
-                                  {/* Rangée 2 : Fiche d'exercices */}
-                                  <button
-                                    style={{ width: '100%', padding: '0.6rem 1rem', borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                    onClick={() => {
-                                      setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
-                                      setSelectedBodyZone(record.zone ?? null)
-                                      setCurrentBilanId(record.id)
-                                      setCurrentAnalyseIA(record.analyseIA ?? null)
-                                      setCurrentBilanDataOverride(record.bilanData ?? null)
-                                      setFicheBackStep('database')
-                                      setStep('fiche_exercice')
-                                    }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                                    </svg>
-                                    Fiche d'exercices
-                                  </button>
-                                  {/* Rangée 3 : Résumé / Modifier / Supprimer — liens discrets */}
-                                  <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
-                                    <button
-                                      onClick={() => setResumeBilan({ record, bilanNum: index + 1 })}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                                      Résumé
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
-                                        setSelectedBodyZone(record.zone ?? null)
-                                        setCurrentBilanId(record.id)
-                                        setCurrentBilanDataOverride(record.bilanData ?? null)
-                                        setBilanNotes(record.notes ?? '')
-                                        setSilhouetteData(record.silhouetteData ?? {})
-                                        setBilanDocuments(record.documents ?? [])
-                                        setBilanZoneBackStep('database')
-                                        setStep('bilan_zone')
-                                      }}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                      Modifier
-                                    </button>
-                                    <button onClick={() => setDeletingBilanId(record.id)}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                                      Supprimer
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )
-                        })}
-                              {(() => {
-                                // ── Timeline chronologique (bilans intermédiaires + notes de séance de cet épisode) ──
-                                const zoneInters = getPatientIntermediaires(selectedPatient ?? '').filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType && inEp(r.id))
-                                const zoneNotes = dbNotes.filter(n => n.patientKey === selectedPatient && (n.bilanType ?? getBilanType(n.zone ?? '')) === zoneType && inEp(n.id)).sort((a, b) => {
-                                  const ta = parseFrDate(a.dateSeance), tb = parseFrDate(b.dateSeance)
-                                  if (ta !== tb) return ta - tb
-                                  return a.id - b.id
-                                })
-                                if (zoneInters.length === 0 && zoneNotes.length === 0) return null
-                                // Index par id pour afficher "Intermédiaire N°X" (position chronologique)
-                                const intermIndexById = new Map<number, number>()
-                                zoneInters.forEach((r, i) => intermIndexById.set(r.id, i))
-                                // Timeline mêlée triée par date croissante
-                                type InterItem = { kind: 'interm'; d: number; rec: BilanIntermediaireRecord }
-                                type NoteItem = { kind: 'note'; d: number; rec: NoteSeanceRecord }
-                                const timeline: Array<InterItem | NoteItem> = [
-                                  ...zoneInters.map(r => ({ kind: 'interm' as const, d: parseFrDate(r.dateBilan), rec: r })),
-                                  ...zoneNotes.map(n => ({ kind: 'note' as const, d: parseFrDate(n.dateSeance), rec: n })),
-                                ].sort((a, b) => a.d - b.d)
-                                return (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                    {timeline.map(item => {
-                                      if (item.kind === 'note') {
-                                        const note = item.rec
-                                        const ZONE_LABELS: Record<string, string> = { epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche', cervical: 'Cervical', lombaire: 'Lombaire', generique: 'Général', geriatrique: 'Gériatrie' }
-                                        const zt = note.bilanType ?? getBilanType(note.zone ?? '')
-                                        const noteKey = `note-${note.id}`
-                                        const noteOpen = openTimelineKey === noteKey
-                                        return (
-                                          <div key={`note-${note.id}`} style={{ background: 'var(--surface)', borderRadius: 12, border: `1.5px solid ${noteOpen ? '#ddd6fe' : '#ede9fe'}`, boxShadow: noteOpen ? '0 1px 3px rgba(109,40,217,0.06)' : 'none', overflow: 'hidden' }}>
-                                            <div
-                                              role="button"
-                                              onClick={() => toggleTimeline(noteKey)}
-                                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '0.55rem 0.75rem', cursor: 'pointer' }}
-                                            >
-                                              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#5b21b6' }}>Séance n°{note.numSeance}</span>
-                                                <span style={{ fontSize: '0.72rem', color: '#6d28d9' }}>{note.dateSeance}</span>
-                                              </div>
-                                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                                {note.data.eva != null && note.data.eva !== '' && <span style={{ fontSize: '0.66rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', background: '#ede9fe', color: '#6d28d9' }}>EVA {note.data.eva}</span>}
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: noteOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-                                              </div>
-                                            </div>
-                                            {noteOpen && (
-                                            <div style={{ padding: '0 0.75rem 0.75rem' }}>
-                                            {(note.data.evolution || note.data.tolerance) && (
-                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-                                              {note.data.evolution && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.evolution === 'Amélioré' ? '#dcfce7' : note.data.evolution === 'Aggravé' ? '#fef2f2' : '#f3f4f6', color: note.data.evolution === 'Amélioré' ? '#166534' : note.data.evolution === 'Aggravé' ? '#881337' : '#6b7280' }}>{note.data.evolution}</span>}
-                                              {note.data.tolerance && <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: note.data.tolerance === 'Bien toléré' ? '#dcfce7' : '#fffbeb', color: note.data.tolerance === 'Bien toléré' ? '#166534' : '#d97706' }}>{note.data.tolerance}</span>}
-                                            </div>
-                                            )}
-                                            {(() => {
-                                              const hasDetail = note.data.interventions.length > 0 || note.data.detailDosage || note.data.noteSubjective || note.data.toleranceDetail || note.data.prochaineEtape.length > 0 || note.data.notePlan
-                                              if (!hasDetail) return null
-                                              const isDetailOpen = openNoteDetailIds.has(note.id)
-                                              return (
-                                                <div style={{ marginBottom: 8 }}>
-                                                  <button
-                                                    onClick={() => setOpenNoteDetailIds(prev => { const next = new Set(prev); if (next.has(note.id)) next.delete(note.id); else next.add(note.id); return next })}
-                                                    style={{ width: '100%', padding: '0.3rem 0.7rem', borderRadius: isDetailOpen ? '8px 8px 0 0' : 8, background: '#f5f3ff', border: '1px solid #ede9fe', color: '#7c3aed', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <span>Détails séance</span>
-                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isDetailOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="6 9 12 15 18 9"/></svg>
-                                                  </button>
-                                                  {isDetailOpen && (
-                                                    <div style={{ background: '#f5f3ff', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: '#5b21b6', lineHeight: 1.5, borderTop: '1px solid #ede9fe' }}>
-                                                      {note.data.interventions.length > 0 && (<div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Traitement :</span> {note.data.interventions.join(', ')}</div>)}
-                                                      {note.data.detailDosage && <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Dosage :</span> {note.data.detailDosage}</div>}
-                                                      {note.data.noteSubjective && <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Ressenti :</span> {note.data.noteSubjective}</div>}
-                                                      {note.data.toleranceDetail && <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Tolérance :</span> {note.data.toleranceDetail}</div>}
-                                                      {note.data.prochaineEtape.length > 0 && (<div style={{ marginBottom: 4 }}><span style={{ fontWeight: 700 }}>Prochaine étape :</span> {note.data.prochaineEtape.join(', ')}</div>)}
-                                                      {note.data.notePlan && <div><span style={{ fontWeight: 700 }}>Note :</span> {note.data.notePlan}</div>}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              )
-                                            })()}
-                                            {note.analyseIA && (() => {
-                                              const isOpen = openAnalyseNoteIds.has(note.id)
-                                              return (
-                                                <div style={{ marginBottom: 8 }}>
-                                                  <button
-                                                    onClick={() => setOpenAnalyseNoteIds(prev => { const next = new Set(prev); if (next.has(note.id)) next.delete(note.id); else next.add(note.id); return next })}
-                                                    style={{ width: '100%', padding: '0.4rem 0.7rem', borderRadius: isOpen ? '8px 8px 0 0' : 8, background: 'var(--info-soft)', border: '1px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <span>Analyse</span>
-                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="6 9 12 15 18 9"/></svg>
-                                                  </button>
-                                                  {isOpen && (
-                                                    <div style={{ background: 'var(--info-soft)', borderRadius: '0 0 8px 8px', padding: '0.55rem 0.7rem', fontSize: '0.75rem', color: 'var(--primary)', lineHeight: 1.5, borderLeft: '3px solid var(--primary-light)', borderTop: 'none' }}>
-                                                      <div style={{ marginBottom: 3 }}>{note.analyseIA.resume}</div>
-                                                      <div style={{ marginBottom: 3, fontSize: '0.72rem' }}>{note.analyseIA.evolution}</div>
-                                                      {note.analyseIA.vigilance.length > 0 && (<div style={{ color: '#dc2626', fontSize: '0.72rem', marginBottom: 3 }}>Vigilance : {note.analyseIA.vigilance.join(' / ')}</div>)}
-                                                      <div style={{ fontWeight: 600, fontSize: '0.72rem' }}>Focus : {note.analyseIA.focus}</div>
-                                                      {note.analyseIA.conseil && (<div style={{ marginTop: 4, padding: '0.4rem 0.55rem', background: '#f0fdf4', borderRadius: 6, border: '1px solid #bbf7d0', color: '#15803d', fontSize: '0.72rem' }}><span style={{ fontWeight: 700 }}>Conseil :</span> {note.analyseIA.conseil}</div>)}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              )
-                                            })()}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                              <div style={{ display: 'flex', gap: 6 }}>
-                                                <button
-                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: 'var(--info-soft)', border: '1.5px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                                                  onClick={async () => {
-                                                    if (!apiKey) { showToast('Clé API requise', 'error'); return }
-                                                    showToast('Analyse en cours...', 'success')
-                                                    try {
-                                                      const patKey = note.patientKey
-                                                      const allNotes = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === zt).sort((a, b) => a.id - b.id)
-                                                      const allBilans = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
-                                                      const allInters = dbIntermediaires.filter(r => r.patientKey === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
-                                                      const bilansStr = allBilans.map(b => {
-                                                        const d = b.bilanData?.douleur as Record<string, unknown> | undefined
-                                                        const sc = b.bilanData?.scores as Record<string, unknown> | undefined
-                                                        const lines = [`--- Bilan initial ${b.dateBilan} ---`, `EVN : ${b.evn ?? '?'}/10`]
-                                                        if (d?.douleurType) lines.push(`Type douleur : ${d.douleurType} | Évolution : ${d.situation ?? 'N/R'} | Nocturne : ${d.douleurNocturne ?? 'N/R'}`)
-                                                        if (sc && Object.keys(sc).length > 0) lines.push(`Scores : ${JSON.stringify(sc)}`)
-                                                        if (b.analyseIA) lines.push(`Diagnostic IA : ${b.analyseIA.diagnostic.titre} — ${b.analyseIA.diagnostic.description}`)
-                                                        if (b.ficheExercice?.markdown) { const md = b.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
-                                                        return lines.join('\n')
-                                                      }).join('\n\n')
-                                                      const intersStr = allInters.map(r => {
-                                                        const tc2 = (r.data?.troncCommun as Record<string, unknown>) ?? {}
-                                                        const evn2 = (tc2.evn as Record<string, unknown>) ?? {}
-                                                        const lines = [`--- Bilan intermédiaire ${r.dateBilan} ---`, `EVN pire : ${evn2.pireActuel ?? '?'}/10 (initial: ${evn2.pireInitial ?? '?'}) | Évolution globale : ${tc2.evolutionGlobale ?? 'N/R'}`]
-                                                        if (r.analyseIA) lines.push(`Diagnostic IA : ${r.analyseIA.noteDiagnostique.titre} — ${r.analyseIA.noteDiagnostique.evolution}`)
-                                                        if (r.ficheExercice?.markdown) { const md = r.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
-                                                        return lines.join('\n')
-                                                      }).join('\n\n')
-                                                      const notesStr = allNotes.map(n => {
-                                                        const lines = [`--- Séance n°${n.numSeance} (${n.dateSeance}) ---`,
-                                                          `EVA : ${n.data.eva}/10 | Observance : ${n.data.observance} | Tolérance : ${n.data.tolerance}${n.data.toleranceDetail ? ` (${n.data.toleranceDetail})` : ''}`,
-                                                          `Évolution : ${n.data.evolution}`,
-                                                          `Interventions : ${n.data.interventions.join(', ')}`]
-                                                        if (n.data.prochaineEtape?.length) lines.push(`Prochaines étapes : ${n.data.prochaineEtape.join(', ')}`)
-                                                        if (n.data.noteSubjective) lines.push(`Ressenti patient : ${n.data.noteSubjective}`)
-                                                        if (n.analyseIA) {
-                                                          if (n.analyseIA.resume) lines.push(`Analyse : ${n.analyseIA.resume}`)
-                                                          if (n.analyseIA.focus) lines.push(`Focus : ${n.analyseIA.focus}`)
-                                                          if (n.analyseIA.conseil) lines.push(`Conseil : ${n.analyseIA.conseil}`)
-                                                        }
-                                                        if (n.ficheExercice?.markdown) { const md = n.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
-                                                        return lines.join('\n')
-                                                      }).join('\n\n')
-                                                      const historiqueStr = [bilansStr, intersStr, notesStr].filter(Boolean).join('\n\n')
-                                                      const raw = await callClaudeSecure({
-                                                        apiKey,
-                                                        systemPrompt: 'Tu es un kinésithérapeute expert. Analyse la séance actuelle dans le contexte de tout l\'historique COMPLET du patient (bilans, bilans intermédiaires, séances précédentes, analyses IA, exercices prescrits). Sois concis. Réponds UNIQUEMENT en JSON valide.',
-                                                        userPrompt: `HISTORIQUE COMPLET DU PATIENT (${ZONE_LABELS[zt] ?? zt}) :\n${historiqueStr}\n\nSÉANCE ACTUELLE (n°${note.numSeance}) :\nEVA : ${note.data.eva}/10\nÉvolution : ${note.data.evolution}\nObservance : ${note.data.observance}\nInterventions : ${note.data.interventions.join(', ')}\nDosage : ${note.data.detailDosage}\nTolérance : ${note.data.tolerance} ${note.data.toleranceDetail}\nRessenti : ${note.data.noteSubjective}\nProchaine étape : ${note.data.prochaineEtape.join(', ')}\nNote : ${note.data.notePlan}\n\nRéponds en JSON :\n{"resume":"1-2 phrases résumant la séance","evolution":"1 phrase sur la tendance globale de l\'évolution","vigilance":["point de vigilance 1","point 2 si pertinent"],"focus":"1 phrase sur quoi se focaliser à la prochaine séance","conseil":"1-2 phrases de conseil IA basé sur la direction de la symptomatologie et l\'historique — concret et actionnable"}`,
-                                                        maxOutputTokens: 2048,
-                                                        jsonMode: true,
-                                                        patient: { nom: note.nom, prenom: note.prenom, patientKey: note.patientKey },
-                                                        category: 'note_seance_mini',
-                                                        onAudit: recordAIAudit,
-                                                      })
-                                                      const parsed = analyseSeanceMiniSchema.parse(JSON.parse(raw))
-                                                      const mini = { generatedAt: new Date().toISOString(), resume: stripMd(parsed.resume), evolution: stripMd(parsed.evolution), vigilance: parsed.vigilance.map(stripMd), focus: stripMd(parsed.focus), conseil: stripMd(parsed.conseil ?? '') }
-                                                      setDbNotes(prev => prev.map(n => n.id === note.id ? { ...n, analyseIA: mini } : n))
-                                                      showToast('Analyse générée', 'success')
-                                                    } catch { showToast('Erreur analyse', 'error') }
-                                                  }}>
-                                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
-                                                  </svg>
-                                                  {note.analyseIA ? 'Relancer' : 'Analyser'}
-                                                </button>
-                                                <button
-                                                  style={{ flex: 1, padding: '0.5rem 0.5rem', borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                                                  onClick={() => {
-                                                    setFormData(prev => ({ ...prev, nom: note.nom, prenom: note.prenom, dateNaissance: note.dateNaissance }))
-                                                    const patKey = note.patientKey
-                                                    const bt = note.bilanType ?? getBilanType(note.zone ?? '')
-                                                    const allNotesForZone = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt).sort((a, b) => a.id - b.id)
-                                                    const allBilansForZone = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
-                                                    const allIntersForZone = dbIntermediaires.filter(r => r.patientKey === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
-                                                    const historiqueStr = [
-                                                      ...allBilansForZone.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
-                                                      ...allIntersForZone.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>)?.evn as Record<string, unknown> ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${tc.pireActuel ?? '?'}/10` }),
-                                                      ...allNotesForZone.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — ${n.data.interventions.join(', ')}`),
-                                                    ].join('\n')
-                                                    setFicheExerciceContextOverride({
-                                                      zone: note.zone ?? '',
-                                                      bilanData: {},
-                                                      notesLibres: `SÉANCE n°${note.numSeance} du ${note.dateSeance}\nEVA: ${note.data.eva}/10 — ${note.data.evolution}\nInterventions: ${note.data.interventions.join(', ')}\nDosage: ${note.data.detailDosage}\nTolérance: ${note.data.tolerance} ${note.data.toleranceDetail}\nRessenti: ${note.data.noteSubjective}\n\nHistorique complet du patient:\n${historiqueStr}`,
-                                                    })
-                                                    setFicheExerciceSource({ type: 'note', id: note.id })
-                                                    setSelectedBodyZone(note.zone ?? null)
-                                                    setFicheBackStep('database')
-                                                    setStep('fiche_exercice')
-                                                  }}>
-                                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                                                  </svg>
-                                                  Fiche exercices
-                                                </button>
-                                              </div>
-                                              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
-                                                <button
-                                                  onClick={() => {
-                                                    setFormData(prev => ({ ...prev, nom: note.nom, prenom: note.prenom, dateNaissance: note.dateNaissance }))
-                                                    setNoteSeanceZone(note.zone ?? null)
-                                                    setCurrentNoteSeanceId(note.id)
-                                                    setCurrentNoteSeanceData(note.data)
-                                                    setStep('note_seance')
-                                                  }}
-                                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                                  Modifier
-                                                </button>
-                                                <button onClick={() => setDeletingNoteSeanceId(note.id)}
-                                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                                                  Supprimer
-                                                </button>
-                                              </div>
-                                            </div>
-                                            </div>
-                                            )}
-                                          </div>
-                                        )
-                                      }
-                                      // kind === 'interm'
-                                      const rec = item.rec
-                                      const idx = intermIndexById.get(rec.id) ?? 0
-                                      return (() => {
-                                      // Score d'amélioration : EVN pireActuel vs pireInitial dans troncCommun
-                                      const tc = (rec.data?.troncCommun as Record<string, unknown>) ?? {}
-                                      const evnInter = (tc.evn as Record<string, unknown>) ?? {}
-                                      const evnActNum  = parseFloat(String(evnInter.pireActuel  ?? ''))
-                                      const evnInitNum = parseFloat(String(evnInter.pireInitial ?? ''))
-                                      // Fallback : comparer avec EVN du premier bilan initial de la zone
-                                      const firstInitial = zoneBilans.find(b => b.evn != null)
-                                      const baseEvn = !isNaN(evnInitNum) ? evnInitNum : (firstInitial?.evn ?? null)
-                                      const score = (!isNaN(evnActNum) && baseEvn != null && baseEvn > 0)
-                                        ? improvDelta(baseEvn, evnActNum) : null
-                                      const sColor = score === null ? '#94a3b8' : score > 0 ? '#166534' : score < 0 ? '#881337' : '#94a3b8'
-
-                                      const intermKey = `interm-${rec.id}`
-                                      const intermOpen = openTimelineKey === intermKey
-                                      return (
-                                      <div key={rec.id} style={{ background: 'var(--surface)', border: `1.5px solid ${intermOpen ? '#fdba74' : '#fed7aa'}`, borderRadius: 'var(--radius-lg)', boxShadow: intermOpen ? 'var(--shadow-sm)' : 'none', overflow: 'hidden' }}>
-                                        <div
-                                          role="button"
-                                          onClick={() => toggleTimeline(intermKey)}
-                                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0.55rem 0.9rem', cursor: 'pointer' }}
-                                        >
-                                          <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                              <span style={{ fontWeight: 700, color: '#92400e', fontSize: '0.85rem' }}>Intermédiaire n°{idx + 1}</span>
-                                              {rec.status === 'incomplet' && <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#991b1b' }}>Incomplet</span>}
-                                            </div>
-                                            <div style={{ fontSize: '0.72rem', color: '#c2410c', marginTop: 1 }}>{rec.dateBilan}</div>
-                                          </div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                            {score !== null && (
-                                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, fontSize: '0.76rem', color: sColor, letterSpacing: '-0.01em' }}>
-                                                {score > 0 ? (
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                                                ) : score < 0 ? (
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                                ) : (
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                                )}
-                                                {Math.abs(score)}%
-                                              </span>
-                                            )}
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fdba74" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: intermOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-                                          </div>
-                                        </div>
-                                        {intermOpen && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
-                                          {rec.status === 'incomplet' ? (
-                                            <>
-                                              <button
-                                                style={{ width: '100%', padding: '0.55rem 1rem', borderRadius: 10, background: 'linear-gradient(135deg, #ea580c, #c2410c)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                                onClick={() => {
-                                                  setFormData(prev => ({ ...prev, nom: rec.nom, prenom: rec.prenom, dateNaissance: rec.dateNaissance }))
-                                                  setBilanIntermediaireZone(rec.zone ?? null)
-                                                  setCurrentBilanIntermediaireId(rec.id)
-                                                  setCurrentBilanIntermediaireData(rec.data ?? null)
-                                                  setStep('bilan_intermediaire')
-                                                }}>
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 13 20 8 15 3"/><path d="M4 20v-3a5 5 0 0 1 5-5h11"/></svg>
-                                                Reprendre le bilan intermédiaire
-                                              </button>
-                                              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
-                                                <button onClick={() => setDeletingIntermediaireId(rec.id)}
-                                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                                                  Supprimer
-                                                </button>
-                                              </div>
-                                            </>
-                                          ) : (
-                                            <>
-                                              {/* Rangée 1 : Bilan PDF + Note diag */}
-                                              <div style={{ display: 'flex', gap: 6 }}>
-                                                <button
-                                                  style={{ flex: 1, padding: '0.55rem 0.5rem', borderRadius: 10, background: 'var(--secondary)', border: '1.5px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, fontSize: '0.78rem', cursor: exportingRecordId === rec.id ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, opacity: exportingRecordId === rec.id ? 0.75 : 1 }}
-                                                  onClick={() => {
-                                                    // Exporte le bilan intermédiaire comme un BilanRecord pour réutiliser exportBilanFromRecord
-                                                    exportBilanFromRecord({
-                                                      id: rec.id, nom: rec.nom, prenom: rec.prenom,
-                                                      dateNaissance: rec.dateNaissance, dateBilan: rec.dateBilan,
-                                                      zoneCount: 1, zone: rec.zone, bilanType: rec.bilanType,
-                                                      bilanData: rec.data, notes: rec.notes, status: rec.status,
-                                                      avatarBg: rec.avatarBg,
-                                                    } as BilanRecord, true)
-                                                  }}
-                                                  disabled={exportingRecordId === rec.id}>
-                                                  {exportingRecordId === rec.id ? (
-                                                    <span className="spinner-sm" />
-                                                  ) : (
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                                                    </svg>
-                                                  )}
-                                                  Bilan PDF
-                                                </button>
-                                                <button
-                                                  style={{ flex: 1, padding: '0.55rem 0.5rem', borderRadius: 10, background: '#fff7ed', border: '1.5px solid #fed7aa', color: '#92400e', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                                                  onClick={() => openNoteIntermediaire(rec)}>
-                                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
-                                                  </svg>
-                                                  Note diag. IA
-                                                </button>
-                                              </div>
-                                              {/* Rangée 2 : Fiche d'exercices */}
-                                              <button
-                                                style={{ width: '100%', padding: '0.55rem 1rem', borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                                                onClick={() => {
-                                                  setFormData(prev => ({ ...prev, nom: rec.nom, prenom: rec.prenom, dateNaissance: rec.dateNaissance }))
-                                                  // Build context from intermediaire + historique
-                                                  const patKey = rec.patientKey
-                                                  const bt = rec.bilanType ?? getBilanType(rec.zone ?? '')
-                                                  const allNotes = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
-                                                  const allBilans = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
-                                                  const historiqueStr = [
-                                                    ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
-                                                    ...allNotes.map(n => `Séance n°${n.numSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — ${n.data.interventions.join(', ')}`),
-                                                  ].join('\n')
-                                                  const tc = (rec.data?.troncCommun as Record<string, unknown>) ?? {}
-                                                  const evnData = (tc.evn as Record<string, unknown>) ?? {}
-                                                  setFicheExerciceContextOverride({
-                                                    zone: rec.zone ?? '',
-                                                    bilanData: rec.data ?? {},
-                                                    notesLibres: `BILAN INTERMÉDIAIRE — EVN actuelle: ${evnData.pireActuel ?? '?'}/10 (initiale: ${evnData.pireInitial ?? '?'}/10)\nHistorique du patient:\n${historiqueStr}`,
-                                                  })
-                                                  setFicheExerciceSource({ type: 'intermediaire', id: rec.id })
-                                                  setSelectedBodyZone(rec.zone ?? null)
-                                                  setFicheBackStep('database')
-                                                  setStep('fiche_exercice')
-                                                }}>
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                                                </svg>
-                                                Fiche d'exercices
-                                              </button>
-                                              {/* Rangée 3 : Modifier / Supprimer — liens discrets */}
-                                              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, paddingTop: 2 }}>
-                                                <button
-                                                  onClick={() => {
-                                                    setFormData(prev => ({ ...prev, nom: rec.nom, prenom: rec.prenom, dateNaissance: rec.dateNaissance }))
-                                                    setBilanIntermediaireZone(rec.zone ?? null)
-                                                    setCurrentBilanIntermediaireId(rec.id)
-                                                    setCurrentBilanIntermediaireData(rec.data ?? null)
-                                                    setStep('bilan_intermediaire')
-                                                  }}
-                                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                                  Modifier
-                                                </button>
-                                                <button onClick={() => setDeletingIntermediaireId(rec.id)}
-                                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                                                  Supprimer
-                                                </button>
-                                              </div>
-                                            </>
-                                          )}
-                                        </div>
-                                        )}
-                                      </div>
-                                      )
-                                      })()
-                                    })}
-                                  </div>
-                                )
-                              })()}
-                              {/* ── Actions par zone ────────────────────── */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: '0.35rem' }}>
-                                {(zoneBilans.filter(r => r.status === 'complet').length + zoneIntermCount + zoneNotesCount) >= 2 && (
-                                  <button
-                                    onClick={() => {
-                                      const firstRec = zoneBilans[0] ?? allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === zoneType) ?? allPatientRecords[0]
-                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                      setEvolutionZoneType(zoneType as BilanType)
-                                      setStep('evolution_ia')
-                                    }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(30,58,138,0.2)' }}>
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                                    Rapport d'évolution — {zoneLabel}
-                                  </button>
-                                )}
-                                {isZoneEmpty ? (
-                                  <button
-                                    onClick={() => {
-                                      const firstRec = allPatientRecords[0]
-                                      setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                                      setPatientMode('existing')
-                                      setSelectedBodyZone(DEFAULT_ZONE_FOR_BILAN[zoneType as BilanType] ?? null)
-                                      setBilanZoneBackStep('identity')
-                                      setStep('identity')
-                                    }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--primary)', background: 'transparent', color: 'var(--primary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' }}>
-                                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Nouveau bilan {zoneLabel}
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(`Clôturer la prise en charge ${zoneLabel} ? Les futures analyses d'autres zones ne verront cette PEC que comme un antécédent résumé.`)) {
-                                        closeTreatment(selectedPatient ?? '', zoneType as BilanType, zoneBilans[0]?.zone)
-                                      }
-                                    }}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--border-color)', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer' }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                    Clôturer la PEC {zoneLabel}
-                                  </button>
-                                )}
-                              </div>
-                              </>)}
-                            </div>
-                            </SwipeToDelete>
-                            </div>
-                          )
-                          })
-                        })()}
-                        {/* ── Documents ────────────────────── */}
-                        <DossierDocuments
-                          patientKey={selectedPatient ?? ''}
-                          bilans={bilans}
-                          standaloneDocs={dbPatientDocs.filter(d => d.patientKey === selectedPatient)}
-                          onRename={(target, newName) => {
-                            if (target.kind === 'bilan') {
-                              setDb(prev => prev.map(r => {
-                                if (r.id !== target.bilanId || !r.documents) return r
-                                const docs = r.documents.map((d, i) => i === target.docIndex ? { ...d, name: newName } : d)
-                                return { ...r, documents: docs }
-                              }))
-                            } else {
-                              setDbPatientDocs(prev => prev.map(d => d.id === target.docId ? { ...d, name: newName } : d))
-                            }
-                          }}
-                          onDelete={(docId) => {
-                            setDbPatientDocs(prev => prev.filter(d => d.id !== docId))
-                          }}
-                          onAddRaw={async (dataUrl, name, mimeType) => {
-                            if (mimeType.startsWith('image/')) {
-                              setPatientDocMaskingQueue(prev => [...prev, { dataUrl, name, mimeType }])
-                            } else if (mimeType === 'application/pdf') {
-                              try {
-                                const pages = await pdfToImages(dataUrl)
-                                const baseName = name.replace(/\.pdf$/i, '')
-                                for (let i = 0; i < pages.length; i++) {
-                                  setPatientDocMaskingQueue(prev => [...prev, {
-                                    dataUrl: pages[i],
-                                    name: pages.length === 1 ? `${baseName}.png` : `${baseName} (p${i + 1}).png`,
-                                    mimeType: 'image/png',
-                                  }])
-                                }
-                              } catch {
-                                const base64 = dataUrl.split(',')[1] ?? dataUrl
-                                const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-                                setDbPatientDocs(prev => [...prev, { id, patientKey: selectedPatient ?? '', name, mimeType, data: base64, addedAt: new Date().toISOString() }])
-                              }
-                            } else {
-                              const base64 = dataUrl.split(',')[1] ?? dataUrl
-                              const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-                              setDbPatientDocs(prev => [...prev, { id, patientKey: selectedPatient ?? '', name, mimeType, data: base64, addedAt: new Date().toISOString() }])
-                            }
-                          }}
-                          onRemask={(docId) => {
-                            const doc = dbPatientDocs.find(d => d.id === docId)
-                            if (!doc || !doc.originalData) return
-                            const dataUrl = `data:${doc.mimeType};base64,${doc.originalData}`
-                            setPatientDocMaskingQueue(prev => [...prev, { dataUrl, name: doc.name, mimeType: doc.mimeType }])
-                            setDbPatientDocs(prev => prev.filter(d => d.id !== docId))
-                          }}
-                        />
-
-                        {/* ── Supprimer le patient ────────────── */}
-                        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-                          <button
-                            onClick={() => setDeletingPatientKey(selectedPatient)}
-                            style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-lg)', background: 'transparent', border: '1.5px solid #fca5a5', color: '#dc2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                            Supprimer ce patient
-                          </button>
-                        </div>
-                      </div>
-
-                      <ConsultationChooser
-                        open={consultationChooserOpen}
-                        onClose={() => setConsultationChooserOpen(false)}
-                        zones={zonesForPicker}
-                        hasAnyBilan={hasAnyBilanForPicker}
-                        onPickSeance={() => {
-                          const activeZones = zonesForPicker
-                          if (activeZones.length <= 1) {
-                            const bt = (activeZones[0]?.bilanType ?? getBilanType(bilans[0]?.zone ?? '')) as BilanType
-                            const firstRec = allPatientRecords[0]
-                            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                            const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt] ?? ''
-                            setNoteSeanceZone(z)
-                            setCurrentNoteSeanceId(null)
-                            setCurrentNoteSeanceData(null)
-                            setStep('note_seance')
-                          } else {
-                            setLetterZonePicker({ action: 'seance' })
-                          }
-                        }}
-                        onPickIntermediaire={() => {
-                          const activeWithBilans = zonesForPicker.filter(z => z.hasBilans)
-                          if (activeWithBilans.length <= 1) {
-                            const bt = (activeWithBilans[0]?.bilanType ?? getBilanType(bilans[0]?.zone ?? '')) as BilanType
-                            const firstRec = allPatientRecords[0]
-                            setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                            const patKey = selectedPatient ?? ''
-                            const z = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)?.zone ?? DEFAULT_ZONE_FOR_BILAN[bt] ?? ''
-                            setBilanIntermediaireZone(z)
-                            setCurrentBilanIntermediaireId(null)
-                            setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, z))
-                            setStep('bilan_intermediaire')
-                          } else {
-                            setLetterZonePicker({ action: 'intermediaire' })
-                          }
-                        }}
-                        onPickNouveauBilan={() => {
-                          const firstRec = allPatientRecords[0]
-                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                          setPatientMode('existing')
-                          setSelectedBodyZone(null)
-                          setBilanZoneBackStep('identity')
-                          setStep('identity')
-                        }}
-                        onPickBilanSortie={() => {
-                          const firstRec = allPatientRecords[0]
-                          setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
-                          const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
-                          if (activeTypes.length <= 1) {
-                            setSelectedBodyZone(bilans[bilans.length - 1]?.zone ?? null)
-                            setStep('bilan_sortie')
-                          } else {
-                            setLetterZonePicker({ action: 'bilan_sortie' })
-                          }
-                        }}
-                        onPickCourrier={() => {
-                          const activeTypes = getPatientBilanTypes(selectedPatient ?? '').filter(t => !isTreatmentClosed(selectedPatient ?? '', t))
-                          if (activeTypes.length <= 1) {
-                            const soleZone = allPatientRecords.find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === activeTypes[0])?.zone ?? null
-                            setSelectedBodyZone(soleZone)
-                            setStep('letter')
-                          } else {
-                            setLetterZonePicker({ action: 'letter' })
-                          }
-                        }}
-                      />
-                    </>
-                  )
-                })()}
-              </>
-            )}
-          </div>
-        </div>
+        <DatabaseProvider value={{
+          apiKey,
+          consultationChooserOpen,
+          db,
+          dbIntermediaires,
+          dbNotes,
+          dbObjectifs,
+          dbPatientDocs,
+          dbPrescriptions,
+          expandedClosedEpisodes,
+          exportingRecordId,
+          editingLabelBilanId,
+          labelDraft,
+          openAnalyseNoteIds,
+          openNoteDetailIds,
+          openTimelineKey,
+          orphanPopupOpen,
+          rxDocViewer,
+          rxEditDoc,
+          rxEditForm,
+          rxEditPopup,
+          rxGroupPicker,
+          searchQuery,
+          selectedPatient,
+          slideEntry,
+          slideEntryStyle,
+          swipeDragStyle,
+          swipedNav,
+          setBilanDocuments,
+          setBilanIntermediaireZone,
+          setBilanNotes,
+          setBilanZoneBackStep,
+          setConsultationChooserOpen,
+          setCurrentAnalyseIA,
+          setCurrentBilanDataOverride,
+          setCurrentBilanId,
+          setCurrentBilanIntermediaireData,
+          setCurrentBilanIntermediaireId,
+          setCurrentNoteSeanceData,
+          setCurrentNoteSeanceId,
+          setDb,
+          setDbNotes,
+          setDbObjectifs,
+          setDbPatientDocs,
+          setDbPrescriptions,
+          setDeletingBilanId,
+          setDeletingIntermediaireId,
+          setDeletingNoteSeanceId,
+          setDeletingPatientKey,
+          setEditingLabelBilanId,
+          setEvolutionZoneType,
+          setExpandedClosedEpisodes,
+          setFicheBackStep,
+          setFicheExerciceContextOverride,
+          setFicheExerciceSource,
+          setFormData,
+          setLabelDraft,
+          setLetterZonePicker,
+          setNoteSeanceZone,
+          setOpenAnalyseNoteIds,
+          setOpenNoteDetailIds,
+          setOrphanPopupOpen,
+          setPatientDocMaskingQueue,
+          setPatientMode,
+          setResumeBilan,
+          setRxDocViewer,
+          setRxEditDoc,
+          setRxEditForm,
+          setRxEditPopup,
+          setRxGroupPicker,
+          setRxMaskingItem,
+          setSearchQuery,
+          setSelectedBodyZone,
+          setSelectedPatient,
+          setShowAddPatientChoice,
+          setSilhouetteData,
+          setStep,
+          closeTreatment,
+          deleteClosedEpisode,
+          exportBilanFromRecord,
+          getClosureTimes,
+          getIntermediairePreFill,
+          getPatientBilans,
+          getPatientBilanTypes,
+          getPatientIntermediaires,
+          getPatientNotes,
+          getTreatmentEpisodes,
+          improvDelta,
+          isBirthday,
+          isPrescriptionCurrent,
+          isTreatmentClosed,
+          isZoneCollapsed,
+          openNoteIntermediaire,
+          parseFrDate,
+          patientGeneralScore,
+          recordAIAudit,
+          reopenTreatment,
+          showToast,
+          stripMd,
+          toggleTimeline,
+          toggleZoneCollapsed,
+          onTouchEnd,
+          onTouchMove,
+          onTouchStart,
+        }}>
+          <DatabasePage />
+        </DatabaseProvider>
       )}
 
       {/* ── Delete patient confirmation ─────────────────────────────────────────── */}
@@ -4150,660 +2280,37 @@ Mobilité articulaire lombaire
 
       {/* ── Profile Tab ─────────────────────────────────────────────── */}
       {step === 'profile' && (
-          <div className="general-info-screen fade-in">
-            <header className="screen-header">
-              <button className="btn-back" onClick={() => setStep('settings')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-              </button>
-              <h2 className="title-section">Modifier le profil</h2>
-              <div style={{ width: 24 }} />
-            </header>
-            <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
-
-              <div className="fade-in">
-                  {/* Photo */}
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.75rem', marginBottom:'2rem' }}>
-                    <div onClick={() => photoInputRef.current?.click()}
-                      style={{ position:'relative', width:96, height:96, borderRadius:'50%', overflow:'hidden', cursor:'pointer', boxShadow:'var(--shadow-lg)', background: profileEditDraft.photo ? 'transparent' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      {profileEditDraft.photo
-                        ? <img src={profileEditDraft.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="Profil" />
-                        : <span style={{ fontSize:'2.2rem', fontWeight:700, color:'white' }}>{(profileEditDraft.nom || profileEditDraft.prenom || 'W')[0]}</span>}
-                      <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:'0.4rem' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                          <circle cx="12" cy="13" r="4"/>
-                        </svg>
-                      </div>
-                    </div>
-                    <input ref={photoInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handlePhotoUpload} />
-                    <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Appuyez pour changer la photo</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Prénom / Nom affiché</label>
-                    <input type="text" className="input-luxe" value={profileEditDraft.nom}
-                      onChange={e => setProfileEditDraft(p => ({ ...p, nom: e.target.value }))} placeholder="Renseignez votre nom" />
-                  </div>
-                  <div className="form-group">
-                    <label>Profession</label>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                      {(['Kinésithérapeute', 'Physiothérapeute'] as const).map(opt => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setProfileEditDraft(p => ({ ...p, profession: opt }))}
-                          style={{
-                            flex: 1,
-                            padding: '0.65rem 0.75rem',
-                            borderRadius: 'var(--radius-md)',
-                            border: profileEditDraft.profession === opt ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                            background: profileEditDraft.profession === opt ? 'var(--info-soft)' : 'var(--surface)',
-                            color: profileEditDraft.profession === opt ? 'var(--primary-dark)' : 'var(--text-main)',
-                            fontWeight: profileEditDraft.profession === opt ? 700 : 500,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {opt}
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: 2 }}>
-                            {opt === 'Kinésithérapeute' ? '🇫🇷 France' : '🇨🇭 Suisse / 🇧🇪 Belgique'}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Compétences & Équipements */}
-                  {(() => {
-                    const chipStyle = (active: boolean): React.CSSProperties => ({
-                      padding: '0.45rem 0.75rem',
-                      borderRadius: 'var(--radius-full)',
-                      border: active ? '2px solid var(--primary)' : '1.5px solid var(--border-color)',
-                      background: active ? 'var(--info-soft)' : 'transparent',
-                      color: active ? 'var(--primary-dark)' : 'var(--text-muted)',
-                      fontWeight: active ? 600 : 400,
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.18s',
-                    })
-                    const sectionTitle: React.CSSProperties = { fontWeight: 700, color: 'var(--primary)', fontSize: '0.95rem', marginBottom: 8 }
-                    return (
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={sectionTitle}>Compétences & Équipements</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Les propositions de prise en charge seront adaptées en fonction de vos compétences et équipements.
-                    </p>
-
-                    {/* Spécialités */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={sectionTitle}>Spécialités</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Thérapie manuelle', 'McKenzie (MDT)', 'Sport', 'Pédiatrie', 'Neurologie', 'Vestibulaire', 'Périnéologie', 'Respiratoire', 'Rhumatologie', 'Gériatrie', 'Orthopédie'].map(s => (
-                          <button key={s} type="button" style={chipStyle((profileEditDraft.specialites ?? []).includes(s))}
-                            onClick={() => setProfileEditDraft(p => ({
-                              ...p,
-                              specialites: (p.specialites ?? []).includes(s)
-                                ? (p.specialites ?? []).filter(x => x !== s)
-                                : [...(p.specialites ?? []), s]
-                            }))}>{s}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Techniques */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={sectionTitle}>Techniques maîtrisées</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Dry needling', 'Mulligan', 'Maitland', 'Cupping', 'Taping / K-Tape', 'PNF (Kabat)', 'Chaînes musculaires (GDS/Busquet)', 'Éducation neurosciences douleur', 'Crochetage / IASTM', 'Drainage lymphatique', 'Trigger points', 'Ventouses', 'Stretching global actif'].map(t => (
-                          <button key={t} type="button" style={chipStyle((profileEditDraft.techniques ?? []).includes(t))}
-                            onClick={() => setProfileEditDraft(p => ({
-                              ...p,
-                              techniques: (p.techniques ?? []).includes(t)
-                                ? (p.techniques ?? []).filter(x => x !== t)
-                                : [...(p.techniques ?? []), t]
-                            }))}>{t}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Équipements */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={sectionTitle}>Équipements au cabinet</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['Ondes de choc', 'TENS', 'Tecarthérapie (Winback/Indiba)', 'Ultrasons', 'Laser', 'Isocinétisme', 'Plateforme proprioceptive', 'Huber / LPG', 'Pressothérapie', 'Électrostimulation', 'Cryothérapie', 'Traction cervicale/lombaire', 'Vélo / Elliptique', 'Presse'].map(e => (
-                          <button key={e} type="button" style={chipStyle((profileEditDraft.equipements ?? []).includes(e))}
-                            onClick={() => setProfileEditDraft(p => ({
-                              ...p,
-                              equipements: (p.equipements ?? []).filter(x => x !== e).length === (p.equipements ?? []).length
-                                ? [...(p.equipements ?? []), e]
-                                : (p.equipements ?? []).filter(x => x !== e)
-                            }))}>{e}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Autres compétences (texte libre) */}
-                    <div>
-                      <div style={sectionTitle}>Autres (non listés ci-dessus)</div>
-                      <textarea
-                        value={profileEditDraft.autresCompetences ?? ''}
-                        onChange={e => setProfileEditDraft(p => ({ ...p, autresCompetences: e.target.value }))}
-                        placeholder="Ex : méthode Schroth, rééducation maxillo-faciale, posturologie, biofeedback, Game Ready..."
-                        rows={2}
-                        className="input-luxe"
-                        style={{ fontSize: '0.82rem', resize: 'vertical' }}
-                      />
-                    </div>
-                  </div>
-                    )
-                  })()}
-
-                  {/* En-tête Courriers */}
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 8 }}>En-tête des courriers</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Ces informations apparaîtront en en-tête de vos courriers PDF (fin de PEC, demande d'imagerie, etc.).
-                    </p>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid var(--border-color)' }}>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Prénom (si différent du nom affiché)</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.prenom ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, prenom: e.target.value }))}
-                          placeholder="Ex : Marie" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Spécialisations (libellé affiché)</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.specialisationsLibelle ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, specialisationsLibelle: e.target.value }))}
-                          placeholder="Ex : Thérapie manuelle, Rééducation du sportif" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Numéro RCC / ADELI</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.rcc ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, rcc: e.target.value }))}
-                          placeholder="Ex : 123456789" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Adresse</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.adresse ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, adresse: e.target.value }))}
-                          placeholder="Ex : 12 rue des Lilas" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Complément (bâtiment, étage)</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.adresseComplement ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, adresseComplement: e.target.value }))}
-                          placeholder="Ex : Cabinet 2B" />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10, marginBottom: 10 }}>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label style={{ fontSize: '0.82rem' }}>CP</label>
-                          <input type="text" className="input-luxe" value={profileEditDraft.codePostal ?? ''}
-                            onChange={e => setProfileEditDraft(p => ({ ...p, codePostal: e.target.value }))}
-                            placeholder="75001" />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label style={{ fontSize: '0.82rem' }}>Ville</label>
-                          <input type="text" className="input-luxe" value={profileEditDraft.ville ?? ''}
-                            onChange={e => setProfileEditDraft(p => ({ ...p, ville: e.target.value }))}
-                            placeholder="Paris" />
-                        </div>
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Téléphone</label>
-                        <input type="text" className="input-luxe" value={profileEditDraft.telephone ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, telephone: e.target.value }))}
-                          placeholder="01 23 45 67 89" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Email</label>
-                        <input type="email" className="input-luxe" value={profileEditDraft.email ?? ''}
-                          onChange={e => setProfileEditDraft(p => ({ ...p, email: e.target.value }))}
-                          placeholder="contact@cabinet.fr" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '0.82rem' }}>Signature manuscrite (image)</label>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          onChange={e => {
-                            const f = e.target.files?.[0]
-                            if (!f) return
-                            const reader = new FileReader()
-                            reader.onload = () => setProfileEditDraft(p => ({ ...p, signatureImage: reader.result as string }))
-                            reader.readAsDataURL(f)
-                          }}
-                          style={{ fontSize: '0.8rem', marginTop: 4 }}
-                        />
-                        {profileEditDraft.signatureImage && (
-                          <div style={{ marginTop: 8, padding: 8, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 6, display: 'inline-block' }}>
-                            <img src={profileEditDraft.signatureImage} alt="Signature" style={{ maxHeight: 50, maxWidth: 180 }} />
-                            <button
-                              onClick={() => setProfileEditDraft(p => ({ ...p, signatureImage: null }))}
-                              style={{ display: 'block', marginTop: 6, background: 'none', border: 'none', color: '#dc2626', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}>
-                              Retirer
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Confidentialité & conformité */}
-                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '0.95rem', marginBottom: 8 }}>Confidentialité & conformité RGPD</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Mention d'information à intégrer dans votre livret d'accueil, salle d'attente ou politique de confidentialité, ainsi que le registre des traitements effectués.
-                    </p>
-                    <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: 14 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', marginBottom: 6 }}>
-                        Mention d'information patient (à afficher)
-                      </div>
-                      <div style={{
-                        fontSize: '0.78rem', color: '#064e3b', lineHeight: 1.55,
-                        background: 'var(--surface)', padding: '10px 12px', borderRadius: 8,
-                        border: '1px solid #bbf7d0', fontFamily: 'Georgia, serif',
-                        whiteSpace: 'pre-line',
-                      }}>
-{`Dans le cadre de votre prise en charge, des outils informatiques incluant des modèles d'intelligence artificielle peuvent être utilisés pour assister la rédaction de vos documents médicaux (courriers aux médecins, synthèses, comptes rendus).
-
-Aucune donnée personnelle identifiante vous concernant (nom, prénom, date de naissance, coordonnées) n'est transmise à ces outils. Seules des informations médicales anonymisées (âge, pathologie, données cliniques) le sont, et uniquement à des fins d'aide à la rédaction. Le contenu final est systématiquement relu et validé par votre thérapeute avant tout envoi.
-
-Vos données médicales sont stockées exclusivement sur l'équipement informatique du praticien, ne sont jamais partagées avec des tiers en dehors du strict cadre du parcours de soins, et restent sous le contrôle du thérapeute qui en est le responsable du traitement au sens du RGPD.
-
-Pour toute question, exercer vos droits (accès, rectification, effacement) ou signaler une préoccupation, adressez-vous directement à votre thérapeute.`}
-                      </div>
-                      <button
-                        onClick={() => {
-                          const text = `Dans le cadre de votre prise en charge, des outils informatiques incluant des modèles d'intelligence artificielle peuvent être utilisés pour assister la rédaction de vos documents médicaux (courriers aux médecins, synthèses, comptes rendus).
-
-Aucune donnée personnelle identifiante vous concernant (nom, prénom, date de naissance, coordonnées) n'est transmise à ces outils. Seules des informations médicales anonymisées (âge, pathologie, données cliniques) le sont, et uniquement à des fins d'aide à la rédaction. Le contenu final est systématiquement relu et validé par votre thérapeute avant tout envoi.
-
-Vos données médicales sont stockées exclusivement sur l'équipement informatique du praticien, ne sont jamais partagées avec des tiers en dehors du strict cadre du parcours de soins, et restent sous le contrôle du thérapeute qui en est le responsable du traitement au sens du RGPD.
-
-Pour toute question, exercer vos droits (accès, rectification, effacement) ou signaler une préoccupation, adressez-vous directement à votre thérapeute.`
-                          if (navigator.clipboard?.writeText) {
-                            navigator.clipboard.writeText(text).then(() => showToast('Mention copiée', 'success'))
-                          }
-                        }}
-                        style={{ marginTop: 10, width: '100%', padding: '0.55rem', borderRadius: 8, background: 'var(--surface)', border: '1px solid #86efac', color: '#065f46', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
-                        Copier le texte
-                      </button>
-                    </div>
-
-                    <div style={{ background: 'var(--info-soft)', border: '1px solid var(--border-soft)', borderRadius: 12, padding: 14, marginTop: 10 }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>
-                        Registre des traitements
-                      </div>
-                      {(() => {
-                        const totalCount = dbLetterAudit.length + dbAICallAudit.length
-                        const suspiciousCount = dbAICallAudit.filter(e => e.scrubReplacements > 0).length
-                        const withDocsCount = dbAICallAudit.filter(e => e.hasDocuments).length
-                        if (totalCount === 0) {
-                          return <p style={{ fontSize: '0.75rem', color: 'var(--primary)', margin: '0 0 10px', lineHeight: 1.5 }}>Aucun traitement enregistré pour le moment.</p>
-                        }
-                        return (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginBottom: 10, lineHeight: 1.5 }}>
-                            <div>• <strong>{dbLetterAudit.length}</strong> courrier{dbLetterAudit.length > 1 ? 's' : ''} généré{dbLetterAudit.length > 1 ? 's' : ''}</div>
-                            <div>• <strong>{dbAICallAudit.length}</strong> autre{dbAICallAudit.length > 1 ? 's' : ''} analyse{dbAICallAudit.length > 1 ? 's' : ''} (bilans, fiches exos…)</div>
-                            {withDocsCount > 0 && (
-                              <div style={{ color: '#92400e', marginTop: 4 }}>⚠ {withDocsCount} appel{withDocsCount > 1 ? 's' : ''} avec documents joints (non pseudonymisés automatiquement)</div>
-                            )}
-                            {suspiciousCount > 0 && (
-                              <div style={{ color: '#b91c1c', marginTop: 4, fontWeight: 600 }}>⚠ {suspiciousCount} appel{suspiciousCount > 1 ? 's' : ''} où le scrub wrapper a intercepté un nom — à examiner</div>
-                            )}
-                          </div>
-                        )
-                      })()}
-                      <button
-                        disabled={dbLetterAudit.length === 0 && dbAICallAudit.length === 0}
-                        onClick={async () => {
-                          const { generateAuditPDF } = await import('./utils/pdfGenerator')
-                          generateAuditPDF({
-                            praticien: {
-                              nom: profile.nom, prenom: profile.prenom,
-                              profession: profile.profession, rcc: profile.rcc,
-                              adresse: profile.adresse, ville: profile.ville,
-                              codePostal: profile.codePostal,
-                            },
-                            entries: dbLetterAudit,
-                            aiCallEntries: dbAICallAudit,
-                          })
-                          showToast('Registre exporté', 'success')
-                        }}
-                        style={{ width: '100%', padding: '0.55rem', borderRadius: 8, background: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--secondary)' : 'var(--surface)', border: '1px solid var(--border-soft)', color: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'var(--text-muted)' : 'var(--primary)', fontWeight: 600, fontSize: '0.8rem', cursor: (dbLetterAudit.length === 0 && dbAICallAudit.length === 0) ? 'not-allowed' : 'pointer' }}>
-                        Exporter le registre (PDF)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Sauvegarde multi-appareils */}
-                  <div style={{ background:'var(--surface)', borderRadius:'var(--radius-xl)', padding:'1.25rem', marginBottom:'1.25rem', boxShadow:'var(--shadow-sm)', border:'1px solid var(--border-color)' }}>
-                    <div style={{ fontWeight:700, color:'var(--primary-dark)', marginBottom:'0.5rem', fontSize:'0.92rem' }}>Sauvegarde multi-appareils</div>
-                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:'0 0 1rem', lineHeight:1.5 }}>Exporte tes données depuis ce navigateur, puis importe le fichier sur un autre appareil (téléphone, tablette…).</p>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      <button type="button" onClick={handleExportData}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'linear-gradient(135deg, var(--primary), var(--primary-dark))', border:'none', color:'white', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="7 10 12 15 17 10"/>
-                          <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        Exporter mes données (.json)
-                      </button>
-                      <button type="button" onClick={() => importDataRef.current?.click()}
-                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'0.75rem', borderRadius:10, background:'var(--surface)', border:'1.5px solid var(--border-color)', color:'var(--primary-dark)', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="17 8 12 3 7 8"/>
-                          <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Importer un fichier de sauvegarde
-                      </button>
-                      <input ref={importDataRef} type="file" accept=".json" style={{ display:'none' }} onChange={handleImportData} />
-                    </div>
-                  </div>
-
-                  <button className="btn-primary-luxe" style={{ marginBottom:'1rem', marginTop:'1.5rem' }}
-                    onClick={() => {
-                      setProfile(profileEditDraft)
-                      showToast('Profil enregistré', 'success')
-                      setStep('settings')
-                    }}>
-                    Enregistrer
-                  </button>
-                </div>
-            </div>
-          </div>
+        <ProfilePage
+          profile={profile}
+          onSave={handleSaveProfile}
+          onBack={() => setStep('settings')}
+          onExportData={handleExportData}
+          onImportFile={handleImportFile}
+          letterAuditCount={dbLetterAudit.length}
+          aiAuditCount={dbAICallAudit.length}
+          aiAuditWithDocsCount={dbAICallAudit.filter(e => e.hasDocuments).length}
+          aiAuditSuspiciousCount={dbAICallAudit.filter(e => e.scrubReplacements > 0).length}
+          onExportRegister={handleExportRegister}
+          onShowToast={showToast}
+        />
       )}
 
-      {/* ── Settings ──────────────────────────────────────────────────────────── */}
       {step === 'settings' && (
-        <div className="general-info-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('dashboard')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Réglages</h2>
-            <div style={{ width: 24 }} />
-          </header>
-          <div className="scroll-area" style={{ paddingBottom: '2rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {/* Profil */}
-              <button
-                onClick={() => { setProfileEditDraft(profile); setStep('profile') }}
-                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Profil</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Nom, photo, profession, compétences</div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-
-              {/* Apparence — sélecteur de thème */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.9rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Apparence</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Choisissez le thème visuel</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {([
-                    { id: 'soft' as const, label: 'Soft', desc: 'Vert & beige', swatch: ['#2D5A4B', '#F0EBE1'] },
-                    { id: 'medical' as const, label: 'Médical', desc: 'Bleu & blanc', swatch: ['#1e3a8a', '#f8fafc'] },
-                  ]).map(t => {
-                    const active = theme === t.id
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => setTheme(t.id)}
-                        style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8,
-                          padding: '0.75rem', borderRadius: 'var(--radius-md)',
-                          border: active ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                          background: active ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--surface)',
-                          cursor: 'pointer', textAlign: 'left',
-                          transition: 'border-color 0.15s, background 0.15s',
-                        }}
-                      >
-                        <div style={{ display: 'flex', gap: 4, height: 24, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                          <div style={{ flex: 1, background: t.swatch[0] }} />
-                          <div style={{ flex: 1, background: t.swatch[1] }} />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.85rem' }}>{t.label}</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{t.desc}</div>
-                        </div>
-                        {active && (
-                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            ✓ Actif
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Tutoriel */}
-              <button
-                onClick={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
-                style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.1rem' }}>🎓</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Relancer le tutoriel</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Revoir le guide de prise en main</div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-
-              {/* Préférences */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Préférences</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Langue, notifications, thème</div>
-                  </div>
-                </div>
-
-                {/* Langue */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Langue</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                    {([
-                      { id: 'fr' as const, flag: '🇫🇷', label: 'Français' },
-                      { id: 'de' as const, flag: '🇩🇪', label: 'Deutsch' },
-                      { id: 'en' as const, flag: '🇬🇧', label: 'English' },
-                    ]).map(lang => {
-                      const active = language === lang.id
-                      return (
-                        <button
-                          key={lang.id}
-                          onClick={() => setLanguage(lang.id)}
-                          style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                            padding: '0.6rem 0.4rem',
-                            borderRadius: 'var(--radius-md)',
-                            border: active ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                            background: active ? 'color-mix(in srgb, var(--primary) 6%, var(--surface))' : 'var(--secondary)',
-                            cursor: 'pointer',
-                            transition: 'border-color 0.15s, background 0.15s',
-                          }}
-                        >
-                          <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>{lang.flag}</span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: active ? 700 : 500, color: active ? 'var(--primary)' : 'var(--text-muted)' }}>{lang.label}</span>
-                          {active && <span style={{ fontSize: '0.6rem', color: 'var(--primary)', fontWeight: 700 }}>✓</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Notifications */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0', borderTop: '1px solid var(--border-color)' }}>
-                  <div>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Notifications</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
-                      {notificationsEnabled ? 'Activées — rappels et alertes patients' : 'Désactivées'}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-                    style={{
-                      width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
-                      background: notificationsEnabled ? 'var(--primary)' : 'var(--border-color)',
-                      position: 'relative', flexShrink: 0,
-                      transition: 'background 0.2s',
-                    }}
-                  >
-                    <span style={{
-                      position: 'absolute', top: 3,
-                      left: notificationsEnabled ? 23 : 3,
-                      width: 22, height: 22, borderRadius: '50%',
-                      background: 'white',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                      transition: 'left 0.2s',
-                    }} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Plan & Facturation */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan & Facturation</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement actuel et options</div>
-                  </div>
-                </div>
-
-                {/* Abonnement actuel */}
-                <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', marginBottom: '1rem', color: 'white' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Plan actuel</div>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(255,255,255,0.2)', padding: '0.15rem 0.5rem', borderRadius: 99, border: '1px solid rgba(255,255,255,0.3)' }}>
-                      ✓ Actif
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 2 }}>Basique</div>
-                  <div style={{ fontSize: '0.8rem', opacity: 0.85, marginBottom: 8 }}>
-                    {billingType === 'annual'
-                      ? '290 CHF / an · soit 24.15 CHF/mois'
-                      : '29 CHF / mois'}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
-                    <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
-                      Facturation {billingType === 'annual' ? 'annuelle' : 'mensuelle'} · Renouvellement le 22 mai 2026
-                    </span>
-                  </div>
-                </div>
-
-                {/* Inclus dans Basique */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Inclus dans votre plan</div>
-                  {[
-                    'Bilans illimités (toutes zones)',
-                    'Analyse IA par bilan (Claude)',
-                    'Génération PDF & courriers',
-                    'Stockage local sécurisé',
-                    'Fiche d\'exercices IA',
-                  ].map((feature, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.3rem 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
-                      <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>✓</span>
-                      {feature}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Plans disponibles */}
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.6rem' }}>Changer de plan</div>
-                  {([
-                    { name: 'Pro', price: '49', desc: 'IA vocale ElevenLabs + sync cloud + statistiques avancées', highlight: false },
-                    { name: 'Équipe', price: '79', desc: 'Multi-praticiens, dashboard cabinet, accès collaborateur', highlight: true },
-                  ]).map(plan => (
-                    <div key={plan.name} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-md)',
-                      border: `1px solid ${plan.highlight ? 'var(--primary)' : 'var(--border-color)'}`,
-                      background: plan.highlight ? 'color-mix(in srgb, var(--primary) 5%, var(--surface))' : 'var(--secondary)',
-                      marginBottom: 8, cursor: 'pointer',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{plan.name}</span>
-                          {plan.highlight && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>Populaire</span>}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>{plan.desc}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>{plan.price} CHF</div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>/mois</div>
-                      </div>
-                    </div>
-                  ))}
-                  <p style={{ fontSize: '0.68rem', color: 'var(--text-faint)', textAlign: 'center', marginTop: '0.4rem', lineHeight: 1.4 }}>
-                    Mise à niveau disponible après intégration Supabase
-                  </p>
-                </div>
-              </div>
-
-              {/* Synchronisation cloud */}
-              {(() => {
-                const statusConfig = {
-                  idle: { color: 'var(--text-muted)', bg: 'var(--secondary)', label: 'En attente' },
-                  syncing: { color: '#f59e0b', bg: 'color-mix(in srgb, #f59e0b 10%, transparent)', label: 'Synchronisation...' },
-                  done: { color: '#22c55e', bg: 'color-mix(in srgb, #22c55e 10%, transparent)', label: 'Synchronisé' },
-                  error: { color: '#dc2626', bg: 'color-mix(in srgb, #dc2626 10%, transparent)', label: 'Erreur de sync' },
-                }[syncStatus]
-                return (
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
-                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusConfig.color }} />
-                        <span style={{ fontSize: '0.72rem', color: statusConfig.color, fontWeight: 500 }}>{isOnline ? statusConfig.label : 'Hors ligne'}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Déconnexion */}
-              <button
-                onClick={() => signOut()}
-                style={{ background: 'var(--surface)', border: '1px solid #fecaca', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%', marginTop: '0.5rem' }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #dc2626 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: '#dc2626', fontSize: '0.9rem' }}>Se déconnecter</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
+        <SettingsPage
+          theme={theme}
+          onChangeTheme={setTheme}
+          language={language}
+          onChangeLanguage={setLanguage}
+          notificationsEnabled={notificationsEnabled}
+          onToggleNotifications={setNotificationsEnabled}
+          billingType={billingType}
+          syncStatus={syncStatus}
+          isOnline={isOnline}
+          onBack={() => setStep('dashboard')}
+          onProfile={() => setStep('profile')}
+          onRelaunchTutorial={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
+          onSignOut={() => signOut()}
+        />
       )}
 
       {/* ── Résumé bilan modal ─────────────────────────────────────────────────── */}
@@ -5267,163 +2774,36 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
 
       {/* ── Identity step ──────────────────────────────────────────────────────── */}
       {step === 'identity' && (
-        <div className="identity-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('dashboard')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Identité du patient</h2>
-            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
-          <div className="scroll-area">
-            <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 'var(--radius-xl)', padding: '0.4rem', marginBottom: '1.5rem', width: '100%', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.06)' }}>
-              {(['new', 'existing'] as const).map(mode => (
-                <button key={mode} onClick={() => setPatientMode(mode)}
-                  style={{ flex: 1, padding: '0.6rem', borderRadius: 'var(--radius-lg)', background: patientMode === mode ? '#ffffff' : 'transparent', color: patientMode === mode ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: patientMode === mode ? 600 : 400, boxShadow: patientMode === mode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>
-                  {mode === 'new' ? 'Nouveau patient' : 'Patient existant'}
-                </button>
-              ))}
-            </div>
-            {patientMode === 'existing' && (
-              <div className="form-group" style={{background: 'var(--secondary)', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem'}}>
-                <label style={{fontSize: '1.1rem', color: 'var(--primary-dark)', fontWeight: 600}}>Pour quel patient ?</label>
-                <select className="input-luxe" defaultValue=""
-                  onChange={(e) => { if(e.target.value) { try { const val = JSON.parse(e.target.value); setFormData(prev => ({...prev, nom: val.nom, prenom: val.prenom, dateNaissance: val.dateNaissance})) } catch { /* select value is self-generated JSON */ } }}}>
-                  <option value="" disabled>-- Dossiers récents --</option>
-                  {Array.from(new Map(db.map(r => [`${(r.nom||'').toUpperCase()} ${r.prenom}`, r])).values()).map(r => (
-                    <option key={r.id} value={JSON.stringify({nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance})}>
-                      {(r.nom || '').toUpperCase()} {r.prenom}
-                    </option>
-                  ))}
-                </select>
-                {formData.nom && (
-                  <div style={{marginTop: '1rem', padding: '1rem', background: 'var(--surface)', borderRadius: 'var(--radius-md)', color: 'var(--primary)', fontWeight: 600, border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8}}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    Dossier actif : {(formData.nom || '').toUpperCase()} {formData.prenom}
-                  </div>
-                )}
-              </div>
-            )}
-            {patientMode === 'new' && (
-              <>
-                <div className="form-group">
-                  <label>Nom</label>
-                  <input type="text" placeholder="Ex: Dupont" className="input-luxe" value={formData.nom} onChange={e => updateField('nom', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Prénom</label>
-                  <input type="text" placeholder="Ex: Jean" className="input-luxe" value={formData.prenom} onChange={e => updateField('prenom', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Date de naissance</label>
-                  <input type="date" className="input-luxe" value={formData.dateNaissance} onChange={(e) => updateField('dateNaissance', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Sexe <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {([
-                      { value: 'masculin', label: 'Masculin' },
-                      { value: 'feminin', label: 'Féminin' },
-                    ] as const).map(opt => (
-                      <button key={opt.value} type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, sexe: opt.value }))}
-                        style={{ flex: 1, padding: '0.6rem 0.85rem', borderRadius: 'var(--radius-full)', border: formData.sexe === opt.value ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: formData.sexe === opt.value ? 'var(--secondary)' : 'var(--input-bg)', color: formData.sexe === opt.value ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: formData.sexe === opt.value ? 600 : 400, fontSize: '0.88rem', cursor: 'pointer' }}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 8 }}>Zone du bilan</label>
-              <button
-                onClick={() => setShowZonePopup(true)}
-                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 16, border: selectedBodyZone ? '2px solid var(--primary)' : '1.5px solid var(--border-color)', background: selectedBodyZone ? 'var(--info-soft)' : 'var(--input-bg)', color: selectedBodyZone ? 'var(--primary-dark)' : 'var(--text-muted)', fontWeight: selectedBodyZone ? 600 : 400, fontSize: '0.92rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, boxShadow: selectedBodyZone ? '0 2px 8px rgba(45,90,75,0.12)' : '0 1px 4px rgba(0,0,0,0.06)', transition: 'all 0.18s' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {selectedBodyZone && (
-                    <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <ZoneIcon zone={selectedBodyZone} size={16} color="white" />
-                    </span>
-                  )}
-                  {selectedBodyZone ? ZONE_PICKER_ITEMS.find(z => z.zone === selectedBodyZone)?.label ?? selectedBodyZone : 'Sélectionner une zone…'}
-                </span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-            </div>
-          </div>
-          <div className="fixed-bottom">
-            <button className="btn-primary-luxe"
-              disabled={!selectedBodyZone}
-              style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
-              onClick={() => {
-                if (patientMode === 'existing') { setBilanZoneBackStep('identity'); setStep('bilan_zone') }
-                else setStep('general_info')
-              }}>
-              Étape suivante
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── General info step ──────────────────────────────────────────────────── */}
-      {step === 'general_info' && (
-        <div className="general-info-screen fade-in">
-          <header className="screen-header">
-            <button className="btn-back" onClick={() => setStep('identity')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <h2 className="title-section">Infos générales</h2>
-            <button onClick={handleQuitBilan} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', border: 'none', cursor: 'pointer', flexShrink: 0 }} aria-label="Quitter le bilan">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
-          <div className="scroll-area">
-            <div className="form-group">
-              <label>Activité professionnelle</label>
-              <DictableInput value={formData.profession} onChange={e => updateField('profession', e.target.value)} placeholder="Ex: Employé de bureau" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Activité physique / sportive</label>
-              <DictableInput value={formData.sport} onChange={e => updateField('sport', e.target.value)} placeholder="Ex: Course à pied…" inputStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Antécédents familiaux</label>
-              <DictableTextarea value={formData.famille} onChange={e => updateField('famille', e.target.value)} placeholder="Diabète, hypertension…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Antécédents chirurgicaux</label>
-              <DictableTextarea value={formData.chirurgie} onChange={e => updateField('chirurgie', e.target.value)} placeholder="Opérations passées…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-            <div className="form-group">
-              <label>Notes complémentaires</label>
-              <DictableTextarea value={formData.notes} onChange={e => updateField('notes', e.target.value)} placeholder="Précisions…" rows={2} textareaStyle={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', boxSizing: 'border-box' }} />
-            </div>
-          </div>
-          <div className="fixed-bottom">
-            <button
-              className="btn-primary-luxe"
-              disabled={!selectedBodyZone}
-              style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
-              onClick={() => {
-                if (!selectedBodyZone) return
-                setBilanZoneBackStep('general_info')
-                setStep('bilan_zone')
-              }}>
-              {selectedBodyZone
-                ? `Commencer le bilan → ${BILAN_ZONE_LABELS[getBilanType(selectedBodyZone)]}`
-                : 'Sélectionnez une zone dans l\'étape précédente'}
-            </button>
-          </div>
-        </div>
+        <IdentityStep
+          formData={formData}
+          updateField={updateField}
+          onSelectSexe={(sexe) => setFormData(prev => ({ ...prev, sexe }))}
+          onPickExistingPatient={(p) => setFormData(prev => ({ ...prev, nom: p.nom, prenom: p.prenom, dateNaissance: p.dateNaissance }))}
+          patientMode={patientMode}
+          setPatientMode={setPatientMode}
+          selectedBodyZone={selectedBodyZone}
+          setShowZonePopup={setShowZonePopup}
+          stepProgress={stepProgress}
+          db={db}
+          onBack={() => setStep('dashboard')}
+          onQuit={handleQuitBilan}
+          onNext={() => {
+            setBilanZoneBackStep('identity')
+            setStep('bilan_zone')
+          }}
+        />
       )}
 
       {/* ── Bilan zone step — toujours monté pour préserver l'état lors du retour arrière ── */}
       {selectedBodyZone && (
+        <GeneralInfoProvider value={{
+          profession: formData.profession,
+          sport: formData.sport,
+          famille: formData.famille,
+          chirurgie: formData.chirurgie,
+          notes: formData.notes,
+          updateField: (field, value) => updateField(field, value),
+        }}>
         <div className="general-info-screen" style={{ display: step === 'bilan_zone' ? 'flex' : 'none', flexDirection: 'column' }}>
           <header className="screen-header">
             <button className="btn-back" onClick={() => { if (bilanZoneBackStep === 'database') { setCurrentBilanId(null); setCurrentBilanDataOverride(null) } setStep(bilanZoneBackStep) }}>
@@ -5448,6 +2828,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             {getBilanType(selectedBodyZone ?? '') === 'lombaire' && <BilanLombaire key={currentBilanId ?? 'new'} ref={bilanLombaireRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique key={currentBilanId ?? 'new'} ref={bilanGeneriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
             {getBilanType(selectedBodyZone ?? '') === 'geriatrique' && <BilanGeriatrique key={currentBilanId ?? 'new'} ref={bilanGeriatriqueRef} initialData={currentBilanDataOverride ?? undefined} />}
+            {getBilanType(selectedBodyZone ?? '') === 'drainage-lymphatique' && <BilanDrainageLymphatique key={currentBilanId ?? 'new'} ref={bilanDrainageLymphatiqueRef} initialData={currentBilanDataOverride ?? undefined} />}
 
             {/* ── Note de fin de bilan ── */}
             <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
@@ -5580,7 +2961,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             </button>
             <button className="btn-primary-luxe"
               style={{ marginBottom: 0, background: 'var(--primary-dark)' }}
-              onClick={() => { saveBilan('complet'); setCurrentBilanId(null); setCurrentBilanDataOverride(null); setBilanZoneBackStep('general_info'); goToPatientRecord() }}>
+              onClick={() => { saveBilan('complet'); setCurrentBilanId(null); setCurrentBilanDataOverride(null); setBilanZoneBackStep('identity'); goToPatientRecord() }}>
               Enregistrer uniquement
             </button>
             <button className="btn-primary-luxe"
@@ -5600,6 +2981,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             </div>
           </div>
         </div>
+        </GeneralInfoProvider>
       )}
 
       {/* ── Evolution IA step ─────────────────────────────────────────────────── */}
@@ -5652,7 +3034,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             onAudit={recordAIAudit}
             onBack={() => { setEvolutionZoneType(null); setStep('database') }}
             onClose={() => { setEvolutionZoneType(null); setStep('database') }}
-            onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+            onGoToProfile={() => setStep('profile')}
             onExportPDF={(evolution) => {
               const hasText = (v: string | undefined | null): v is string => !!v && v.trim().length > 0
               const sanitizeCell = (v: string) => v.replace(/\|/g, '/').replace(/\s+/g, ' ').trim()
@@ -5845,7 +3227,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         const bilanType = getBilanType(noteSeanceZone ?? '')
         const ZONE_LABELS: Record<string, string> = {
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
+          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique', 'drainage-lymphatique': 'Bilan Drainage Lymphatique',
         }
         const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
         const numSeance = currentNoteSeanceId !== null
@@ -5883,7 +3265,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
         const bilanType = getBilanType(bilanIntermediaireZone ?? '')
         const ZONE_LABELS: Record<string, string> = {
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
-          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique',
+          cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique', 'drainage-lymphatique': 'Bilan Drainage Lymphatique',
         }
         return (
           <div className="general-info-screen fade-in">
@@ -5978,7 +3360,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             showToast('Note diagnostique générée', 'success')
           }}
           onBack={() => setStep('database')}
-          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+          onGoToProfile={() => setStep('profile')}
           onFicheExercice={() => {
             setFicheBackStep('database')
             setStep('fiche_exercice')
@@ -6058,7 +3440,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
             if (bilanZoneBackStep === 'database') {
               setCurrentBilanId(null)
               setCurrentBilanDataOverride(null)
-              setBilanZoneBackStep('general_info')
+              setBilanZoneBackStep('identity')
               setStep('database')
             } else {
               setStep('bilan_zone')
@@ -6067,12 +3449,12 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           onClose={() => {
             setCurrentBilanId(null)
             setCurrentBilanDataOverride(null)
-            setBilanZoneBackStep('general_info')
+            setBilanZoneBackStep('identity')
             goToPatientRecord()
           }}
           onExport={handleExportPDF}
           exporting={exportingPDF}
-          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+          onGoToProfile={() => setStep('profile')}
           onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
         />
         </Suspense>
@@ -6141,7 +3523,7 @@ Pour toute question, exercer vos droits (accès, rectification, effacement) ou s
           }}
           onBack={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setStep(ficheBackStep) }}
           onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}
-          onGoToProfile={() => { setProfileEditDraft(profile); setStep('profile') }}
+          onGoToProfile={() => setStep('profile')}
         />
         </Suspense>
       )}

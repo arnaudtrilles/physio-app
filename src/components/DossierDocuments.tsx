@@ -10,6 +10,10 @@ type RenameTarget =
   | { kind: 'bilan'; bilanId: number; docIndex: number }
   | { kind: 'standalone'; docId: string }
 
+export type DeleteTarget =
+  | { kind: 'bilan'; bilanId: number; docIndex: number }
+  | { kind: 'standalone'; docId: string }
+
 interface UnifiedDoc {
   key: string
   name: string
@@ -36,7 +40,7 @@ interface DossierDocumentsProps {
   bilans: BilanRecord[]
   standaloneDocs: PatientDocument[]
   onRename: (target: RenameTarget, newName: string) => void
-  onDelete: (docId: string) => void
+  onDelete: (target: DeleteTarget) => void
   onAddRaw: (dataUrl: string, name: string, mimeType: string) => void
   /** Relancer le caviardage sur un document standalone existant */
   onRemask?: (docId: string) => void
@@ -58,7 +62,8 @@ function formatSize(b64: string | undefined, mimeType: string): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-function ensureDataUrl(data: string, mimeType: string): string {
+function ensureDataUrl(data: string | undefined, mimeType: string): string {
+  if (!data) return ''
   return data.startsWith('data:') ? data : `data:${mimeType};base64,${data}`
 }
 
@@ -70,14 +75,16 @@ function formatDate(iso: string): string {
   }
 }
 
-/** Renvoie l'original si disponible, sinon la version masquée */
-function getDisplayData(doc: UnifiedDoc): string {
+/** Renvoie l'original si disponible, sinon la version masquée. Peut être undefined si le doc est corrompu/incomplet. */
+function getDisplayData(doc: UnifiedDoc): string | undefined {
   return doc.originalData ?? doc.data
 }
 
 function triggerDownload(doc: UnifiedDoc) {
+  const url = ensureDataUrl(getDisplayData(doc), doc.mimeType)
+  if (!url) return
   const a = document.createElement('a')
-  a.href = ensureDataUrl(getDisplayData(doc), doc.mimeType)
+  a.href = url
   a.download = doc.name
   document.body.appendChild(a)
   a.click()
@@ -87,6 +94,44 @@ function triggerDownload(doc: UnifiedDoc) {
 function DocViewer({ doc, onClose }: { doc: UnifiedDoc; onClose: () => void }) {
   const url = ensureDataUrl(getDisplayData(doc), doc.mimeType)
   const isImg = doc.mimeType.startsWith('image/')
+  if (!url) {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'rgba(0, 0, 0, 0.85)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 16, boxSizing: 'border-box',
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: 'white', borderRadius: 12, padding: '1.5rem 1.75rem',
+            maxWidth: 360, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
+            Document indisponible
+          </div>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
+            Le contenu de « {doc.name} » est manquant. Le document a été sauvegardé sans ses données binaires (ancien format ou exportation PDF). Tu peux le supprimer pour nettoyer le dossier.
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '0.55rem 1rem', borderRadius: 8, border: 'none',
+              background: '#0f172a', color: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div
       onClick={onClose}
@@ -343,7 +388,7 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {unified.map(doc => {
             const isRenaming = renamingKey === doc.key
-            const isConfirmingDelete = confirmDeleteId === doc.docId
+            const isConfirmingDelete = confirmDeleteId === doc.key
             return (
               <div
                 key={doc.key}
@@ -451,27 +496,36 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                     </svg>
                   </IconBtn>
-                  {doc.kind === 'standalone' && (
-                    isConfirmingDelete ? (
-                      <>
-                        <IconBtn onClick={() => { if (doc.docId) onDelete(doc.docId); setConfirmDeleteId(null) }} title="Confirmer" danger>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        </IconBtn>
-                        <IconBtn onClick={() => setConfirmDeleteId(null)} title="Annuler">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                          </svg>
-                        </IconBtn>
-                      </>
-                    ) : (
-                      <IconBtn onClick={() => doc.docId && setConfirmDeleteId(doc.docId)} title="Supprimer" danger>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  {isConfirmingDelete ? (
+                    <>
+                      <IconBtn
+                        onClick={() => {
+                          if (doc.kind === 'standalone' && doc.docId) {
+                            onDelete({ kind: 'standalone', docId: doc.docId })
+                          } else if (doc.kind === 'bilan' && typeof doc.bilanId === 'number' && typeof doc.docIndex === 'number') {
+                            onDelete({ kind: 'bilan', bilanId: doc.bilanId, docIndex: doc.docIndex })
+                          }
+                          setConfirmDeleteId(null)
+                        }}
+                        title="Confirmer"
+                        danger
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
                         </svg>
                       </IconBtn>
-                    )
+                      <IconBtn onClick={() => setConfirmDeleteId(null)} title="Annuler">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </IconBtn>
+                    </>
+                  ) : (
+                    <IconBtn onClick={() => setConfirmDeleteId(doc.key)} title="Supprimer" danger>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </IconBtn>
                   )}
                 </div>
               </div>

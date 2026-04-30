@@ -6,6 +6,7 @@ import { AmplitudeInput, ForceInput, MRCInfo, OuiNon, SectionHeader, ScoreRow, B
 import { useQuestionnaires } from './questionnaires/useQuestionnaires'
 import { TestInfoButton } from './testInfo/TestInfoButton'
 import { TestResultInput } from './testInputs'
+import { InfosGeneralesSection } from './InfosGeneralesSection'
 import {
   DouleurSection, RedFlagsSection, YellowFlagsSection, BlueBlackFlagsSection,
   ContratKineSection, ConseilsSection, PSFSCards,
@@ -180,7 +181,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
   )
   const questionnaires = useQuestionnaires(updScore, qAnswers, setQAnswers, qResults, setQResults)
 
-  const [open, setOpen] = useState<Record<string, boolean>>({ douleur: true })
+  const [open, setOpen] = useState<Record<string, boolean>>({ infosGenerales: true, douleur: true })
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   useImperativeHandle(ref, () => ({
@@ -241,6 +242,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
   // tests spécifiques (Thessaly + Noble), scores (PSFS seul), contrat, conseils.
   type Priority = 'noyau' | 'approfondissement'
   const allSections: { id: string; title: string; color: string; priority: Priority }[] = [
+    { id: 'infosGenerales',title: 'Infos générales',                  color: '#1A1A1A', priority: 'noyau' },
     { id: 'douleur',       title: 'Douleur',                          color: '#1A1A1A', priority: 'noyau' },
     { id: 'redFlags',      title: 'Red Flags 🚩',                      color: '#991b1b',        priority: 'noyau' },
     { id: 'yellowFlags',   title: 'Yellow Flags 🟡',                   color: '#d97706',        priority: 'noyau' },
@@ -286,6 +288,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
+              {sec.id === 'infosGenerales' && <InfosGeneralesSection />}
               {sec.id === 'douleur' && (
                 <DouleurSection state={douleur} onChange={p => setDouleur(s => ({ ...s, ...p }))} options={{ hasMecanismeLesionnel: true }} coreMode={coreMode} />
               )}

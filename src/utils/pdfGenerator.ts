@@ -860,6 +860,310 @@ export const generatePDF = async (
         y += 2
       }
     }
+
+    // ── DLM-spécifique : œdèmes, mesures Kuhnke, stades, plan CDT ─────────
+    // Le bilan DLM a une structure dédiée (cf. drainageLymphatique/dlmTypes).
+    // On détecte sa présence via oedemeTypes et on rend une vue compacte.
+    const isDLM = Array.isArray(d.oedemeTypes)
+    if (isDLM) {
+      const OEDEME_LABELS: Record<string, string> = {
+        lymphoedeme: 'Lymphœdème', lipoedeme: 'Lipœdème', phleboedeme: 'Phlébœdème',
+      }
+      const COTE_LABELS: Record<string, string> = { D: 'Droit', G: 'Gauche', bilateral: 'Bilatéral' }
+
+      // Synthèse type / côté / régions
+      const types = (d.oedemeTypes as string[]).map(t => OEDEME_LABELS[t] ?? t).filter(Boolean)
+      if (types.length > 0 || d.cote || (Array.isArray(d.regions) && d.regions.length > 0)) {
+        subTitle('Drainage Lymphatique — synthèse')
+        if (types.length > 0) field('Type(s) d\'œdème', types.join(' + '))
+        if (d.cote) field('Côté', COTE_LABELS[d.cote as string] ?? String(d.cote))
+        if (Array.isArray(d.regions) && d.regions.length > 0) {
+          field('Régions atteintes', (d.regions as string[]).join(', '))
+        }
+        if (typeof d.bodyChartAnnotations === 'string' && d.bodyChartAnnotations.trim()) {
+          field('Annotations topographiques', d.bodyChartAnnotations.trim())
+        }
+        y += 2
+      }
+
+      // Contre-indications
+      if (d.contreIndications && typeof d.contreIndications === 'object') {
+        const ci = d.contreIndications as Record<string, unknown>
+        const positives: string[] = []
+        const CI_LABELS: Record<string, string> = {
+          thromboseAigue: 'TVP aiguë', insuffisanceCardiaqueDecompensee: 'IC décompensée',
+          infectionAigue: 'Infection aiguë', cancerActifNonTraite: 'Cancer évolutif non traité',
+          hypotensionSevere: 'Hypotension sévère', arythmie: 'Arythmie',
+          insuffisanceRenaleSevere: 'IR sévère', trombopeniePlaquettes: 'Thrombopénie',
+          asthmesevere: 'Asthme sévère', hypothyroidieSevere: 'Hypothyroïdie sévère',
+          grossesseT1: 'Grossesse T1', plaiesCutaneesOuvertes: 'Plaies ouvertes',
+          mycoseActive: 'Mycose active', douleurInexpliquee: 'Douleur inexpliquée',
+        }
+        for (const [k, lbl] of Object.entries(CI_LABELS)) {
+          if (ci[k] === 'oui') positives.push(lbl)
+        }
+        const decisionLabels: Record<string, string> = {
+          priseEnCharge: 'Prise en charge', reportee: 'Reportée', refusee: 'Refusée — réorientation',
+        }
+        if (positives.length > 0 || ci.prescriptionMedicale === 'oui' || ci.decision) {
+          subTitle('Contre-indications & encadrement')
+          if (positives.length > 0) field('CI positives', positives.join(' · '))
+          if (ci.prescriptionMedicale === 'oui') {
+            field('Prescription médicale', `Présente${ci.prescriptionDate ? ` (${ci.prescriptionDate})` : ''}`)
+          }
+          if (ci.decision) field('Décision kiné', decisionLabels[ci.decision as string] ?? String(ci.decision))
+          if (ci.motifDecision) field('Motif', String(ci.motifDecision))
+          y += 2
+        }
+      }
+
+      // Anamnèse — synthèse compacte
+      if (d.anamnese && typeof d.anamnese === 'object') {
+        const a = d.anamnese as Record<string, unknown>
+        const ANAM_LABELS: Record<string, string> = {
+          ageApparition: 'Âge apparition', delaiDepuisApparition: 'Délai',
+          evolutionDecrite: 'Évolution', facteursAggravants: 'Aggravants',
+          facteursAmeliorants: 'Améliorants', douleurEvn: 'Douleur EVA /10',
+          lourdeur: 'Lourdeur', tension: 'Tension', paresthesies: 'Paresthésies',
+          pruritus: 'Prurit', cellulites: 'ATCD érysipèle', cellulitesEpisodes: 'Épisodes',
+          ulceres: 'Ulcères', ulceresLocalisation: 'Loc. ulcères',
+          atcdChirurgicaux: 'ATCD chirurgicaux', curageGanglionnaire: 'Curage',
+          curageDetail: 'Détail curage', radiotherapie: 'Radiothérapie',
+          radiotherapieZones: 'Zones RT', cancer: 'Cancer', cancerType: 'Type cancer',
+          cancerStatut: 'Statut', chimioActuelle: 'Chimio en cours',
+          insuffisanceVeineuse: 'IV chronique', insuffisanceCardiaque: 'IC',
+          insuffisanceRenale: 'IR', diabete: 'Diabète', obesite: 'Obésité', imc: 'IMC',
+          thromboseATCD: 'ATCD thrombose', filariose: 'Filariose', voyageEndemique: 'Voyage endémique',
+          atcdFamiliauxLymphoedeme: 'ATCD fam. lymphœdème',
+          atcdFamiliauxLipoedeme: 'ATCD fam. lipœdème',
+          traitementsActuels: 'Traitements', traitementsHormones: 'Hormones',
+          diuretiques: 'Diurétiques', professionDebout: 'Profession debout',
+          activitePhysique: 'Activité physique', alimentationContexte: 'Alimentation',
+          vetementsContention: 'Contention portée', vetementsContentionDetail: 'Détail',
+          plaintePatient: 'Plainte', retentissementQdV: 'Retentissement QdV', attentes: 'Attentes',
+        }
+        const entries = renderObjCompact(a, ANAM_LABELS)
+        if (entries.length > 0) {
+          subTitle('Anamnèse')
+          entries.forEach(e => field(e.label, e.value))
+          y += 2
+        }
+      }
+
+      // Examen clinique
+      if (d.examenClinique && typeof d.examenClinique === 'object') {
+        const ec = d.examenClinique as Record<string, unknown>
+        const EX_LABELS: Record<string, string> = {
+          asymetrie: 'Asymétrie', asymetrieDetail: 'Détail asymétrie',
+          posture: 'Posture', troublesTrophiques: 'Troubles trophiques',
+          couleurPeau: 'Couleur peau', temperatureLocale: 'Température',
+          varices: 'Varices', varicesDetail: 'Détail varices', cicatrices: 'Cicatrices',
+          godetGrade: 'Godet (0-4)', godetLocalisation: 'Loc. godet',
+          fibrose: 'Fibrose', fibroseLocalisation: 'Loc. fibrose',
+          consistance: 'Consistance', douleurPalpation: 'Douleur palpation',
+          douleurPalpationLocalisation: 'Loc. douleur',
+          stemmer: 'Stemmer', stemmerLocalisation: 'Loc. Stemmer',
+          poulsPedieux: 'Pouls pédieux', signeHomans: 'Homans',
+          amplitudesArticulaires: 'Amplitudes', notesExamen: 'Notes',
+        }
+        const entries = renderObjCompact(ec, EX_LABELS)
+        if (entries.length > 0) {
+          subTitle('Examen clinique DLM')
+          entries.forEach(e => field(e.label, e.value))
+          y += 2
+        }
+      }
+
+      // Mesures
+      if (d.mesures && typeof d.mesures === 'object') {
+        const m = d.mesures as Record<string, unknown>
+        const general: { label: string; value: string }[] = []
+        const M_LABELS: Record<string, string> = {
+          poids: 'Poids (kg)', taille: 'Taille (cm)', imc: 'IMC',
+          perimetreOmbilical: 'Périm. ombilical', perimetreHanche: 'Périm. hanche', rapportTH: 'Rapport T/H',
+          volumeMSDcm3: 'Vol MS D (cm³)', volumeMSGcm3: 'Vol MS G (cm³)',
+          volumeMIDcm3: 'Vol MI D (cm³)', volumeMIGcm3: 'Vol MI G (cm³)',
+          ecartVolumiqueMS: 'Écart MS (%)', ecartVolumiqueMI: 'Écart MI (%)',
+          notesMesures: 'Notes mesures',
+        }
+        for (const [k, lbl] of Object.entries(M_LABELS)) {
+          const v = fmt(m[k])
+          if (v && isRelevant(v)) general.push({ label: lbl, value: v })
+        }
+        const renderCirco = (label: string, raw: unknown) => {
+          if (!raw || typeof raw !== 'object') return
+          const cs = raw as { repere?: string; niveaux?: Array<{ niveau?: string; perimetreD?: string; perimetreG?: string; note?: string }> }
+          const niv = Array.isArray(cs.niveaux) ? cs.niveaux : []
+          const filled = niv.filter(n => (n.perimetreD ?? '').trim() || (n.perimetreG ?? '').trim())
+          if (filled.length === 0 && !cs.repere) return
+          subTitle(label)
+          if (cs.repere) field('Repère', cs.repere)
+          filled.forEach(n => {
+            const niveau = n.niveau ?? '—'
+            field(`Niv ${niveau} cm`, `D ${n.perimetreD || '—'} cm · G ${n.perimetreG || '—'} cm${n.note ? ` (${n.note})` : ''}`)
+          })
+          y += 2
+        }
+        if (general.length > 0) {
+          subTitle('Mesures')
+          general.forEach(e => field(e.label, e.value))
+          y += 2
+        }
+        renderCirco('Circométrie membre supérieur (Kuhnke)', m.circoMS)
+        renderCirco('Circométrie membre inférieur (Kuhnke)', m.circoMI)
+        if (m.bioImpedance && typeof m.bioImpedance === 'object') {
+          const bi = m.bioImpedance as Record<string, unknown>
+          const biEntries = renderObjCompact(bi, {
+            appareil: 'Appareil', lDexScore: 'L-Dex', date: 'Date', note: 'Note',
+          })
+          if (biEntries.length > 0) {
+            subTitle('Bio-impédance')
+            biEntries.forEach(e => field(e.label, e.value))
+            y += 2
+          }
+        }
+      }
+
+      // Stade & classification
+      const stadeBlock: { label: string; value: string }[] = []
+      if (d.stadeISL) stadeBlock.push({ label: 'Stade ISL (lymphœdème)', value: `Stade ${d.stadeISL}` })
+      if (d.stadeLipo) stadeBlock.push({ label: 'Stade lipœdème', value: `Stade ${d.stadeLipo}` })
+      if (d.typeLipoDistribution) stadeBlock.push({ label: 'Distribution lipo', value: String(d.typeLipoDistribution) })
+      if (d.ceap) stadeBlock.push({ label: 'CEAP (phlébœdème)', value: String(d.ceap) })
+      if (stadeBlock.length > 0) {
+        subTitle('Stade & classification')
+        stadeBlock.forEach(e => field(e.label, e.value))
+        y += 2
+      }
+
+      // ICF
+      if (d.icf && typeof d.icf === 'object') {
+        const entries = renderObjCompact(d.icf as Record<string, unknown>, {
+          fonctionsCorps: 'Fonctions (b)', structuresCorps: 'Structures (s)',
+          activitesLimitees: 'Activités (d)', participationRestreinte: 'Participation',
+          facteursEnvironnementaux: 'F. environnementaux', facteursPersonnels: 'F. personnels',
+          echelleEffortFonctionnel: 'Effort fonctionnel /10',
+        })
+        if (entries.length > 0) {
+          subTitle('Cadre ICF (CIF)')
+          entries.forEach(e => field(e.label, e.value))
+          y += 2
+        }
+      }
+
+      // Diagnostic différentiel
+      if (d.dxDifferentiel && typeof d.dxDifferentiel === 'object') {
+        const dx = d.dxDifferentiel as Record<string, unknown>
+        const RETENU: Record<string, string> = { oui: 'Retenu', non: 'Écarté', a_explorer: 'À explorer' }
+        const renderHyp = (key: string, title: string) => {
+          const h = dx[key] as Record<string, unknown> | undefined
+          if (!h) return
+          const r = h.retenu ? RETENU[h.retenu as string] ?? String(h.retenu) : ''
+          const pour = fmt(h.argumentsPour)
+          const contre = fmt(h.argumentsContre)
+          if (!r && !pour && !contre) return
+          field(title, [r, pour ? `Pour: ${pour}` : '', contre ? `Contre: ${contre}` : ''].filter(Boolean).join(' | '))
+        }
+        let titled = false
+        const ensureTitle = () => { if (!titled) { subTitle('Diagnostic différentiel'); titled = true } }
+        if (dx.lymphoedeme || dx.lipoedeme || dx.phleboedeme) {
+          ensureTitle()
+          renderHyp('lymphoedeme', 'Lymphœdème')
+          renderHyp('lipoedeme', 'Lipœdème')
+          renderHyp('phleboedeme', 'Phlébœdème')
+        }
+        if (Array.isArray(dx.autres)) {
+          (dx.autres as Array<Record<string, unknown>>).forEach((h, i) => {
+            const r = h.retenu ? RETENU[h.retenu as string] ?? String(h.retenu) : ''
+            const pour = fmt(h.argumentsPour)
+            const contre = fmt(h.argumentsContre)
+            const hyp = fmt(h.hypothese)
+            if (!hyp && !r && !pour && !contre) return
+            ensureTitle()
+            field(`Autre ${i + 1}`, [hyp, r, pour ? `Pour: ${pour}` : '', contre ? `Contre: ${contre}` : ''].filter(Boolean).join(' | '))
+          })
+        }
+        const concl = fmt(dx.conclusionDx)
+        if (concl) { ensureTitle(); field('Conclusion', concl) }
+        if (titled) y += 2
+      }
+
+      // Plan de traitement
+      if (d.plan && typeof d.plan === 'object') {
+        const p = d.plan as Record<string, unknown>
+        const PHASE1_LABELS: Record<string, string> = {
+          dlm: 'DLM', bandesPeu: 'Bandages peu élastiques', soinsPeau: 'Soins peau',
+          exercicesDecongestifs: 'Exercices décongestifs', education: 'Éducation',
+          pressotherapie: 'Pressothérapie', bandagesNuit: 'Bandages nuit',
+        }
+        const PHASE2_LABELS: Record<string, string> = {
+          contention: 'Contention', autoDLM: 'Auto-DLM', exercices: 'Exercices',
+          suivi: 'Suivi planifié', autobandage: 'Auto-bandage',
+        }
+        const collectChecked = (obj: unknown, labels: Record<string, string>): string => {
+          if (!obj || typeof obj !== 'object') return ''
+          const r = obj as Record<string, unknown>
+          return Object.entries(labels)
+            .filter(([k]) => r[k] === true)
+            .map(([, lbl]) => lbl)
+            .join(' · ')
+        }
+        let titled = false
+        const ensure = () => { if (!titled) { subTitle('Plan de traitement (CDT)'); titled = true } }
+        if (p.phase1Active === 'oui') {
+          ensure()
+          field('Phase 1 — Décongestion intensive', `${fmt(p.phase1FrequenceHebdo) || ''}${p.phase1Duree ? ` · ${p.phase1Duree}` : ''}`.trim() || 'Active')
+          const c1 = collectChecked(p.phase1Composantes, PHASE1_LABELS)
+          if (c1) field('Composantes P1', c1)
+          const o1 = fmt(p.phase1Objectifs)
+          if (o1) field('Objectifs SMART P1', o1)
+        }
+        if (p.phase2Active === 'oui') {
+          ensure()
+          field('Phase 2 — Entretien', fmt(p.phase2FrequenceSuivi) || 'Active')
+          const c2 = collectChecked(p.phase2Composantes, PHASE2_LABELS)
+          if (c2) field('Composantes P2', c2)
+          const o2 = fmt(p.phase2Objectifs)
+          if (o2) field('Objectifs SMART P2', o2)
+        }
+        const lipo = p.lipoSpecifique as Record<string, unknown> | undefined
+        if (lipo) {
+          const lipoBits: string[] = []
+          if (lipo.nutritionConseil === true) lipoBits.push('Nutrition')
+          if (lipo.activitePhysique === true) lipoBits.push('AP adaptée')
+          if (lipo.psyAccompagnement === true) lipoBits.push('Accomp. psy')
+          if (lipo.chirurgieLiposuccionEnvisagee) {
+            const chirLabels: Record<string, string> = { oui: 'Liposuccion indiquée', non: 'Liposuccion non indiquée', a_discuter: 'Liposuccion à discuter' }
+            lipoBits.push(chirLabels[lipo.chirurgieLiposuccionEnvisagee as string] ?? '')
+          }
+          if (lipoBits.filter(Boolean).length > 0) {
+            ensure()
+            field('Lipœdème — spécifique', lipoBits.filter(Boolean).join(' · '))
+          }
+        }
+        const phlebo = p.phleboSpecifique as Record<string, unknown> | undefined
+        if (phlebo) {
+          const phleboBits: string[] = []
+          if (phlebo.contentionMedicaleDegre) phleboBits.push(`Contention classe ${phlebo.contentionMedicaleDegre}`)
+          if (phlebo.avisAngiologique === 'oui') phleboBits.push('Avis angiologique demandé')
+          if (phlebo.elevation === true) phleboBits.push('Élévation')
+          if (phlebo.activeMobilisation === true) phleboBits.push('Mobilisation active')
+          if (phleboBits.length > 0) {
+            ensure()
+            field('Phlébœdème — spécifique', phleboBits.join(' · '))
+          }
+        }
+        const edu = fmt(p.educationAutosoinsItems)
+        const sa = fmt(p.signesAlerte)
+        const next = fmt(p.prochaineConsultation)
+        const np = fmt(p.notesPlan)
+        if (edu) { ensure(); field('Éducation / autosoins', edu) }
+        if (sa) { ensure(); field('Signes d\'alerte', sa) }
+        if (next) { ensure(); field('Prochaine consultation', next) }
+        if (np) { ensure(); field('Notes plan', np) }
+        if (titled) y += 2
+      }
+    }
   }
 
   // ── 4. Suivi & amélioration ───────────────────────────────────────────────

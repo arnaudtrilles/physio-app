@@ -125,6 +125,10 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
 
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
   const sexeLine = sexe ? ` — Sexe : ${sexe}` : ''
+  const sexeNorm = sexe === 'feminin' ? 'feminin' : sexe === 'masculin' ? 'masculin' : null
+  const sexeHeader = sexeNorm
+    ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur (voir règle 4).`
+    : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
   const notesLibresStr = ctx.notesLibres ? scrub(ctx.notesLibres) : null
 
   // Profil thérapeute
@@ -144,7 +148,9 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
 
   const role = roleTitle(ctx.therapistProfession)
 
-  return `Tu es un ${role} expert en musculo-squelettique. Analyse ce bilan clinique et fournis une évaluation précise et personnalisée.
+  return `${sexeHeader}
+
+Tu es un ${role} expert en musculo-squelettique. Analyse ce bilan clinique et fournis une évaluation précise et personnalisée.
 
 DONNÉES DU BILAN (données anonymisées) :
 - Patient : ${ageLine}${sexeLine}
@@ -169,7 +175,10 @@ ${therapistSection}
 INSTRUCTIONS STRICTES :
 1. Les 3 hypothèses doivent avoir des probabilités RÉELLES calculées à partir des données cliniques (EVN, tests, scores, flags). Les probabilités ne doivent PAS être fixes (pas de 75/45/20 par défaut). Elles doivent refléter la réalité clinique du cas. La somme des 3 probabilités DOIT être exactement égale à 100 (ex: 65+25+10=100, ou 50+30+20=100).
 2. La prise en charge doit être SPÉCIFIQUE à ce patient : cite les techniques précises que le thérapeute maîtrise et les équipements dont il dispose. Ne propose PAS de techniques ou appareils que le thérapeute n'a pas listés. Si aucun profil thérapeute n'est fourni, reste générique. Chaque phase doit contenir 3 à 5 "points" COURTS et ACTIONNABLES (12-18 mots max par point, style télégraphique clinique, pas de phrases longues). Chaque point = une action, une technique ou un exercice concret avec sa dose/fréquence quand pertinent.
-3. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
+3. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique : pas de "absence de mesures", "absence de tests objectifs", "données objectives manquantes", "manque de documentation". Quand une donnée n'est pas dans les entrées, elle ne figure tout simplement pas dans la sortie — aucun champ ne contient "Non documenté", "Non renseigné", "Aucune donnée". Les "alertes" ne contiennent QUE des red flags critiques cliniques (signe d'alerte médicale, urgence orientation) — JAMAIS de remarque sur la qualité des données. Aucun "point" de priseEnCharge ne recommande de produire des données futures (HOOS/Oxford/WOMAC/KOOS/DASH/objectivation systématique) — les actions sont THÉRAPEUTIQUES (technique manuelle, exercice, conseil, éducation), pas méthodologiques.
+4. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "Elle", "active", "sportive", "présentait". Si \`masculin\` : "Le patient", "âgé", "Il", "actif", "sportif". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions. JAMAIS inférer le sexe depuis le prénom — seule SEXE_PATIENT fait foi. Vérifie chaque occurrence de "le patient"/"la patiente" avant de produire le JSON.
+5. ÉCHELLE DOULEUR COHÉRENTE — Étiquette EVN pour les valeurs des bilans, EVA pour les valeurs des séances. Pas de mélange "EVN/EVA" dans une même phrase, pas de conversion de l'une en l'autre.
+6. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
 
 {
   "diagnostic": {
@@ -186,7 +195,7 @@ INSTRUCTIONS STRICTES :
     { "phase": "Phase subaiguë (J8–J21)", "titre": "Titre spécifique", "points": ["Action concise 1", "Action concise 2", "Action concise 3", "Action concise 4"] },
     { "phase": "Phase fonctionnelle (J22–J42)", "titre": "Titre spécifique", "points": ["Action concise 1", "Action concise 2", "Action concise 3", "Action concise 4"] }
   ],
-  "alertes": ["Alerte uniquement si red flag critique nécessitant orientation urgente, sinon tableau vide"]
+  "alertes": ["Red flag CLINIQUE critique nécessitant orientation médicale urgente — sinon tableau vide. INTERDIT : remarques sur la qualité ou la quantité des données, mentions d'absence de mesures ou de scores."]
 }`
 }
 
@@ -339,6 +348,8 @@ export interface EvolutionContext {
   /** Résumés 1-ligne des PEC clôturées dans d'autres zones — contexte d'arrière-plan uniquement. */
   closedAntecedents?: string[]
   therapistProfession?: string
+  /** Note libre du thérapeute saisie avant génération — observations cliniques prioritaires à intégrer. */
+  therapistNote?: string
 }
 
 // Parse dd/mm/yyyy → timestamp (stable sort key)
@@ -439,7 +450,18 @@ Plan : ${scrub(d.notePlan ?? 'N/R')}`
     ? `\n\nANTÉCÉDENTS D'AUTRES PEC CLÔTURÉES (contexte patient uniquement, NE PAS mélanger à l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
     : ''
 
-  return `${sexeLine}
+  const noteThera = ctx.therapistNote && ctx.therapistNote.trim()
+    ? `
+
+========================================
+SECTION 0 — OBSERVATIONS DU THÉRAPEUTE (PRIORITÉ ABSOLUE)
+========================================
+Le thérapeute qui a vu le patient en consultation transmet les observations suivantes. Tu DOIS les intégrer prioritairement dans le rapport quand elles éclairent ou nuancent les données chronologiques de la section 3. Elles priment sur toute interprétation par défaut. Si la note contredit une donnée brute, tu suis la note (le thérapeute a vu, l'IA non). Tu ne reproduis JAMAIS la note verbatim — tu en intègres la substance dans les blocs narratifs appropriés (tableauInitial, evolutionClinique, etatActuel, conclusion). Aucun champ ne doit citer "note du thérapeute" ou équivalent.
+
+${scrub(ctx.therapistNote.trim())}`
+    : ''
+
+  return `${sexeLine}${noteThera}
 
 ========================================
 SECTION 1 — DONNÉES PATIENT
@@ -470,18 +492,23 @@ Ordre chronologique strict (1 = début de PEC, ${timeline.length} = étape la pl
 ${timelineStr || '(Aucune étape exploitable — rapport non génératif.)'}
 
 ========================================
-SECTION 4 — INSTRUCTIONS DE RÉDACTION (10 règles absolues)
+SECTION 4 — INSTRUCTIONS DE RÉDACTION (15 règles absolues)
 ========================================
-1. ANCRAGE FACTUEL STRICT — N'utilise QUE les données de la section 3. Aucune invention, aucune extrapolation, aucune pathologie ou mécanisme lésionnel non explicité dans les données. Si une information manque, écris "Non documenté dans le suivi" ou laisse le champ vide ([]).
+1. ANCRAGE FACTUEL STRICT — N'utilise QUE les données de la section 3. Aucune invention, aucune extrapolation, aucune pathologie ou mécanisme lésionnel non explicité dans les données. Quand une donnée manque, le champ correspondant reste VIDE (chaîne "" ou tableau []). INTERDICTION ABSOLUE d'écrire "Non documenté dans le suivi", "Non documenté", "Non renseigné", "Aucune donnée", "Absence de données", "données objectives chiffrées limitant le suivi" ou toute formulation équivalente — ces mentions disqualifient le rapport. Le médecin destinataire constatera lui-même les champs vides.
 2. PROSE MÉDICALE — Rédige en français médical professionnel, phrases articulées (sujet + verbe + complément), pas de style télégraphique, pas de listes à puces dans les blocs narratifs (tableauInitial, evolutionClinique.*, interventionsRealisees.*, etatActuel.*, resume, conclusion). Les tableaux (pointsForts, pointsVigilance, recommandations, progression) sont en revanche listes structurées.
-3. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "née", "Elle", "active", "sportive". Si \`masculin\` : "Le patient", "âgé", "né", "Il", "actif", "sportif". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule SEXE_PATIENT fait foi.
+3. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi (relire AVANT chaque phrase qui mentionne le patient). Si \`feminin\` : "La patiente", "âgée", "née", "Elle", "active", "sportive", "présentait", "rapportait". Si \`masculin\` : "Le patient", "âgé", "né", "Il", "actif", "sportif". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule SEXE_PATIENT fait foi. AUCUNE phrase du rapport ne doit utiliser "le patient" si SEXE_PATIENT vaut \`feminin\`, et inversement — vérifie chaque occurrence avant de produire le JSON.
 4. TERMINOLOGIE VERBATIM — Noms de tests, articulations, échelles, acronymes : reproduis-les exactement comme dans les données. "Lasègue" reste "Lasègue", jamais "signe de Lasègue inversé" sauf si écrit tel quel.
 5. PAS DE POURCENTAGES — aucune hypothèse diagnostique chiffrée (ni %, ni probabilité numérique). Langage qualitatif uniquement : "évolution favorable", "amélioration marquée", "progression lente", "stagnation relative".
 6. CALIBRAGE LONGUEUR — tableauInitial : 3-5 phrases. evolutionClinique.syntheseGlobale : 3-4 phrases. evolutionClinique.evolutionSymptomatique/fonctionnelle/objective : 2-4 phrases chacun. interventionsRealisees.* : 2-3 phrases chacun. etatActuel.* : 2-3 phrases chacun. resume : 3-4 phrases. conclusion : 3-5 phrases. Respecte ces fourchettes.
 7. TIMELINE — le champ "progression" liste CHAQUE étape de la section 3 dans l'ordre chronologique. "bilanNum" = numéro d'étape séquentiel (1, 2, 3…). "etape" = libellé type ("Bilan initial", "Bilan intermédiaire N°2", "Séance N°3"). "evn" = valeur EVN ou EVA quand disponible, sinon null. "commentaire" = 1 phrase courte (15-25 mots) résumant cliniquement l'étape.
 8. TENDANCE — valeur unique parmi : "amelioration", "stationnaire", "regression", "mixte". Évalue sur l'ensemble de la chronologie (EVN/EVA, capacité fonctionnelle déclarée, tolérance). "mixte" = trajectoires divergentes (ex. douleur qui baisse mais fonction qui régresse).
 9. TON CLINIQUE — concis, factuel, sans pathos, sans jargon gratuit, sans qualificatifs subjectifs ("malheureusement", "heureusement", "impressionnant"). Le rapport s'adresse à un médecin prescripteur : il doit pouvoir être lu en 2 minutes et donner une image fidèle de la PEC.
-10. UNE INFO = UNE PLACE — ne répète pas une donnée dans plusieurs champs. Le resume est une synthèse narrative globale ; evolutionClinique détaille par dimension ; etatActuel est une photographie à la dernière étape ; conclusion est une orientation thérapeutique prospective.
+10. UNE INFO = UNE PLACE — ne répète pas une donnée dans plusieurs champs. Le resume est une synthèse narrative globale ; evolutionClinique détaille par dimension ; etatActuel est une photographie à la dernière étape ; conclusion est une orientation thérapeutique prospective. Une même phrase, une même tournure, un même chiffre n'apparaissent qu'UNE FOIS dans tout le rapport. Reformule systématiquement quand un même fait doit être évoqué dans deux champs (ex. EVN initiale dans tableauInitial vs. evolutionSymptomatique).
+11. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase qui souligne une lacune méthodologique du clinicien : aucune mention d'absence de tests objectifs, de scores fonctionnels, de mesures d'amplitude, d'observance, de documentation. Les pointsVigilance ne contiennent QUE des éléments cliniques observés (drapeaux jaunes, comorbidités, signes d'alerte) — JAMAIS "absence de mesures", "données objectives manquantes", "manque de documentation", etc. Les recommandations sont CLINIQUES (réévaluation à distance, ajustement thérapeutique, concertation médicale, orientation chirurgicale, imagerie complémentaire) — JAMAIS MÉTHODOLOGIQUES (interdiction stricte de "intégrer des mesures objectives", "réaliser des scores HOOS/Oxford/WOMAC/KOOS/DASH", "documenter systématiquement", "objectivation clinique systématique", "tracer les amplitudes", ou toute variante).
+12. ÉCHELLE DOULEUR COHÉRENTE — Quand tu cites un score de douleur, utilise EXACTEMENT l'étiquette de la donnée source : "EVN" pour les valeurs issues d'un bilan (initial ou intermédiaire), "EVA" pour les valeurs issues d'une séance. Ne convertis JAMAIS l'une en l'autre, ne mélange JAMAIS "EVN/EVA" dans la même phrase, n'écris JAMAIS "EVN ou EVA". Dans une trajectoire mixte (bilans + séances), réfère-toi aux étapes par leur numéro et précise l'échelle exacte ("EVN de 8 à l'étape 1, EVA de 3 à l'étape 5").
+13. FORMAT DATE FRANÇAIS — Toutes les dates citées dans les champs narratifs sont au format JJ/MM/AAAA (ex. "15/03/2026"). Le champ progression[i].date utilise le même format. Aucune date au format anglais (yyyy-mm-dd, mm/dd/yyyy) ni en toutes lettres ("15 mars 2026").
+14. TERMINOLOGIE CLINIQUE DE LA ZONE — Quand tu désignes la PEC, utilise une formulation clinique : "prise en charge de la hanche droite", "PEC d'une lombalgie", "rééducation post-traumatique du genou". JAMAIS "bilan hanche", "pour bilan zone X", ni le label brut de la zone collé sans déterminant.
+15. CONCLUSION ORIENTÉE — La conclusion ne récapitule PAS la trajectoire (déjà fait dans resume + evolutionClinique). Elle propose une orientation : poursuite de PEC avec axes prioritaires, fin de PEC envisagée avec critères, ou réorientation (médicale, imagerie, chirurgicale). Sans répétition des chiffres déjà cités.
 
 RÉFÉRENTIEL KNODE (acronymes autorisés — n'invente AUCUNE expansion) :
 - EVN = Échelle Visuelle Numérique
@@ -497,7 +524,7 @@ Tout autre acronyme non listé : conservé verbatim sans expansion.
 ========================================
 SECTION 5 — FORMAT DE SORTIE (JSON STRICT)
 ========================================
-Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour. Schéma exact (les champs obligatoires doivent tous être présents ; laisse "" ou [] si "Non documenté dans le suivi") :
+Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour. Schéma exact (les champs obligatoires doivent tous être présents ; laisse "" ou [] quand l'information manque — JAMAIS de mention d'absence de donnée dans le contenu) :
 
 {
   "resume": "Synthèse narrative globale de la PEC en 3-4 phrases (motif, durée, trajectoire globale).",
@@ -522,10 +549,10 @@ Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour. Schéma exact
     "fonctionnel": "Capacités fonctionnelles actuelles en 2-3 phrases (AVQ, retour activités).",
     "objectif": "Données objectives à la dernière étape en 2-3 phrases (mobilités, force, tests de contrôle)."
   },
-  "pointsForts": ["Élément positif factuel 1", "Élément positif factuel 2"],
-  "pointsVigilance": ["Point de vigilance factuel 1"],
+  "pointsForts": ["Élément positif factuel observé chez le patient (adhérence, progrès objectivés, tolérance)"],
+  "pointsVigilance": ["Point de vigilance CLINIQUE observé chez le patient (drapeau jaune, comorbidité, signe d'alerte) — JAMAIS de mention d'absence de mesure, de score ou de documentation."],
   "recommandations": [
-    { "titre": "Titre court de la recommandation", "detail": "Description précise de la recommandation (2-3 phrases)." }
+    { "titre": "Titre court de la recommandation CLINIQUE", "detail": "Description précise (2-3 phrases). Recommandations CLINIQUES uniquement : réévaluation à distance, ajustement thérapeutique, concertation médicale, imagerie, orientation chirurgicale, éducation thérapeutique. INTERDIT : recommander de produire des données futures (scores HOOS/Oxford/WOMAC/KOOS/DASH, mesures d'amplitude, objectivation systématique, traçage de l'observance)." }
   ],
   "conclusion": "Conclusion clinique et orientation thérapeutique pour la suite de la PEC en 3-5 phrases (poursuite, fin de PEC, réorientation éventuelle)."
 }`
@@ -672,6 +699,10 @@ export function buildIntermediairePrompt(
   const { age, sexe, scrub } = anonymizePatientData(patient)
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
   const sexeLine = sexe ? ` — Sexe : ${sexe}` : ''
+  const sexeNorm = sexe === 'feminin' ? 'feminin' : sexe === 'masculin' ? 'masculin' : null
+  const sexeHeader = sexeNorm
+    ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur (voir règle 7).`
+    : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
 
   const tc  = (intermData.troncCommun      as Record<string, unknown>) ?? {}
   const evn = (tc.evn                      as Record<string, unknown>) ?? {}
@@ -735,7 +766,9 @@ export function buildIntermediairePrompt(
     ? `\nANTÉCÉDENTS DE PEC (autres zones, clôturées — contexte uniquement, NE PAS y puiser d'éléments cliniques pour cette zone) :\n${closedAntecedents.map(a => `- ${a}`).join('\n')}\n`
     : ''
 
-  return `Tu es un ${roleTitle(therapistProfession)} expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique COMPLET du patient pour cette zone : bilans, séances, analyses IA précédentes et exercices prescrits.
+  return `${sexeHeader}
+
+Tu es un ${roleTitle(therapistProfession)} expert en musculo-squelettique. Rédige une note diagnostique intermédiaire en tenant compte de l'historique COMPLET du patient pour cette zone : bilans, séances, analyses IA précédentes et exercices prescrits.
 
 PATIENT (anonymisé) : ${ageLine}${sexeLine}
 ZONE : ${zone} (type : ${bilanType})${antecedentsPEC}
@@ -758,9 +791,12 @@ INSTRUCTIONS STRICTES :
 1. noteDiagnostique.titre : diagnostic physiothérapeutique court et précis, mis à jour selon l'évolution.
 2. noteDiagnostique.evolution : 1 phrase courte décrivant la tendance observée (amélioration / stagnation / régression) avec les données chiffrées EVN.
 3. noteDiagnostique.description : 2-3 phrases d'analyse clinique contextualisant l'évolution par rapport aux bilans antérieurs.
-4. priseEnChargeAjustee : 4 à 6 points SYNTHÉTIQUES et directement applicables, sans blabla. Chaque point = une action ou un ajustement concret.
-5. alertes : uniquement si red flag critique ou évolution défavorable nécessitant réorientation. Sinon tableau vide.
-6. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
+4. priseEnChargeAjustee : 4 à 6 points SYNTHÉTIQUES et directement applicables, sans blabla. Chaque point = une action ou un ajustement concret THÉRAPEUTIQUE (technique, exercice, dose, conseil) — JAMAIS méthodologique (pas de "réaliser HOOS/Oxford/WOMAC/KOOS/DASH", "objectiver les amplitudes", "documenter systématiquement", "tracer l'observance").
+5. alertes : uniquement si red flag CLINIQUE critique ou évolution défavorable nécessitant réorientation. Sinon tableau vide. INTERDICTION ABSOLUE d'y mentionner une absence de mesure, un score manquant, ou la qualité de la documentation.
+6. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique. Quand une donnée manque dans les entrées, le champ correspondant ne la mentionne pas — pas de "Non documenté", "Non renseigné", "Aucune donnée", "Absence de scores objectifs". Le médecin destinataire constatera lui-même les zones non couvertes.
+7. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "Elle". Si \`masculin\` : "Le patient", "âgé", "Il". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`/\` inclusive, parenthèses féminines, circonlocutions. JAMAIS inférer le sexe depuis le prénom.
+8. ÉCHELLE DOULEUR COHÉRENTE — EVN pour les bilans, EVA pour les séances. Pas de mélange "EVN/EVA" dans une même phrase, pas de conversion.
+9. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
 
 {
   "noteDiagnostique": {
@@ -962,6 +998,7 @@ RÈGLES ABSOLUES (rappel) :
 16. PROJET THÉRAPEUTIQUE (section 8) — structure par 3 à 5 axes (contrôle antalgique, mobilité, renforcement, éducation, reprise activités), techniques introduites par formulations conditionnelles (« pourront être mobilisés », « selon l'évolution », « en fonction de la réponse clinique »). Pas de jalons datés.
 17. PAS DE SÉPARATEURS HORIZONTAUX (\`---\`, \`***\`, \`___\`) — ni entre sections, ni à l'intérieur.
 18. ACCORD GRAMMATICAL SELON LE SEXE — Utilise la valeur SEXE_PATIENT en tête de prompt. Si \`feminin\` : « La patiente », « âgée », « née », « Elle », « active », « sportive », « kiné­sithérapeute traitante ». Si \`masculin\` : « Le patient », « âgé », « né », « Il », « actif », « sportif », « kinésithérapeute traitant ». INTERDICTIONS ABSOLUES — aucune formulation inclusive ni neutre tolérée : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule la valeur SEXE_PATIENT fait foi. Si \`inconnu\` (cas de repli uniquement) : rédige au masculin singulier par défaut, toujours sans inclusif.
+19. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique du kinésithérapeute (absence de tests objectifs, scores fonctionnels manquants, mesures d'amplitude non tracées, défaut de documentation). La section 8 (Projet thérapeutique) ne contient QUE des axes thérapeutiques (antalgique, mobilité, renforcement, éducation, reprise activités) — JAMAIS de recommandation méthodologique sur la production de données futures (« objectivation systématique », « réaliser des scores HOOS/Oxford/WOMAC/KOOS/DASH », « tracer les amplitudes », « documenter l'observance »). La section 9 (Conclusion) est clinique et orientée prise en charge, jamais critique du suivi documentaire.
 
 DONNÉES DU BILAN (source unique — ne rien ajouter) :
 
