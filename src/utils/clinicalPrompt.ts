@@ -1002,16 +1002,28 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
   const ottawaStr = renderSection(ottawa)
   const cinqD3NStr = renderSection(cinqD3N)
 
-  // ── Mode vocal : injecter narrativeReport (7 sections cliniques + transcription brute) ──
+  // ── Mode vocal : injecter narrativeReport (8 sections cliniques calquées sur le PDF + transcription brute) ──
   // Sans cela, un bilan saisi en mode vocal aurait des sections « Non renseigné » dans le PDF
   // (la donnée structurée n'a pas été remplie — tout est dans le rapport narratif).
   const narrativeReport = bilanData.narrativeReport as { sections?: Array<{ id: string; titre: string; contenu: string }>; transcription?: string } | undefined
   const isVocalMode = bilanData._mode === 'vocal' || !!narrativeReport
   const narrativeBlock = isVocalMode && narrativeReport
     ? (() => {
-        const lines: string[] = ['MODE : Bilan saisi par enregistrement vocal — les données cliniques sont distribuées dans les 7 sections narratives ci-dessous (et complétées par la transcription brute si besoin de récupérer un détail).']
+        const lines: string[] = [
+          '⚠ MODE VOCAL — LECTURE OBLIGATOIRE : ce bilan a été saisi par enregistrement vocal. Les rubriques structurées ci-dessus (DOULEUR, RED FLAGS, EXAMEN CLINIQUE, TESTS SPÉCIFIQUES…) sont VOLONTAIREMENT VIDES — toutes les données cliniques sont dans le bloc ci-dessous (sections narratives + transcription brute). Ce bloc EST la source unique de la donnée pour les sections 2 à 6 du PDF. La règle 6 (« Non renseigné » si pas de donnée) ne s\'applique à une section du PDF QUE si l\'élément clinique correspondant est totalement absent de CE BLOC.',
+          '',
+          'MAPPING DIRECT (les sections narratives sont calquées 1:1 sur les sections 2→9 du PDF) :',
+          '  • [Anamnèse] → PDF section 2 (Anamnèse)',
+          '  • [Symptomatologie douloureuse] → PDF section 3 (Symptomatologie douloureuse) — reprends VERBATIM toutes les EVN, le type de douleur, la localisation, les facteurs aggravants/améliorants, la nocturne, le dérouillage',
+          '  • [Drapeaux cliniques] → PDF section 4 (Drapeaux cliniques) — y compris explorations négatives (« red flags négatifs : …, …, … »)',
+          '  • [Examen clinique] → PDF section 5 (Examen clinique) — morphostatique, palpation, mobilité, force, neuro',
+          '  • [Tests spécifiques] → PDF section 6 (Tests spécifiques) — chaque test nommé avec son résultat',
+          '  • [Synthèse diagnostique] → PDF section 7 (alimente le raisonnement)',
+          '  • [Projet thérapeutique] → PDF section 8',
+          '  • [Conseils au patient] → PDF section 8 ou 9 selon nature',
+        ]
         if (narrativeReport.sections && narrativeReport.sections.length > 0) {
-          lines.push('', 'SECTIONS NARRATIVES (à redistribuer dans les sections 1→9 selon leur contenu clinique réel — l\'intitulé d\'une section narrative ne définit PAS sa destination dans le rapport) :')
+          lines.push('', 'SECTIONS NARRATIVES :')
           for (const s of narrativeReport.sections) {
             const c = scrub((s.contenu ?? '').trim())
             if (!c || /^non renseigné/i.test(c)) continue
@@ -1019,7 +1031,13 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
           }
         }
         if (narrativeReport.transcription) {
-          lines.push('', 'TRANSCRIPTION BRUTE (référentiel ultime — extraire toute donnée non explicitement reformulée dans les sections narratives ci-dessus, en particulier symptomatologie douloureuse, examen clinique, tests spécifiques, drapeaux) :', scrub(narrativeReport.transcription).trim())
+          lines.push(
+            '',
+            'TRANSCRIPTION BRUTE (référentiel ULTIME — autorité supérieure aux sections narratives) :',
+            'Si une donnée clinique apparaît dans la transcription mais n\'a pas été reprise dans les sections narratives ci-dessus (oubli de reformulation, valeur EVN précise, nom de test, drapeau évoqué brièvement), tu DOIS l\'extraire de la transcription et l\'intégrer dans la section appropriée du PDF. La transcription contient toujours plus de détails que le résumé narratif — ne l\'ignore pas. Concentre-toi en particulier sur : valeurs numériques (EVN, amplitudes, MRC), noms de tests, irradiations, mouvements aggravants/soulageants précis, drapeaux explicitement évoqués (positifs ou négatifs).',
+            '',
+            scrub(narrativeReport.transcription).trim()
+          )
         }
         return lines.join('\n')
       })()
