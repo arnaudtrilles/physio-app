@@ -10,11 +10,11 @@ type SettingsPageProps = {
   onChangeLanguage: (l: Language) => void
   notificationsEnabled: boolean
   onToggleNotifications: (enabled: boolean) => void
-  billingType: 'monthly' | 'annual'
   syncStatus: SyncStatus
   isOnline: boolean
   onBack: () => void
   onProfile: () => void
+  onPricing: () => void
   onRelaunchTutorial: () => void
   onSignOut: () => void
 }
@@ -37,26 +37,13 @@ const LANGUAGE_OPTIONS: Array<{ id: Language; flag: string; label: string }> = [
   { id: 'en', flag: '🇬🇧', label: 'English' },
 ]
 
-const PLAN_FEATURES = [
-  'Bilans illimités (toutes zones)',
-  'Analyse IA par bilan (Claude)',
-  'Génération PDF & courriers',
-  'Stockage local sécurisé',
-  'Fiche d\'exercices IA',
-]
-
-const PLAN_OPTIONS = [
-  { name: 'Pro', price: '49', desc: 'IA vocale ElevenLabs + sync cloud + statistiques avancées', highlight: false },
-  { name: 'Équipe', price: '79', desc: 'Multi-praticiens, dashboard cabinet, accès collaborateur', highlight: true },
-]
 
 export function SettingsPage({
   theme, onChangeTheme,
   language, onChangeLanguage,
   notificationsEnabled, onToggleNotifications,
-  billingType,
   syncStatus, isOnline,
-  onBack, onProfile, onRelaunchTutorial, onSignOut,
+  onBack, onProfile, onPricing, onRelaunchTutorial, onSignOut,
 }: SettingsPageProps) {
   const syncConfig = SYNC_STATUS_CONFIG[syncStatus]
 
@@ -210,76 +197,19 @@ export function SettingsPage({
             </div>
           </div>
 
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
-              <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan & Facturation</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement actuel et options</div>
-              </div>
+          <button
+            onClick={onPricing}
+            style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'left', width: '100%' }}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
-
-            <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', marginBottom: '1rem', color: 'white' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Plan actuel</div>
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(255,255,255,0.2)', padding: '0.15rem 0.5rem', borderRadius: 99, border: '1px solid rgba(255,255,255,0.3)' }}>
-                  ✓ Actif
-                </span>
-              </div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 2 }}>Basique</div>
-              <div style={{ fontSize: '0.8rem', opacity: 0.85, marginBottom: 8 }}>
-                {billingType === 'annual'
-                  ? '290 CHF / an · soit 24.15 CHF/mois'
-                  : '29 CHF / mois'}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
-                <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
-                  Facturation {billingType === 'annual' ? 'annuelle' : 'mensuelle'} · Renouvellement le 22 mai 2026
-                </span>
-              </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Plan & Facturation</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Abonnement actuel et options</div>
             </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Inclus dans votre plan</div>
-              {PLAN_FEATURES.map((feature, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.3rem 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
-                  <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>✓</span>
-                  {feature}
-                </div>
-              ))}
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.6rem' }}>Changer de plan</div>
-              {PLAN_OPTIONS.map(plan => (
-                <div key={plan.name} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-md)',
-                  border: `1px solid ${plan.highlight ? 'var(--primary)' : 'var(--border-color)'}`,
-                  background: plan.highlight ? 'color-mix(in srgb, var(--primary) 5%, var(--surface))' : 'var(--secondary)',
-                  marginBottom: 8, cursor: 'pointer',
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{plan.name}</span>
-                      {plan.highlight && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>Populaire</span>}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>{plan.desc}</div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>{plan.price} CHF</div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>/mois</div>
-                  </div>
-                </div>
-              ))}
-              <p style={{ fontSize: '0.68rem', color: 'var(--text-faint)', textAlign: 'center', marginTop: '0.4rem', lineHeight: 1.4 }}>
-                Mise à niveau disponible après intégration Supabase
-              </p>
-            </div>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

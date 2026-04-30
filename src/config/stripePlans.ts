@@ -40,7 +40,7 @@ export const PLANS: PlanConfig[] = [
     id: 'basique',
     name: 'Basique',
     priceMonthly: 29,
-    priceAnnual: 319,   // 29 × 11 mois — 1 mois offert
+    priceAnnual: 29 * 12,   // pas de réduction sur Basique
     currency: 'CHF',
     description: 'Idéal pour démarrer',
     features: [
@@ -61,7 +61,7 @@ export const PLANS: PlanConfig[] = [
     id: 'pro',
     name: 'Pro',
     priceMonthly: 49,
-    priceAnnual: 539,   // 49 × 11 mois — 1 mois offert
+    priceAnnual: 529,   // -10% annuel (529 vs 588)
     currency: 'CHF',
     description: 'Pour les praticiens exigeants',
     highlighted: true,
@@ -80,7 +80,7 @@ export const PLANS: PlanConfig[] = [
     id: 'cabinet',
     name: 'Cabinet',
     priceMonthly: 89,
-    priceAnnual: 979,   // 89 × 11 mois — 1 mois offert
+    priceAnnual: 961,   // -10% annuel (961 vs 1068)
     currency: 'CHF',
     description: 'Pour les cabinets multi-physios',
     features: [

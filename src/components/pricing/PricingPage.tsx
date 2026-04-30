@@ -59,11 +59,11 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '0.75rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Facturation annuelle</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>1 mois offert vs mensuel</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>-10% sur Pro & Cabinet</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {billing === 'annual' && (
-                <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', padding: '0.15rem 0.5rem', borderRadius: 99 }}>-8%</span>
+                <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#10b981', background: 'color-mix(in srgb, #10b981 12%, transparent)', padding: '0.15rem 0.5rem', borderRadius: 99 }}>-10%</span>
               )}
               <button
                 onClick={() => setBilling(b => b === 'monthly' ? 'annual' : 'monthly')}
@@ -151,6 +151,7 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{plan.name}</span>
                       {plan.highlighted && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>Populaire</span>}
+                      {billing === 'annual' && plan.id !== 'basique' && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#10b981', background: 'color-mix(in srgb, #10b981 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>-10%</span>}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>{plan.description}</div>
                   </div>

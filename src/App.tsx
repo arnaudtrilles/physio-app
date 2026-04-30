@@ -137,7 +137,7 @@ function App() {
   const [theme, setTheme] = useTheme()
   const [language, setLanguage] = useLocalStorage<'fr' | 'de' | 'en'>('physio_lang', 'fr')
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage<boolean>('physio_notif', true)
-  const [billingType] = useLocalStorage<'monthly' | 'annual'>('physio_billing', 'monthly')
+
   const appContainerRef = useRef<HTMLDivElement | null>(null)
   const [showSplash, setShowSplash] = useState(() => {
     const last = sessionStorage.getItem('splash_ts')
@@ -2371,11 +2371,11 @@ Mobilité articulaire lombaire
           onChangeLanguage={setLanguage}
           notificationsEnabled={notificationsEnabled}
           onToggleNotifications={setNotificationsEnabled}
-          billingType={billingType}
           syncStatus={syncStatus}
           isOnline={isOnline}
           onBack={() => setStep('dashboard')}
           onProfile={() => setStep('profile')}
+          onPricing={() => setStep('pricing')}
           onRelaunchTutorial={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
           onSignOut={() => signOut()}
         />
