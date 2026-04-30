@@ -40,9 +40,13 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
 
   // Mode Noyau (EBP minimum) activé par défaut pour tout nouveau bilan.
   // Si initialData contient déjà des données, on reste en Noyau également — le kiné peut basculer en Complet à tout moment.
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (init._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
-  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
+    (init.narrativeReport as NarrativeReport | undefined) ?? null
+  )
 
   const [douleur, setDouleur] = useState<DouleurState>(() => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))
   const [redFlags, setRedFlags] = useState<RedFlagsState>(() => initRedFlags(init.redFlags as Record<string, unknown> | undefined))

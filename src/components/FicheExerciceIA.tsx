@@ -117,17 +117,23 @@ export function FicheExerciceIA({ apiKey, context, patientKey, profession, analy
     setLoading(true)
     setError(null)
     try {
-      const systemPrompt = `Tu es un ${roleTitle(profession)} expert en biomécanique et en rééducation fonctionnelle. Ton rôle est de traduire un plan de traitement technique en une fiche d'exercices à domicile claire, professionnelle et sécurisée.
+      const isPhysio = /physio/i.test(profession ?? '')
+      const role = roleTitle(profession)
+      const metier = isPhysio ? 'physiothérapie' : 'kinésithérapie'
+      const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+      const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+      const systemPrompt = `Tu es un ${role} expert en biomécanique et en rééducation fonctionnelle. Ton rôle est de traduire un plan de traitement technique en une fiche d'exercices à domicile claire, professionnelle et sécurisée.
 
 Tu vas recevoir en entrée l'état actuel du patient ainsi que la demande du thérapeute dans la balise <notes_seance_actuelle>.
 Si un historique patient est fourni dans la balise <historique_patient>, tu DOIS l'analyser attentivement pour adapter les exercices : évolution de la douleur, tolérance aux exercices précédents, observance, interventions réalisées, progression globale. Propose des exercices qui s'inscrivent dans la continuité du parcours de soin.
 
 <regles_strictes>
-1. Rédige en français courant mais professionnel. Pas de jargon inaccessible (dis "couché sur le dos" plutôt que "décubitus dorsal"), mais utilise les vrais noms des exercices de kinésithérapie (ex: "Rotation externe en décubitus latéral", "Flexion isométrique contre résistance", "Proprioception unipode sur plan instable", "Étirement capsulaire postérieur en cross-body").
+1. Rédige en français courant mais professionnel. Pas de jargon inaccessible (dis "couché sur le dos" plutôt que "décubitus dorsal"), mais utilise les vrais noms des exercices de ${metier} (ex: "Rotation externe en décubitus latéral", "Flexion isométrique contre résistance", "Proprioception unipode sur plan instable", "Étirement capsulaire postérieur en cross-body").
 2. Limite-toi à un MAXIMUM STRICT de 4 exercices pour garantir l'observance.
 3. La sécurité est absolue : chaque exercice doit avoir une limite de douleur claire.
 4. Adresse-toi directement au patient (utilise le "vous").
 5. NE COMMENCE PAS par un mot d'encouragement, de félicitations ou de "bravo". Va directement aux exercices.
+6. VOCABULAIRE PROFESSION — Tu es ${role}. Tu emploies EXCLUSIVEMENT « ${role} » et « ${metier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « kiné », « physio ». Aucune exception.
 </regles_strictes>
 
 Voici la structure EXACTE que ta réponse doit suivre en format Markdown :

@@ -82,9 +82,13 @@ function MobInput({ label, value, onChange }: { label: string; value: string; on
 export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (init._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
-  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
+    (init.narrativeReport as NarrativeReport | undefined) ?? null
+  )
 
   // ── Section 1 : Contexte de vie ──────────────────────────────────────────
   const _ctx = (init.contexte as Record<string, unknown>) ?? {}

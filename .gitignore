@@ -36,3 +36,6 @@ gcp-*.json
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Bot persona artefacts (screenshots, traces, JSON) — auto-generated
+bots/reports/

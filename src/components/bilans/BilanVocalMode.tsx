@@ -708,6 +708,19 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
           onChange={(contenu) => updateSection(section.id, contenu)}
         />
       ))}
+      {report.transcription && report.transcription.trim().length > 0 && (
+        <details style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '0.6rem 0.85rem' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)' }}>
+            🎙️ Transcription brute ({report.transcription.length.toLocaleString('fr-CH')} caractères)
+          </summary>
+          <div style={{ marginTop: 10, fontSize: '0.78rem', lineHeight: 1.5, color: 'var(--text-main)', whiteSpace: 'pre-wrap', maxHeight: 360, overflowY: 'auto', padding: '0.5rem 0.6rem', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: 8 }}>
+            {report.transcription}
+          </div>
+          <div style={{ marginTop: 6, fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+            Référentiel d'origine — utilisé par l'IA lors de l'export PDF pour combler les sections manquantes.
+          </div>
+        </details>
+      )}
     </div>
   )
 

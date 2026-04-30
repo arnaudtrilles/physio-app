@@ -39,9 +39,13 @@ const MOB_CERVICAL_KEYS: [string, string][] = [
 export const BilanCervical = forwardRef<BilanCervicalHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (init._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
-  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
+    (init.narrativeReport as NarrativeReport | undefined) ?? null
+  )
 
   const [douleur, setDouleur] = useState<DouleurState>(() => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))
   const [redFlags, setRedFlags] = useState<RedFlagsState>(() => initRedFlags(init.redFlags as Record<string, unknown> | undefined))

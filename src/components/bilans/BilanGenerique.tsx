@@ -27,9 +27,13 @@ export interface BilanGeneriqueHandle {
 export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (init._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
-  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
+    (init.narrativeReport as NarrativeReport | undefined) ?? null
+  )
 
   // ── Sections partagées V2 ────────────────────────────────────────────────
   const [douleur, setDouleur]   = useState<DouleurState>(()   => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))

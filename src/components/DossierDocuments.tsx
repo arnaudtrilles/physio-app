@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { BilanRecord, PatientDocument, PatientDocumentSource } from '../types'
 import { sourceBadgeLabel } from '../utils/pdfPersistence'
 
@@ -80,20 +80,52 @@ function getDisplayData(doc: UnifiedDoc): string | undefined {
   return doc.originalData ?? doc.data
 }
 
+/**
+ * Convertit base64 (avec ou sans préfixe data:) → Blob.
+ * Indispensable pour iOS Safari : les data: URL bloquent l'affichage iframe au-delà de la 1ʳᵉ
+ * page d'un PDF, et l'attribut `download` est ignoré sur les data: URLs. Les blob: URLs
+ * fonctionnent dans les deux cas.
+ */
+function dataToBlob(data: string | undefined, mimeType: string): Blob | null {
+  if (!data) return null
+  const base64 = data.startsWith('data:') ? data.slice(data.indexOf(',') + 1) : data
+  try {
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return new Blob([bytes], { type: mimeType })
+  } catch {
+    return null
+  }
+}
+
 function triggerDownload(doc: UnifiedDoc) {
-  const url = ensureDataUrl(getDisplayData(doc), doc.mimeType)
-  if (!url) return
+  const blob = dataToBlob(getDisplayData(doc), doc.mimeType)
+  if (!blob) return
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = doc.name
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
+  // Délai avant revoke : Safari iOS a besoin de quelques ms pour démarrer le téléchargement
+  setTimeout(() => URL.revokeObjectURL(url), 4000)
 }
 
 function DocViewer({ doc, onClose }: { doc: UnifiedDoc; onClose: () => void }) {
-  const url = ensureDataUrl(getDisplayData(doc), doc.mimeType)
   const isImg = doc.mimeType.startsWith('image/')
+  const isPdf = doc.mimeType === 'application/pdf'
+
+  // Pour les PDF : on convertit en blob URL (iframe data: URL n'affiche que la 1ʳᵉ page sur iOS Safari).
+  // Pour les images : data URL marche bien et reste plus simple.
+  const blob = useMemo(() => isPdf ? dataToBlob(getDisplayData(doc), doc.mimeType) : null, [doc, isPdf])
+  const blobUrl = useMemo(() => blob ? URL.createObjectURL(blob) : null, [blob])
+  useEffect(() => {
+    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
+  }, [blobUrl])
+
+  const url = isPdf ? blobUrl : ensureDataUrl(getDisplayData(doc), doc.mimeType)
   if (!url) {
     return (
       <div
@@ -163,6 +195,25 @@ function DocViewer({ doc, onClose }: { doc: UnifiedDoc; onClose: () => void }) {
           <div style={{ flex: 1, minWidth: 0, color: 'white', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {doc.name}
           </div>
+          {isPdf && url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Ouvrir dans un nouvel onglet (toutes les pages)"
+              aria-label="Ouvrir dans un nouvel onglet"
+              style={{
+                width: 32, height: 32, borderRadius: 8, border: 'none',
+                background: 'rgba(255,255,255,0.15)', color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                textDecoration: 'none', flexShrink: 0,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          )}
           <button
             type="button"
             onClick={onClose}

@@ -146,7 +146,32 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
     ? `\nANTÉCÉDENTS DE PRISE EN CHARGE (autres zones, déjà clôturées — contexte général uniquement, NE PAS mélanger avec l'analyse de la zone courante) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
     : ''
 
+  // Mode vocal : injecter narrativeReport (sections cliniques + transcription) — sinon les
+  // champs structurés sont vides et l'analyse n'a aucune donnée à exploiter.
+  const narrativeReport = bilanData.narrativeReport as { sections?: Array<{ id: string; titre: string; contenu: string }>; transcription?: string } | undefined
+  const narrativeBlock = (bilanData._mode === 'vocal' || !!narrativeReport) && narrativeReport
+    ? (() => {
+        const lines: string[] = ['', 'BILAN VOCAL — données cliniques saisies par enregistrement (les champs structurés ci-dessus sont vides : tout est dans les sections narratives + la transcription) :']
+        if (narrativeReport.sections && narrativeReport.sections.length > 0) {
+          for (const s of narrativeReport.sections) {
+            const c = scrub((s.contenu ?? '').trim())
+            if (!c || /^non renseigné/i.test(c)) continue
+            lines.push('', `[${s.titre}]`, c)
+          }
+        }
+        if (narrativeReport.transcription) {
+          lines.push('', 'TRANSCRIPTION BRUTE (référentiel ultime — utilise-la pour extraire les données cliniques précises absentes des sections narratives ci-dessus) :', scrub(narrativeReport.transcription).trim())
+        }
+        return lines.join('\n')
+      })()
+    : ''
+
   const role = roleTitle(ctx.therapistProfession)
+  const isPhysio = /physio/i.test(ctx.therapistProfession ?? '')
+  const adjMetier = isPhysio ? 'physiothérapique' : 'kinésithérapique'
+  const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+  const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+  const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapique'
 
   return `${sexeHeader}
 
@@ -170,6 +195,7 @@ YELLOW FLAGS positifs : ${flagsPositifs(yellowFlags)}
 TESTS CLINIQUES : ${testsStr}
 SCORES : ${scoresStr}
 ${notesLibresStr ? `\nNOTES CLINIQUES COMPLÉMENTAIRES : ${notesLibresStr}` : ''}
+${narrativeBlock}
 ${therapistSection}
 
 INSTRUCTIONS STRICTES :
@@ -178,11 +204,12 @@ INSTRUCTIONS STRICTES :
 3. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique : pas de "absence de mesures", "absence de tests objectifs", "données objectives manquantes", "manque de documentation". Quand une donnée n'est pas dans les entrées, elle ne figure tout simplement pas dans la sortie — aucun champ ne contient "Non documenté", "Non renseigné", "Aucune donnée". Les "alertes" ne contiennent QUE des red flags critiques cliniques (signe d'alerte médicale, urgence orientation) — JAMAIS de remarque sur la qualité des données. Aucun "point" de priseEnCharge ne recommande de produire des données futures (HOOS/Oxford/WOMAC/KOOS/DASH/objectivation systématique) — les actions sont THÉRAPEUTIQUES (technique manuelle, exercice, conseil, éducation), pas méthodologiques.
 4. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "Elle", "active", "sportive", "présentait". Si \`masculin\` : "Le patient", "âgé", "Il", "actif", "sportif". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions. JAMAIS inférer le sexe depuis le prénom — seule SEXE_PATIENT fait foi. Vérifie chaque occurrence de "le patient"/"la patiente" avant de produire le JSON.
 5. ÉCHELLE DOULEUR COHÉRENTE — Étiquette EVN pour les valeurs des bilans, EVA pour les valeurs des séances. Pas de mélange "EVN/EVA" dans une même phrase, pas de conversion de l'une en l'autre.
-6. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
+6. VOCABULAIRE PROFESSION — Tu rédiges en tant que ${role}. Tu emploies EXCLUSIVEMENT « ${role} » et ses dérivés (« ${adjMetier} »). INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que des abréviations « kiné » et « physio ». Aucune exception, même dans une citation, un exemple ou un titre.
+7. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
 
 {
   "diagnostic": {
-    "titre": "Titre court et précis du diagnostic physiothérapeutique principal",
+    "titre": "Titre court et précis du diagnostic ${adjMetier} principal",
     "description": "Description clinique détaillée et personnalisée en 2-3 phrases basée sur les données fournies"
   },
   "hypotheses": [
@@ -366,6 +393,11 @@ const parseFrDateStr = (raw: string | undefined): number => {
 export function buildEvolutionPrompt(ctx: EvolutionContext): string {
   const { patient, bilans, intermediaires = [], seances = [] } = ctx
   const { age, sexe, scrub } = anonymizePatientData(patient)
+  const isPhysio = /physio/i.test(ctx.therapistProfession ?? '')
+  const titreRole = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
+  const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+  const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+  const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapique'
 
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
   const profession = scrub(patient.profession || 'Non renseignée')
@@ -492,7 +524,7 @@ Ordre chronologique strict (1 = début de PEC, ${timeline.length} = étape la pl
 ${timelineStr || '(Aucune étape exploitable — rapport non génératif.)'}
 
 ========================================
-SECTION 4 — INSTRUCTIONS DE RÉDACTION (15 règles absolues)
+SECTION 4 — INSTRUCTIONS DE RÉDACTION (16 règles absolues)
 ========================================
 1. ANCRAGE FACTUEL STRICT — N'utilise QUE les données de la section 3. Aucune invention, aucune extrapolation, aucune pathologie ou mécanisme lésionnel non explicité dans les données. Quand une donnée manque, le champ correspondant reste VIDE (chaîne "" ou tableau []). INTERDICTION ABSOLUE d'écrire "Non documenté dans le suivi", "Non documenté", "Non renseigné", "Aucune donnée", "Absence de données", "données objectives chiffrées limitant le suivi" ou toute formulation équivalente — ces mentions disqualifient le rapport. Le médecin destinataire constatera lui-même les champs vides.
 2. PROSE MÉDICALE — Rédige en français médical professionnel, phrases articulées (sujet + verbe + complément), pas de style télégraphique, pas de listes à puces dans les blocs narratifs (tableauInitial, evolutionClinique.*, interventionsRealisees.*, etatActuel.*, resume, conclusion). Les tableaux (pointsForts, pointsVigilance, recommandations, progression) sont en revanche listes structurées.
@@ -509,6 +541,7 @@ SECTION 4 — INSTRUCTIONS DE RÉDACTION (15 règles absolues)
 13. FORMAT DATE FRANÇAIS — Toutes les dates citées dans les champs narratifs sont au format JJ/MM/AAAA (ex. "15/03/2026"). Le champ progression[i].date utilise le même format. Aucune date au format anglais (yyyy-mm-dd, mm/dd/yyyy) ni en toutes lettres ("15 mars 2026").
 14. TERMINOLOGIE CLINIQUE DE LA ZONE — Quand tu désignes la PEC, utilise une formulation clinique : "prise en charge de la hanche droite", "PEC d'une lombalgie", "rééducation post-traumatique du genou". JAMAIS "bilan hanche", "pour bilan zone X", ni le label brut de la zone collé sans déterminant.
 15. CONCLUSION ORIENTÉE — La conclusion ne récapitule PAS la trajectoire (déjà fait dans resume + evolutionClinique). Elle propose une orientation : poursuite de PEC avec axes prioritaires, fin de PEC envisagée avec critères, ou réorientation (médicale, imagerie, chirurgicale). Sans répétition des chiffres déjà cités.
+16. VOCABULAIRE PROFESSION — Tu rédiges en tant que ${titreRole}. Tu emploies EXCLUSIVEMENT « ${titreRole} » et ses dérivés (« ${isPhysio ? 'physiothérapie' : 'kinésithérapie'} », « ${isPhysio ? 'physiothérapique' : 'kinésithérapique'} »). INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que des abréviations « kiné » et « physio ». Aucune exception, aucune occurrence dans le rapport, même dans une citation, un exemple ou un titre.
 
 RÉFÉRENTIEL KNODE (acronymes autorisés — n'invente AUCUNE expansion) :
 - EVN = Échelle Visuelle Numérique
@@ -703,6 +736,13 @@ export function buildIntermediairePrompt(
   const sexeHeader = sexeNorm
     ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur (voir règle 7).`
     : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
+  const isPhysio = /physio/i.test(therapistProfession ?? '')
+  const titreRole = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
+  const metierAdj = isPhysio ? 'physiothérapeutique' : 'kinésithérapique'
+  const metier = isPhysio ? 'physiothérapie' : 'kinésithérapie'
+  const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+  const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+  const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapeutique'
 
   const tc  = (intermData.troncCommun      as Record<string, unknown>) ?? {}
   const evn = (tc.evn                      as Record<string, unknown>) ?? {}
@@ -788,7 +828,7 @@ BILAN INTERMÉDIAIRE ACTUEL :
 - Scores fonctionnels : ${scrub(scoresStr)}
 
 INSTRUCTIONS STRICTES :
-1. noteDiagnostique.titre : diagnostic physiothérapeutique court et précis, mis à jour selon l'évolution.
+1. noteDiagnostique.titre : diagnostic ${metierAdj} court et précis, mis à jour selon l'évolution.
 2. noteDiagnostique.evolution : 1 phrase courte décrivant la tendance observée (amélioration / stagnation / régression) avec les données chiffrées EVN.
 3. noteDiagnostique.description : 2-3 phrases d'analyse clinique contextualisant l'évolution par rapport aux bilans antérieurs.
 4. priseEnChargeAjustee : 4 à 6 points SYNTHÉTIQUES et directement applicables, sans blabla. Chaque point = une action ou un ajustement concret THÉRAPEUTIQUE (technique, exercice, dose, conseil) — JAMAIS méthodologique (pas de "réaliser HOOS/Oxford/WOMAC/KOOS/DASH", "objectiver les amplitudes", "documenter systématiquement", "tracer l'observance").
@@ -796,7 +836,8 @@ INSTRUCTIONS STRICTES :
 6. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique. Quand une donnée manque dans les entrées, le champ correspondant ne la mentionne pas — pas de "Non documenté", "Non renseigné", "Aucune donnée", "Absence de scores objectifs". Le médecin destinataire constatera lui-même les zones non couvertes.
 7. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "Elle". Si \`masculin\` : "Le patient", "âgé", "Il". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`/\` inclusive, parenthèses féminines, circonlocutions. JAMAIS inférer le sexe depuis le prénom.
 8. ÉCHELLE DOULEUR COHÉRENTE — EVN pour les bilans, EVA pour les séances. Pas de mélange "EVN/EVA" dans une même phrase, pas de conversion.
-9. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
+9. VOCABULAIRE PROFESSION — Tu rédiges en tant que ${titreRole}. Tu emploies EXCLUSIVEMENT « ${titreRole} », « ${metier} », « ${metierAdj} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que des abréviations « kiné » et « physio ». Aucune exception, aucune occurrence dans la note ou le JSON, même dans une citation.
+10. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
 
 {
   "noteDiagnostique": {
@@ -840,11 +881,18 @@ export interface PDFReportContext {
     priseEnCharge: Array<{ phase: string; titre: string; detail: string }>
     alertes: string[]
   } | null
+  therapistProfession?: string
 }
 
 export function buildPDFReportPrompt(ctx: PDFReportContext): string {
   const { patient, zone, bilanType, bilanData, notesLibres, analyseIA } = ctx
   const { age, sexe, scrub } = anonymizePatientData(patient)
+  const isPhysio = /physio/i.test(ctx.therapistProfession ?? '')
+  const titreRole = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
+  const titreRoleFem = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
+  const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
+  const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
+  const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapique'
 
   const defined = (v: unknown): string | null => {
     if (v === null || v === undefined) return null
@@ -954,6 +1002,47 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
   const ottawaStr = renderSection(ottawa)
   const cinqD3NStr = renderSection(cinqD3N)
 
+  // ── Mode vocal : injecter narrativeReport (8 sections cliniques calquées sur le PDF + transcription brute) ──
+  // Sans cela, un bilan saisi en mode vocal aurait des sections « Non renseigné » dans le PDF
+  // (la donnée structurée n'a pas été remplie — tout est dans le rapport narratif).
+  const narrativeReport = bilanData.narrativeReport as { sections?: Array<{ id: string; titre: string; contenu: string }>; transcription?: string } | undefined
+  const isVocalMode = bilanData._mode === 'vocal' || !!narrativeReport
+  const narrativeBlock = isVocalMode && narrativeReport
+    ? (() => {
+        const lines: string[] = [
+          '⚠ MODE VOCAL — LECTURE OBLIGATOIRE : ce bilan a été saisi par enregistrement vocal. Les rubriques structurées ci-dessus (DOULEUR, RED FLAGS, EXAMEN CLINIQUE, TESTS SPÉCIFIQUES…) sont VOLONTAIREMENT VIDES — toutes les données cliniques sont dans le bloc ci-dessous (sections narratives + transcription brute). Ce bloc EST la source unique de la donnée pour les sections 2 à 6 du PDF. La règle 6 (« Non renseigné » si pas de donnée) ne s\'applique à une section du PDF QUE si l\'élément clinique correspondant est totalement absent de CE BLOC.',
+          '',
+          'MAPPING DIRECT (les sections narratives sont calquées 1:1 sur les sections 2→9 du PDF) :',
+          '  • [Anamnèse] → PDF section 2 (Anamnèse)',
+          '  • [Symptomatologie douloureuse] → PDF section 3 (Symptomatologie douloureuse) — reprends VERBATIM toutes les EVN, le type de douleur, la localisation, les facteurs aggravants/améliorants, la nocturne, le dérouillage',
+          '  • [Drapeaux cliniques] → PDF section 4 (Drapeaux cliniques) — y compris explorations négatives (« red flags négatifs : …, …, … »)',
+          '  • [Examen clinique] → PDF section 5 (Examen clinique) — morphostatique, palpation, mobilité, force, neuro',
+          '  • [Tests spécifiques] → PDF section 6 (Tests spécifiques) — chaque test nommé avec son résultat',
+          '  • [Synthèse diagnostique] → PDF section 7 (alimente le raisonnement)',
+          '  • [Projet thérapeutique] → PDF section 8',
+          '  • [Conseils au patient] → PDF section 8 ou 9 selon nature',
+        ]
+        if (narrativeReport.sections && narrativeReport.sections.length > 0) {
+          lines.push('', 'SECTIONS NARRATIVES :')
+          for (const s of narrativeReport.sections) {
+            const c = scrub((s.contenu ?? '').trim())
+            if (!c || /^non renseigné/i.test(c)) continue
+            lines.push('', `[${s.titre}]`, c)
+          }
+        }
+        if (narrativeReport.transcription) {
+          lines.push(
+            '',
+            'TRANSCRIPTION BRUTE (référentiel ULTIME — autorité supérieure aux sections narratives) :',
+            'Si une donnée clinique apparaît dans la transcription mais n\'a pas été reprise dans les sections narratives ci-dessus (oubli de reformulation, valeur EVN précise, nom de test, drapeau évoqué brièvement), tu DOIS l\'extraire de la transcription et l\'intégrer dans la section appropriée du PDF. La transcription contient toujours plus de détails que le résumé narratif — ne l\'ignore pas. Concentre-toi en particulier sur : valeurs numériques (EVN, amplitudes, MRC), noms de tests, irradiations, mouvements aggravants/soulageants précis, drapeaux explicitement évoqués (positifs ou négatifs).',
+            '',
+            scrub(narrativeReport.transcription).trim()
+          )
+        }
+        return lines.join('\n')
+      })()
+    : ''
+
   // Hypothèses : on passe un classement qualitatif (rang) SANS pourcentages — la section 7
   // de sortie doit être rédigée en langage médical argumenté, pas en statistiques chiffrées.
   const rangLabel = (r: number) => r === 1 ? 'Principale' : r === 2 ? 'Second plan' : r === 3 ? 'Troisième plan' : `Rang ${r}`
@@ -997,8 +1086,9 @@ RÈGLES ABSOLUES (rappel) :
 15. ANCRAGE FACTUEL STRICT — pas de contexte socio-professionnel, pas de segment vertébral chiffré (L4-L5, T12-L2, C5-C6…), pas de facteur contributif inventé qui ne figure pas explicitement dans les données.
 16. PROJET THÉRAPEUTIQUE (section 8) — structure par 3 à 5 axes (contrôle antalgique, mobilité, renforcement, éducation, reprise activités), techniques introduites par formulations conditionnelles (« pourront être mobilisés », « selon l'évolution », « en fonction de la réponse clinique »). Pas de jalons datés.
 17. PAS DE SÉPARATEURS HORIZONTAUX (\`---\`, \`***\`, \`___\`) — ni entre sections, ni à l'intérieur.
-18. ACCORD GRAMMATICAL SELON LE SEXE — Utilise la valeur SEXE_PATIENT en tête de prompt. Si \`feminin\` : « La patiente », « âgée », « née », « Elle », « active », « sportive », « kiné­sithérapeute traitante ». Si \`masculin\` : « Le patient », « âgé », « né », « Il », « actif », « sportif », « kinésithérapeute traitant ». INTERDICTIONS ABSOLUES — aucune formulation inclusive ni neutre tolérée : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule la valeur SEXE_PATIENT fait foi. Si \`inconnu\` (cas de repli uniquement) : rédige au masculin singulier par défaut, toujours sans inclusif.
-19. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique du kinésithérapeute (absence de tests objectifs, scores fonctionnels manquants, mesures d'amplitude non tracées, défaut de documentation). La section 8 (Projet thérapeutique) ne contient QUE des axes thérapeutiques (antalgique, mobilité, renforcement, éducation, reprise activités) — JAMAIS de recommandation méthodologique sur la production de données futures (« objectivation systématique », « réaliser des scores HOOS/Oxford/WOMAC/KOOS/DASH », « tracer les amplitudes », « documenter l'observance »). La section 9 (Conclusion) est clinique et orientée prise en charge, jamais critique du suivi documentaire.
+18. ACCORD GRAMMATICAL SELON LE SEXE — Utilise la valeur SEXE_PATIENT en tête de prompt. Si \`feminin\` : « La patiente », « âgée », « née », « Elle », « active », « sportive », « ${titreRoleFem} traitante ». Si \`masculin\` : « Le patient », « âgé », « né », « Il », « actif », « sportif », « ${titreRole} traitant ». INTERDICTIONS ABSOLUES — aucune formulation inclusive ni neutre tolérée : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions (\`cette personne\`, \`l'intéressé·e\`, \`le/la patient·e\`). JAMAIS inférer le sexe depuis le prénom — seule la valeur SEXE_PATIENT fait foi. Si \`inconnu\` (cas de repli uniquement) : rédige au masculin singulier par défaut, toujours sans inclusif.
+19. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique du ${titreRole} (absence de tests objectifs, scores fonctionnels manquants, mesures d'amplitude non tracées, défaut de documentation). La section 8 (Projet thérapeutique) ne contient QUE des axes thérapeutiques (antalgique, mobilité, renforcement, éducation, reprise activités) — JAMAIS de recommandation méthodologique sur la production de données futures (« objectivation systématique », « réaliser des scores HOOS/Oxford/WOMAC/KOOS/DASH », « tracer les amplitudes », « documenter l'observance »). La section 9 (Conclusion) est clinique et orientée prise en charge, jamais critique du suivi documentaire.
+20. VOCABULAIRE PROFESSION — Tu rédiges en tant que ${titreRole}. Tu emploies EXCLUSIVEMENT « ${titreRole} » et ses dérivés. INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que des abréviations « kiné » et « physio ». Aucune exception, aucune occurrence dans le rapport, même dans une citation, un exemple ou un titre de section.
 
 DONNÉES DU BILAN (source unique — ne rien ajouter) :
 
@@ -1016,6 +1106,7 @@ ${mecanoStr ? `\nMÉCANOSENSIBILITÉ :\n${mecanoStr}` : ''}
 ${testsStr ? `\nTESTS SPÉCIFIQUES :\n${testsStr}` : ''}
 ${scoresStr ? `\nSCORES FONCTIONNELS :\n${scoresStr}` : ''}
 ${contratStr ? `\nCONTRAT THÉRAPEUTIQUE :\n${contratStr}` : ''}
+${narrativeBlock ? `\n${narrativeBlock}` : ''}
 ${notesLibres ? `\nNOTES DU THÉRAPEUTE :\n${scrub(notesLibres)}` : ''}
 ${analyseSection}`
 }

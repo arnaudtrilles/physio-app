@@ -359,24 +359,61 @@ Extrais les informations cliniques pertinentes des deux côtés de la conversati
 ${contextInstructions}
 Tu dois produire un compte rendu structuré, clair et professionnel, en corrigeant les hésitations et répétitions orales.
 
+OBJECTIF DE STRUCTURE (CRITIQUE) — Ce compte rendu sert de SOURCE UNIQUE pour la génération ultérieure d'un PDF clinique destiné au médecin prescripteur. Le PDF aura 9 sections imposées (Profil, Anamnèse, Symptomatologie douloureuse, Drapeaux, Examen clinique, Tests spécifiques, Synthèse diagnostique, Projet thérapeutique, Conclusion). Tes 8 sections de sortie sont **calquées 1:1 sur les sections 2 à 9 du PDF** afin que CHAQUE détail de la transcription atterrisse dans la bonne case du PDF final. Aucune information ne doit être perdue ou amalgamée — distribue chaque élément clinique dans la section où le PDF l'attendra.
+
 RÈGLES :
 1. Réponds UNIQUEMENT en JSON valide, sans markdown, sans texte avant ou après.
-2. Le JSON est un tableau de 7 objets avec les clés : "id", "titre", "contenu".
-3. Les 7 sections sont dans cet ordre exact :
-   - id: "anamnese",        titre: "Anamnèse"
-   - id: "biopsychosocial", titre: "Facteurs biopsychosociaux"
-   - id: "examen",          titre: "Examen clinique"
-   - id: "diagnostic",      titre: "Diagnostic physiothérapeutique"
-   - id: "objectifs",       titre: "Objectifs"
-   - id: "plan",            titre: "Plan de traitement"
-   - id: "conseils",        titre: "Conseils au patient"
-4. Chaque "contenu" est un texte narratif professionnel (pas de JSON, pas de listes à puces sauf si cliniquement pertinent).
-5. Si une section n'est pas abordée, écris "Non renseigné lors de cette consultation."
-6. Utilise les termes cliniques appropriés (EVN, PSFS, MRC, ROM, etc.) tels que mentionnés.
-7. Ne rajoute AUCUNE information absente de la transcription.
-8. Conserve toutes les valeurs numériques (EVN, amplitudes, scores) telles quelles.
-9. Style : phrases complètes, présent de l'indicatif, 3e personne (ex: "Le patient présente...", "L'examen révèle...").
-10. AUTOCORRECTIONS — règle critique : la transcription est chronologique. Si le thérapeute revient sur une information précédemment mentionnée et la modifie ou la corrige (formulations typiques : "non en fait", "je me reprends", "plutôt", "finalement", "pardon", "je rectifie", "non c'est plutôt", "je voulais dire", "je me suis trompé"), c'est TOUJOURS la version la plus récente qui prime dans le compte rendu. Ne mentionne jamais l'ancienne version, ne fais aucune référence au changement, écris uniquement la version corrigée comme si elle avait été dite directement. Cela s'applique à TOUS les champs : valeurs numériques (EVN, amplitudes, MRC), tests cliniques, observations, mouvements aggravants/améliorants, diagnostic, etc.`
+2. Le JSON est un tableau de 8 objets avec les clés : "id", "titre", "contenu".
+3. Les 8 sections sont dans cet ordre exact, et chaque section CAPTURE EXACTEMENT le contenu décrit ci-dessous (n'amalgame pas, ne déplace pas) :
+
+   - id: "anamnese", titre: "Anamnèse"
+     → motif de consultation, mécanisme et histoire de la plainte (depuis quand, comment c'est arrivé, évolution), antécédents médico-chirurgicaux, traitements en cours/antérieurs, imageries déjà réalisées, gestes invasifs (infiltrations, chirurgies), profession et activités sportives/loisirs si pertinents.
+     ⚠ NE PAS inclure ici : valeurs EVN, type de douleur, localisation actuelle, facteurs aggravants/améliorants → ces éléments vont dans "symptomatologie".
+     ⚠ NE PAS inclure ici : drapeaux (perte de poids, fièvre, nocturne sévère, troubles sphinctériens) → ces éléments vont dans "drapeaux".
+
+   - id: "symptomatologie", titre: "Symptomatologie douloureuse"
+     → description complète et détaillée de la douleur : EVN pire / EVN mieux / EVN moyenne (toutes les valeurs numériques mentionnées), type de douleur (mécanique, inflammatoire, neurogène, mixte), caractère (brûlure, décharge, crampe, lancinante…), localisation initiale et localisation actuelle, irradiation et trajet, douleur nocturne (réveille / insomniante / non), dérouillage matinal et durée, mouvements/gestes/positions aggravants, mouvements/positions soulageants, facteur déclenchant, évolution sur la journée.
+     ⚠ Reporte CHAQUE valeur numérique citée (« 6/10 », « 3 sur 10 », « 8 », etc.) telle quelle.
+
+   - id: "drapeaux", titre: "Drapeaux cliniques"
+     → red flags (perte de poids inexpliquée, fièvre, sueurs nocturnes, antécédents néoplasiques, douleur nocturne sévère non posturale, troubles sphinctériens, déficit moteur progressif, syndrome de la queue de cheval, traumatisme à haute énergie, anesthésie en selle), yellow flags (croyances erronées sur la douleur, kinésiophobie, catastrophisme, dépression, anxiété), blue flags (insatisfaction au travail, pression, conflits), black flags (litiges, indemnisation, accident du travail). Pour chaque drapeau évoqué (positif OU explicitement négatif), note-le distinctement.
+     ⚠ Si le thérapeute dit « pas de red flag », « rien d'inquiétant », « négatif » → écris-le en clair (« Red flags négatifs : pas de perte de poids, pas de douleur nocturne sévère, pas de trouble sphinctérien »). NE JAMAIS écrire « Non renseigné » si une exploration négative a été verbalisée.
+
+   - id: "examen", titre: "Examen clinique"
+     → examen morphostatique (statique, attitude, déformations), observation (œdème, rougeur, hématome, atrophie, cicatrices), palpation (points douloureux, contractures, températures locales), mobilité articulaire active/passive (amplitudes en degrés, ROM, comparaison contro-latérale), force musculaire (cotation MRC 0-5 par muscle, fatigabilité), examen neurologique (réflexes ostéotendineux, sensibilité, motricité segmentaire, signes pyramidaux), évaluation fonctionnelle non spécifique.
+     ⚠ NE PAS inclure ici les TESTS CLINIQUES NOMMÉS (Lasègue, FABER, Lachman, Spurling, Thessaly, etc.) → ils vont dans "tests".
+
+   - id: "tests", titre: "Tests spécifiques"
+     → tous les tests cliniques nommés réalisés, avec leur résultat (positif / négatif / litigieux + détail) et le côté testé. Le PDF attend ce contenu en bloc dédié.
+       Catalogue de référence (à reconnaître quels que soient leurs synonymes oraux) :
+       • Lombaire / sacro-iliaque : Lasègue (SLR), Slump test, Prone Knee Bend (PKB / test de Léri), Cluster de Laslett, Cluster de Sultive, Extension-Rotation, Prone Instability Test, FABER, Gaenslen, compression sacro-iliaque, distraction sacro-iliaque, push-pull, Adam (Test TA).
+       • Cervical : Spurling, Distraction cervicale, ULTT 1/2/3/4, Adson, Roos (EAST), Sharp-Purser, test de l'alar.
+       • Hanche : FADIR, FABER, Thomas, Ober, Trendelenburg, log-roll, scour test.
+       • Genou : Lachman, Tiroir antérieur/postérieur, Pivot shift, Thessaly, McMurray, Apley, LCL stress varus, LCM stress valgus, Renne, Noble, Vague rotulien, Hoffa, Zohlen.
+       • Cheville/pied : Talar tilt varus, Talar tilt valgus, Kleiger, Squeeze test, Translation fibulaire, Impaction, LFH, Molloy, Foot Lift, BESS, Y-Balance, ALTD, RALTD, HEER, ABD-HEER.
+       • Épaule : Hawkins, Neer, Jobe (empty can), Belly press, Bear hug, Bell press, External rotation lag sign, Internal rotation lag sign, O'Brien, palpation AC, cross-arm, abduction horizontale résistée, apprehension/relocation, jerk test, signe du sulcus.
+       • Drainage lymphatique / vasculaire : Stemmer, signe du godet.
+       Tout autre test nommé → conserve le nom exact du test verbatim.
+     ⚠ Format suggéré : « Lasègue droit positif à 60° avec irradiation S1. Lasègue gauche négatif. Slump test positif à droite. FABER bilatéral négatif. »
+
+   - id: "diagnostic", titre: "Synthèse diagnostique"
+     → hypothèse diagnostique principale formulée par le thérapeute, hypothèses différentielles évoquées et écartées, mécanismes lésionnels probables. Pas de pourcentages.
+
+   - id: "projet", titre: "Projet thérapeutique"
+     → objectifs du patient (formulés ou reformulés en SMART si possible), axes de prise en charge (antalgique, mobilité, renforcement, neurodynamique, éducation, reprise activités), techniques envisagées (TMP, MET, exercices, électrothérapie, etc.), fréquence et durée prévues du suivi.
+
+   - id: "conseils", titre: "Conseils au patient"
+     → auto-rééducation à domicile, ergonomie, hygiène posturale, gestion de l'effort, conseils éducatifs spécifiques mentionnés.
+
+4. Chaque "contenu" est un texte narratif professionnel en prose (pas de JSON, pas de markdown, listes à puces uniquement si cliniquement pertinent comme dans "tests").
+5. Si une section n'est PAS DU TOUT abordée dans la transcription, écris uniquement : "Non renseigné lors de cette consultation."
+6. Si une section est abordée même brièvement (y compris en exploration explicitement négative), retranscris cette information — JAMAIS de « Non renseigné » s'il y a eu verbalisation.
+7. Utilise les termes cliniques appropriés (EVN, PSFS, MRC, ROM, etc.) tels que mentionnés.
+8. Ne rajoute AUCUNE information absente de la transcription.
+9. Conserve TOUTES les valeurs numériques (EVN, amplitudes, scores, cotations MRC) telles quelles, dans la section appropriée.
+10. Style : phrases complètes, présent de l'indicatif, 3e personne (ex: "Le patient présente...", "L'examen révèle...").
+11. EXHAUSTIVITÉ — aucun élément clinique de la transcription ne doit être perdu. Si un élément ne rentre pas évidemment dans une section, place-le dans la plus proche sémantiquement (ex: une remarque sur la kinésiophobie → "drapeaux"). Ne le supprime jamais.
+12. AUTOCORRECTIONS — règle critique : la transcription est chronologique. Si le thérapeute revient sur une information précédemment mentionnée et la modifie ou la corrige (formulations typiques : "non en fait", "je me reprends", "plutôt", "finalement", "pardon", "je rectifie", "non c'est plutôt", "je voulais dire", "je me suis trompé"), c'est TOUJOURS la version la plus récente qui prime dans le compte rendu. Ne mentionne jamais l'ancienne version, ne fais aucune référence au changement, écris uniquement la version corrigée comme si elle avait été dite directement. Cela s'applique à TOUS les champs : valeurs numériques (EVN, amplitudes, MRC), tests cliniques, observations, mouvements aggravants/améliorants, diagnostic, etc.`
 
   const userPrompt = `Zone anatomique : ${zone}
 Mode : ${context === 'seance' ? 'Enregistrement séance complète (thérapeute + patient)' : 'Dictée thérapeute'}

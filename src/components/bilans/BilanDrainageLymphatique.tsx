@@ -62,7 +62,9 @@ export const BilanDrainageLymphatique = forwardRef<
   BilanDrainageLymphatiqueHandle,
   { initialData?: Record<string, unknown> }
 >(({ initialData }, ref) => {
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (initialData?._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
   const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
     (initialData?.narrativeReport as NarrativeReport) ?? null,

@@ -52,9 +52,13 @@ const ABDO_KEYS: [string, string][] = [
 export const BilanHanche = forwardRef<BilanHancheHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
   const init = initialData ?? {}
 
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (init._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
-  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
+    (init.narrativeReport as NarrativeReport | undefined) ?? null
+  )
 
   // ── States via shared helpers ────────────────────────────────────────────
   const [douleur, setDouleur] = useState<DouleurState>(() => mergeDouleur((init.douleur as Record<string, unknown>) ?? {}))

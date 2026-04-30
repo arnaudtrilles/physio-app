@@ -236,6 +236,10 @@ function App() {
   const [dbAICallAudit, setDbAICallAudit, aiAuditLoaded] = useIndexedDB<AICallAuditEntry[]>('physio_ai_call_audit', [])
   const [dbPrescriptions, setDbPrescriptions] = useIndexedDB<PatientPrescription[]>('physio_prescriptions', [])
   const [dbClosedTreatments, setDbClosedTreatments, closedLoaded] = useIndexedDB<ClosedTreatment[]>('physio_closed_treatments', [])
+  // Source de vérité unique pour le sexe d'un patient. Indépendante des BilanRecord
+  // (qui peuvent être créés/supprimés/réécrits) : une fois renseigné, il persiste.
+  // Clé = patientKey (`${NOM} prenom`).
+  const [dbPatientSexe, setDbPatientSexe, sexeMapLoaded] = useIndexedDB<Record<string, 'masculin' | 'feminin'>>('physio_patient_sexe', {})
   // Accordéon : zones repliées par patient (clé = `${patientKey}::${bilanType}`)
   const [collapsedZones, setCollapsedZones] = useState<Set<string>>(new Set())
   // Épisodes clôturés dépliés (clé = `${patientKey}::${bilanType}::${closureId}`) — état UI volatile.
@@ -250,7 +254,7 @@ function App() {
   const [onboarded, setOnboarded] = useIndexedDB<boolean>('physio_onboarded_v3', false)
   // Vertex AI: auth is server-side, no client key needed — always truthy
   const apiKey = 'vertex'
-  const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded && closedLoaded
+  const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded && closedLoaded && sexeMapLoaded
 
   // ── Sync IndexedDB ↔ Supabase ──────────────────────────────────────────────
   const { syncStatus } = useSync({
@@ -754,10 +758,12 @@ Règles :
     db.filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === key)
       .sort((a, b) => a.id - b.id)
 
-  // Sexe = source de vérité unique au niveau du patient. On le stocke sur chaque
-  // BilanRecord mais on le lit en remontant le premier record qui le porte pour
-  // un patKey donné. Renvoie undefined si aucun bilan ne l'a encore renseigné.
+  // Sexe = source de vérité unique au niveau du patient.
+  // Stocké dans `dbPatientSexe` (registre indépendant des BilanRecord).
+  // En fallback : on inspecte les bilans existants (legacy data avant le registre).
   const getPatientSexe = (key: string): 'masculin' | 'feminin' | undefined => {
+    const fromRegistry = dbPatientSexe[key]
+    if (fromRegistry === 'masculin' || fromRegistry === 'feminin') return fromRegistry
     for (const r of getPatientBilans(key)) {
       if (r.sexe === 'masculin' || r.sexe === 'feminin') return r.sexe
     }
@@ -776,32 +782,47 @@ Règles :
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.nom, formData.prenom, db])
 
-  // Migration sexe au démarrage : si un patient a au moins un bilan avec sexe,
-  // propage ce sexe à tous ses bilans qui n'en ont pas encore.
+  // Migration sexe au démarrage :
+  // 1. Backfill du registre `dbPatientSexe` depuis les bilans existants (legacy).
+  // 2. Propage le sexe du registre à tous les bilans qui n'en ont pas (pour les prompts).
   useEffect(() => {
-    if (!dbLoaded) return
-    const needsPatch = db.some(r => !r.sexe && db.some(
-      other => `${(other.nom || 'Anonyme').toUpperCase()} ${other.prenom}`.trim() ===
-               `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() && other.sexe
-    ))
-    if (!needsPatch) return
-    setDb(prev => {
-      const sexeByKey: Record<string, 'masculin' | 'feminin'> = {}
-      prev.forEach(r => { if (r.sexe) sexeByKey[`${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()] = r.sexe })
-      return prev.map(r => {
-        if (r.sexe) return r
+    if (!dbLoaded || !sexeMapLoaded) return
+    // Step 1 : alimenter le registre depuis tout bilan qui porte déjà un sexe.
+    const fromBilans: Record<string, 'masculin' | 'feminin'> = {}
+    db.forEach(r => {
+      if (r.sexe === 'masculin' || r.sexe === 'feminin') {
         const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
-        return sexeByKey[key] ? { ...r, sexe: sexeByKey[key] } : r
-      })
+        if (!fromBilans[key]) fromBilans[key] = r.sexe
+      }
     })
-  }, [dbLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+    const registryUpdates: Record<string, 'masculin' | 'feminin'> = {}
+    for (const [key, sexe] of Object.entries(fromBilans)) {
+      if (dbPatientSexe[key] !== sexe) registryUpdates[key] = sexe
+    }
+    if (Object.keys(registryUpdates).length > 0) {
+      setDbPatientSexe(prev => ({ ...prev, ...registryUpdates }))
+    }
+    // Step 2 : propage le sexe (registre étendu) à tous les bilans qui n'en ont pas.
+    const merged: Record<string, 'masculin' | 'feminin'> = { ...dbPatientSexe, ...registryUpdates }
+    const needsPatch = db.some(r => {
+      if (r.sexe === 'masculin' || r.sexe === 'feminin') return false
+      const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+      return !!merged[key]
+    })
+    if (needsPatch) {
+      setDb(prev => prev.map(r => {
+        if (r.sexe === 'masculin' || r.sexe === 'feminin') return r
+        const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+        return merged[key] ? { ...r, sexe: merged[key] } : r
+      }))
+    }
+  }, [dbLoaded, sexeMapLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Migration sexe : à l'ouverture d'une fiche patient existante, si aucun bilan
-  // ne porte le sexe du patient, déclencher la popup bloquante. Pour un patient
-  // nouvellement créé (formData.sexe rempli), on ne l'affiche pas.
+  // Migration sexe : à l'ouverture d'une fiche patient existante, si le registre
+  // ne contient pas encore le sexe, déclencher la popup bloquante.
   useEffect(() => {
     // Attendre que IDB soit chargé — sinon on lit DEMO_DB et on déclenche le popup à tort
-    if (!dbLoaded) return
+    if (!dbLoaded || !sexeMapLoaded) return
     if (!selectedPatient) {
       if (sexeMigrationTarget) { setSexeMigrationTarget(null); setSexeMigrationChoice('') }
       return
@@ -1113,6 +1134,15 @@ Règles :
 
     const sexeValue = (formData.sexe === 'masculin' || formData.sexe === 'feminin') ? formData.sexe : undefined
 
+    // Persiste le sexe dans le registre patient dès qu'il est connu, pour qu'il
+    // survive même si le bilan est supprimé/réécrit.
+    if (sexeValue) {
+      const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+      if (dbPatientSexe[patKey] !== sexeValue) {
+        setDbPatientSexe(prev => ({ ...prev, [patKey]: sexeValue }))
+      }
+    }
+
     if (currentBilanId !== null) {
       setDb(prev => prev.map(r => r.id === currentBilanId
         ? { ...r, status, bilanData: bilanData ?? undefined, bilanType, evn: evnValue ?? r.evn, notes: bilanNotes || r.notes, silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : r.silhouetteData, documents: bilanDocuments.length > 0 ? bilanDocuments : r.documents, sexe: sexeValue ?? r.sexe }
@@ -1239,6 +1269,7 @@ Règles :
           bilanData,
           notesLibres: bilanNotes || undefined,
           analyseIA: currentAnalyseIA ?? null,
+          therapistProfession: profile.profession,
         })
         const report = await callClaudeWithDocGuard({
           apiKey,
@@ -1855,6 +1886,7 @@ Mobilité articulaire lombaire
           bilanData: record.bilanData,
           notesLibres: record.notes || undefined,
           analyseIA: null, // Bilan PDF = pas d'analyse IA
+          therapistProfession: profile.profession,
         })
         const report = await callClaudeWithDocGuard({
           apiKey,
@@ -2283,6 +2315,9 @@ Mobilité articulaire lombaire
                 if (sexeMigrationChoice !== 'masculin' && sexeMigrationChoice !== 'feminin') return
                 const chosen = sexeMigrationChoice
                 const patKey = sexeMigrationTarget.patKey
+                // Source de vérité : registre patient (persiste indépendamment des bilans)
+                setDbPatientSexe(prev => ({ ...prev, [patKey]: chosen }))
+                // Backfill bilans existants pour les prompts/PDF qui lisent encore r.sexe
                 setDb(prev => prev.map(r =>
                   `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey
                     ? { ...r, sexe: chosen }
@@ -2795,6 +2830,7 @@ Mobilité articulaire lombaire
                 setDb(prev => [...prev, record])
                 setShowQuickAddPatient(false)
                 const patKey = `${quickAddData.nom.trim().toUpperCase()} ${quickAddData.prenom.trim()}`.trim()
+                if (sexeQA) setDbPatientSexe(prev => ({ ...prev, [patKey]: sexeQA }))
                 setSelectedPatient(patKey)
                 showToast('Patient ajouté', 'success')
               }}
