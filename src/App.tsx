@@ -2315,13 +2315,13 @@ Mobilité articulaire lombaire
           onExportRegister={handleExportRegister}
           onShowToast={showToast}
           onUpgrade={() => setStep('pricing')}
-          currentPlan={(profile as Record<string, unknown>).plan as string | undefined}
+          currentPlan={profile.plan}
         />
       )}
 
       {step === 'pricing' && (
         <PricingPage
-          currentPlan={((profile as Record<string, unknown>).plan as string | undefined) as 'basique' | 'pro' | 'cabinet' | undefined}
+          currentPlan={profile.plan}
           userId={user?.id}
           userEmail={user?.email}
           onClose={() => setStep('profile')}

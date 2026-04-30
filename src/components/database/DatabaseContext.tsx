@@ -21,6 +21,7 @@ export type Step =
   | 'database'
   | 'profile'
   | 'settings'
+  | 'pricing'
   | 'identity'
   | 'bilan_zone'
   | 'bilan_intermediaire'

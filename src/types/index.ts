@@ -247,6 +247,9 @@ export interface ProfileData {
   email?: string
   signatureImage?: string | null // base64 PNG de la signature manuscrite
   specialisationsLibelle?: string // ex: "Thérapie manuelle, Rééducation du sportif"
+  plan?: 'basique' | 'pro' | 'cabinet'
+  stripe_customer_id?: string
+  stripe_subscription_id?: string
 }
 
 export type LetterType =
