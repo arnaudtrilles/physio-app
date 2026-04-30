@@ -267,10 +267,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
           setPhaseDetail(`${i + 1} / ${rec.chunks.length} chunks (déjà fait)`)
           continue
         }
-        if (!chunk.blob) {
-          // blob libéré après transcription — ne devrait pas arriver ici
-          continue
-        }
+        if (!chunk.blob) continue
         setPhaseDetail(`Chunk ${i + 1} / ${rec.chunks.length} en cours…`)
         const text = await transcribeWithRetry(chunk.blob, 2)
         chunk.transcription = text
