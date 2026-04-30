@@ -29,9 +29,13 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   const toggle = (id: string) => setOpen(p => ({ ...p, [id]: !p[id] }))
 
   // Mode Noyau EBP (JOSPT 2025 Rotator Cuff) activé par défaut.
-  const [mode, setMode] = useState<BilanMode>('noyau')
+  const [mode, setMode] = useState<BilanMode>(
+    (initialData?._mode as BilanMode | undefined) ?? 'noyau'
+  )
   const coreMode = mode === 'noyau'
-  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
+  const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(
+    (initialData?.narrativeReport as NarrativeReport | undefined) ?? null
+  )
 
   // Si initialData ne contient pas de redFlags existants, pré-cocher tous les booléens à "non".
   const redFlagsIsNew = !initialData?.redFlags || Object.keys(initialData.redFlags as Record<string, unknown>).length === 0
