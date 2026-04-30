@@ -1,16 +1,19 @@
 export type PlanId = 'basique' | 'pro' | 'cabinet'
+export type BillingInterval = 'monthly' | 'annual'
 
 export interface PlanConfig {
   id: PlanId
   name: string
-  price: number
+  priceMonthly: number
+  priceAnnual: number   // total annuel (≈ 11 mois, 1 mois offert)
   currency: string
   description: string
   features: string[]
   notIncluded?: string[]
-  productId: string
-  priceId: string
   highlighted?: boolean
+  productId: string
+  priceId: string           // prix mensuel Stripe
+  priceIdAnnual?: string    // prix annuel Stripe (à créer plus tard)
 }
 
 export const STRIPE_PLANS: Record<string, { productId: string; priceId: string }> = {
@@ -36,15 +39,16 @@ export const PLANS: PlanConfig[] = [
   {
     id: 'basique',
     name: 'Basique',
-    price: 29,
+    priceMonthly: 29,
+    priceAnnual: 319,   // 29 × 11 mois — 1 mois offert
     currency: 'CHF',
     description: 'Idéal pour démarrer',
     features: [
-      'Bilans initiaux illimités',
+      'Bilans initiaux illimités (toutes zones)',
+      'Analyse IA par bilan (Claude)',
+      'Génération PDF & courriers',
       'Notes de séance',
-      'Lucie IA (assistant vocal)',
-      'Génération PDF',
-      'Accès mobile uniquement',
+      'Stockage local sécurisé',
     ],
     notIncluded: [
       'Accès desktop',
@@ -56,7 +60,8 @@ export const PLANS: PlanConfig[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 49,
+    priceMonthly: 49,
+    priceAnnual: 539,   // 49 × 11 mois — 1 mois offert
     currency: 'CHF',
     description: 'Pour les praticiens exigeants',
     highlighted: true,
@@ -67,20 +72,22 @@ export const PLANS: PlanConfig[] = [
       'Lettres aux médecins (IA)',
       'Bilans intermédiaires',
       'Analyse d\'évolution IA',
+      'Fiche d\'exercices IA',
     ],
     ...STRIPE_PLANS.pro,
   },
   {
     id: 'cabinet',
     name: 'Cabinet',
-    price: 89,
+    priceMonthly: 89,
+    priceAnnual: 979,   // 89 × 11 mois — 1 mois offert
     currency: 'CHF',
     description: 'Pour les cabinets multi-physios',
     features: [
       'Tout ce qui est inclus dans Pro',
       'Jusqu\'à 3 physiothérapeutes',
       'Dossiers patients partagés',
-      'Gestion des membres du cabinet',
+      'Gestion des membres',
       'Facturation centralisée',
       '+20 CHF/mois par physio supplémentaire',
     ],
