@@ -354,7 +354,7 @@ function App() {
   const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
   const [ficheExerciceContextOverride, setFicheExerciceContextOverride] = useState<{ notesLibres: string; bilanData: Record<string, unknown>; zone: string } | null>(null)
   const [ficheExerciceSource, setFicheExerciceSource] = useState<{ type: 'note' | 'intermediaire'; id: number } | null>(null)
-  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'database'>('general_info')
+  const [bilanZoneBackStep, setBilanZoneBackStep] = useState<'identity' | 'database'>('identity')
   const [deletingBilanId, setDeletingBilanId] = useState<number | null>(null)
   const [editingLabelBilanId, setEditingLabelBilanId] = useState<number | null>(null)
   const [labelDraft, setLabelDraft] = useState('')

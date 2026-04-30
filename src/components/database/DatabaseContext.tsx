@@ -22,7 +22,6 @@ export type Step =
   | 'profile'
   | 'settings'
   | 'identity'
-  | 'general_info'
   | 'bilan_zone'
   | 'bilan_intermediaire'
   | 'note_intermediaire'
@@ -109,7 +108,7 @@ export interface DatabaseContextValue {
   setBilanDocuments: Dispatch<SetStateAction<BilanDocument[]>>
   setBilanIntermediaireZone: Dispatch<SetStateAction<string | null>>
   setBilanNotes: Dispatch<SetStateAction<string>>
-  setBilanZoneBackStep: Dispatch<SetStateAction<'identity' | 'general_info' | 'database'>>
+  setBilanZoneBackStep: Dispatch<SetStateAction<'identity' | 'database'>>
   setConsultationChooserOpen: Dispatch<SetStateAction<boolean>>
   setCurrentAnalyseIA: Dispatch<SetStateAction<AnalyseIA | null>>
   setCurrentBilanDataOverride: Dispatch<SetStateAction<Record<string, unknown> | null>>
