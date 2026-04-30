@@ -1344,6 +1344,39 @@ export interface AIReportPraticien {
   signatureImage?: string | null
 }
 
+/**
+ * Placement intelligent du bloc signature : évite qu'il atterrisse seul sur une nouvelle page.
+ * Si le bloc rentre dans la place restante avec un espace amont réduit, on resserre.
+ * Si seule l'image manuscrite déborde, on la rétrécit (jusqu'à imageMinH).
+ * Sinon on force proprement un saut de page.
+ */
+function planSignaturePlacement(opts: {
+  y: number
+  pageBottom: number
+  blockHeight: number
+  imageHeight: number
+  imageMinHeight: number
+  idealSpacing: number
+  minSpacing: number
+}): { spacing: number; adjustedImageH: number; needsNewPage: boolean } {
+  const remaining = opts.pageBottom - opts.y
+  if (remaining >= opts.blockHeight + opts.idealSpacing) {
+    return { spacing: opts.idealSpacing, adjustedImageH: opts.imageHeight, needsNewPage: false }
+  }
+  if (remaining >= opts.blockHeight + opts.minSpacing) {
+    return { spacing: opts.minSpacing, adjustedImageH: opts.imageHeight, needsNewPage: false }
+  }
+  if (opts.imageHeight > 0) {
+    const blockWithoutImage = opts.blockHeight - opts.imageHeight - 4
+    const availableForImage = remaining - blockWithoutImage - opts.minSpacing - 4
+    if (availableForImage >= opts.imageMinHeight) {
+      const adjusted = Math.min(opts.imageHeight, availableForImage)
+      return { spacing: opts.minSpacing, adjustedImageH: adjusted, needsNewPage: false }
+    }
+  }
+  return { spacing: opts.idealSpacing, adjustedImageH: opts.imageHeight, needsNewPage: true }
+}
+
 export interface AIReportOptions {
   /**
    * Titre du bloc signature auto-appendu sous le corps du rapport.
@@ -1700,8 +1733,31 @@ export const generateAIPDF = (
   // ── Signature : titre optionnel (défaut '10. Signature') + bloc aligné à droite ──
   const sigTitleOpt = options?.signatureTitle === undefined ? '10. Signature' : options.signatureTitle
   if (hasPraticien) {
-    y += 8
-    check(45)
+    // Placement intelligent : évite la page solo
+    const sigHasImage = !!p.signatureImage
+    const titleBlockH = sigTitleOpt ? 7.5 : 0
+    const sigBlockHeight =
+      titleBlockH +
+      6 +                                                    // ville/date
+      4.5 +                                                  // nom
+      (p.profession ? 4 : 0) +
+      ((p.codePostal || p.ville) ? 4 : 0) +
+      (p.telephone ? 4 : 0) +
+      (sigHasImage ? 22 + 4 : 0)
+    const sigPlan = planSignaturePlacement({
+      y,
+      pageBottom: H - 20,
+      blockHeight: sigBlockHeight,
+      imageHeight: sigHasImage ? 22 : 0,
+      imageMinHeight: 14,
+      idealSpacing: 8,
+      minSpacing: 4,
+    })
+    if (sigPlan.needsNewPage) {
+      doc.addPage()
+      y = 22
+    }
+    y += sigPlan.spacing
 
     if (sigTitleOpt) {
       // Titre de section numérotée, même style que les sections précédentes
@@ -1752,14 +1808,13 @@ export const generateAIPDF = (
       doc.setTextColor(...C.text)
     }
 
-    // Image signature manuscrite si disponible
+    // Image signature manuscrite si disponible (rétrécie si nécessaire pour rester sur la page)
     if (p.signatureImage) {
       try {
-        const imgW = 45
-        const imgH = 22
+        const imgH = sigPlan.adjustedImageH
+        const imgW = imgH * (45 / 22) // garde le ratio
         const imgX = W - MR - imgW
         const imgY = y + 2
-        check(imgH + 5)
         doc.addImage(p.signatureImage, 'PNG', imgX, imgY, imgW, imgH)
         y += imgH + 4
       } catch (e) {
@@ -1918,9 +1973,26 @@ export const generateLetterPDF = (options: LetterPDFOptions): Blob | void => {
     }
   }
 
-  // ── Signature ──────────────────────────────────────────────────────────
-  y += 10
-  check(35)
+  // ── Signature (placement intelligent : évite la page solo) ─────────────
+  const sigHasImage = !!p.signatureImage
+  const sigBlockHeight =
+    5 +                                // nom
+    (p.profession ? 5 : 0) +           // profession
+    (sigHasImage ? 22 + 4 : 0)         // image + padding
+  const sigPlan = planSignaturePlacement({
+    y,
+    pageBottom: H - 20,
+    blockHeight: sigBlockHeight,
+    imageHeight: sigHasImage ? 22 : 0,
+    imageMinHeight: 14,
+    idealSpacing: 10,
+    minSpacing: 4,
+  })
+  if (sigPlan.needsNewPage) {
+    doc.addPage()
+    y = 22
+  }
+  y += sigPlan.spacing
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10.5)
   doc.setTextColor(...C.primary)
@@ -1937,11 +2009,10 @@ export const generateLetterPDF = (options: LetterPDFOptions): Blob | void => {
   // Image signature si disponible
   if (p.signatureImage) {
     try {
-      const imgW = 45
-      const imgH = 22
+      const imgH = sigPlan.adjustedImageH
+      const imgW = imgH * (45 / 22) // garde le ratio 45×22
       const imgX = W - MR - imgW
       const imgY = y
-      check(imgH + 5)
       doc.addImage(p.signatureImage, 'PNG', imgX, imgY, imgW, imgH)
       y += imgH + 4
     } catch (e) {
