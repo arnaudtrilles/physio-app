@@ -138,8 +138,8 @@ service (art. 6.1.f RGPD).
 
 Pour toute question relative à cette politique :
 
-- **DPO de l'Éditeur** : `[À COMPLÉTER : nom DPO]`
-- **Email** : `[À COMPLÉTER : dpo@…]`
+- **Référent protection des données** : `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`
+- **Email** : `[À COMPLÉTER : email pro — exemple rgpd@<domaine>]`
 
 Vous pouvez également vous référer à la
 [Politique de confidentialité](politique-confidentialite.md) globale qui

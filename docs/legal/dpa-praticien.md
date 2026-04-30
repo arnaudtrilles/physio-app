@@ -182,7 +182,8 @@ encadrés par :
 Pour la **Suisse**, la décision d'adéquation **Swiss-US DPF** du 15 septembre
 2024 (PFPDT) couvre les transferts vers les sous-traitants US certifiés.
 
-Copie des SCC sur demande à `[À COMPLÉTER : email DPO]`.
+Copie des SCC sur demande au Référent protection des données de
+l'Éditeur (`[À COMPLÉTER : email pro — exemple rgpd@<domaine>]`).
 
 ---
 

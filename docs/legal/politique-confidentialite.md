@@ -25,7 +25,7 @@
 9. [Cookies et traceurs](#9-cookies-et-traceurs)
 10. [Mineurs](#10-mineurs)
 11. [Profilage et décision automatisée](#11-profilage-et-décision-automatisée)
-12. [Délégué à la protection des données](#12-délégué-à-la-protection-des-données)
+12. [Référent protection des données](#12-référent-protection-des-données)
 13. [Recours et plainte](#13-recours-et-plainte)
 14. [Modifications](#14-modifications)
 
@@ -200,8 +200,8 @@ d'adéquation OFPDP). Les transferts vers les États-Unis sont couverts par
 la décision d'adéquation **Swiss-US Data Privacy Framework** du
 15 septembre 2024 (PFPDT).
 
-L'utilisateur peut, sur demande à `[À COMPLÉTER : email DPO]`, obtenir
-copie des SCC signées.
+L'utilisateur peut, sur demande au Référent (cf. § 12), obtenir copie
+des SCC signées.
 
 ---
 
@@ -292,8 +292,8 @@ tant que personne concernée) disposent des droits suivants :
 
 | Droit | Exercice | Délai max |
 |---|---|---|
-| Accès (art. 15) | Sur demande à `[À COMPLÉTER : email DPO]` | 1 mois (extensible 2 mois) |
-| Rectification (art. 16) | Sur demande au DPO + via l'interface utilisateur | 1 mois |
+| Accès (art. 15) | Sur demande au Référent (§ 12) | 1 mois (extensible 2 mois) |
+| Rectification (art. 16) | Sur demande au Référent + via l'interface utilisateur | 1 mois |
 | Effacement / droit à l'oubli (art. 17) | Sur demande — sauf obligation légale de conservation 20 ans (cf. § 6) | 1 mois |
 | Limitation du traitement (art. 18) | Sur demande | 1 mois |
 | Portabilité (art. 20) | Export JSON / PDF des données via l'interface (`[À COMPLÉTER : statut feature]`) | 1 mois |
@@ -306,9 +306,9 @@ tant que personne concernée) disposent des droits suivants :
 
 - **Patient** : exercer les droits **directement auprès du Praticien** qui
   est le responsable de traitement de son dossier. Si le Praticien ne donne
-  pas suite, le Patient peut écrire au DPO de l'Éditeur (contact ci-dessous)
+  pas suite, le Patient peut écrire au Référent de l'Éditeur (cf. § 12)
   qui transmettra et facilitera la réponse.
-- **Praticien** : écrire à `[À COMPLÉTER : email DPO]` ou utiliser le menu
+- **Praticien** : écrire au Référent (cf. § 12) ou utiliser le menu
   Paramètres → Mes données → Exercer mes droits.
 
 L'Éditeur peut demander une **preuve d'identité** (copie de la carte d'identité
@@ -365,23 +365,34 @@ décision thérapeutique.
 
 ---
 
-## 12. Délégué à la protection des données
+## 12. Référent protection des données
 
-`[À COMPLÉTER : NOM DPO ou cabinet de DPO mutualisé]`
+À ce stade de son activité, l'Éditeur **n'a pas désigné de Délégué à la
+protection des données (DPO)** au sens de l'art. 37 RGPD. L'art. 37.1.c
+RGPD impose la désignation d'un DPO uniquement lorsque l'activité de
+base de l'organisme consiste en un **traitement à grande échelle** de
+données sensibles. Compte tenu du **volume actuel** de Praticiens
+abonnés, ce seuil n'est pas atteint (cf. lignes directrices WP243 du
+G29 — critères de volume, durée et étendue géographique).
 
-- **Email** : `[À COMPLÉTER : dpo@…]`
+L'Éditeur s'engage à **désigner un DPO dès lors que ce seuil sera
+atteint** ou que l'autorité de contrôle le requerra.
+
+En attendant, le **contact référent pour toute question relative à la
+protection des données** est :
+
+- **Référent** : `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`
+- **Email** : `[À COMPLÉTER : email pro — exemple rgpd@<domaine>]`
 - **Adresse postale** : `[À COMPLÉTER]`
 
-> ⚠️ **Désignation obligatoire** car traitement à grande échelle de données
-> de santé (art. 37.1.c RGPD). À nommer **avant** la commercialisation.
-> En attendant, le contact référent est l'Éditeur lui-même via
-> `[À COMPLÉTER : email contact]`.
+Ce référent traite l'ensemble des demandes RGPD/nLPD avec les délais
+légaux applicables (1 mois — art. 12.3 RGPD).
 
 ---
 
 ## 13. Recours et plainte
 
-Si vous estimez, après avoir contacté le Praticien et/ou le DPO de l'Éditeur,
+Si vous estimez, après avoir contacté le Praticien et/ou le Référent de l'Éditeur,
 que vos droits ne sont pas respectés :
 
 ### France

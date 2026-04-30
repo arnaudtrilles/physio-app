@@ -8,6 +8,12 @@
 > volets : description, conformité aux principes, analyse des risques.
 >
 > Version : `1.0` — 2026-04-30.
+>
+> **Phase 1 (pas de DPO formellement désigné)** : la validation et le
+> suivi de l'AIPD sont assurés par le **Référent protection des données**
+> de l'Éditeur, à savoir
+> `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`, en attendant
+> l'atteinte du seuil de désignation obligatoire d'un DPO (art. 37 RGPD).
 
 ---
 

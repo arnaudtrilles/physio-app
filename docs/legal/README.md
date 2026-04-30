@@ -34,19 +34,37 @@
 
 ## Workflow d'utilisation
 
-### Avant le lancement commercial
+### Avant le lancement commercial — Phase 1 (pas de DPO formel)
 
 1. **Compléter les placeholders** dans chaque fichier — ouvrir chaque doc et chercher
-   `[À COMPLÉTER` (Cmd+F).
-2. **Faire relire par un avocat RGPD/santé** — les placeholders et la structure
-   peuvent être validés en 1-2h. Vérifier en particulier la qualification
-   « sous-traitant vs responsable de traitement » dans le DPA.
-3. **Désigner un DPO** (mutualisé, ~150-400 €/mois) — son nom va dans la
-   politique de confidentialité.
-4. **Compléter l'AIPD** (`aipd.md`) avec l'outil CNIL « PIA » (gratuit) — c'est
+   `[À COMPLÉTER` (Cmd+F). Les principaux à renseigner :
+   - raison sociale, SIREN/SIRET, RCS, RPPS, adresse postale ;
+   - email pro de référent RGPD (idéalement `rgpd@<ton-domaine>` plutôt qu'une
+     adresse perso) ;
+   - plans tarifaires et noms commerciaux dans CGV ;
+   - prestataire de paiement (probable Stripe).
+2. **Faire relire par un avocat RGPD/santé** (1-2 h, ~200-500 €) — la structure
+   et les références sont déjà solides, c'est de la validation. Vérifier en
+   particulier la qualification « sous-traitant vs responsable de traitement »
+   dans le DPA.
+3. **Compléter l'AIPD** (`aipd.md`) avec l'outil CNIL « PIA » (gratuit) — c'est
    obligatoire car traitement de données de santé (art. 35 RGPD).
-5. **Tenir le registre** (`registre-traitements.md`) — c'est un Excel/markdown
-   vivant, à mettre à jour à chaque évolution.
+4. **Tenir le registre** (`registre-traitements.md`) — c'est un markdown vivant,
+   à mettre à jour à chaque évolution.
+
+### Phase 2 — quand prévoir un DPO ?
+
+Désigner un DPO (Délégué à la protection des données) devient **obligatoire**
+au sens de l'art. 37 RGPD dès que le traitement de données de santé devient
+« à grande échelle ». Indicateurs concrets :
+- ~20-30 Praticiens abonnés et au-delà ;
+- ou volume de patients dépassant les ~10 000 ;
+- ou contrôle CNIL/PFPDT exigeant la désignation.
+
+Marché DPO mutualisé santé : 80-200 €/mois (Dipeeo, Dastra, Captain DPO, etc.).
+Quand cette étape arrivera, il suffira de remplacer dans tous les docs le
+« Référent » par le DPO formel — la procédure est documentée dans chaque
+fichier interne.
 
 ### Pendant l'exploitation
 
@@ -70,8 +88,11 @@
   pipeline vocal ne passent pas par le scrub** (`voiceBilanClient.ts`). À fixer
   avant launch.
 - **Pas de DPA Supabase signé** à ce jour. À demander gratuitement via support.
-- **Pas de DPO désigné** à ce jour. Bloquant pour publier la politique de
-  confidentialité (le nom doit y figurer).
+- **Pas de DPO désigné** à ce jour — choix Phase 1 assumé : le seuil de l'art.
+  37 RGPD (« traitement à grande échelle ») n'est pas atteint au lancement.
+  Le rôle est tenu par un **Référent protection des données** (Arnaud lui-même),
+  documenté dans chaque doc juridique. Désignation d'un DPO mutualisé prévue
+  Phase 2 (~20-30 Praticiens abonnés ou contrôle CNIL).
 
 ## Bases légales en synthèse
 

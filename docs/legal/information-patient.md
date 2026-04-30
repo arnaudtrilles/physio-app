@@ -179,12 +179,18 @@ Vous disposez à tout moment des droits suivants :
 direct comme responsable du traitement.
 
 Si votre Praticien ne donne pas suite dans le délai d'un mois, vous pouvez
-écrire à l'Éditeur :
+écrire au Référent protection des données de l'Éditeur :
 
-- **DPO (Délégué à la protection des données) de l'Éditeur** :
-  `[À COMPLÉTER : nom DPO]`
-- **Email** : `[À COMPLÉTER : dpo@…]`
+- **Référent protection des données de l'Éditeur** :
+  `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`
+- **Email** : `[À COMPLÉTER : email pro — exemple rgpd@<domaine>]`
 - **Adresse postale** : `[À COMPLÉTER]`
+
+> À ce stade de l'activité, l'Éditeur n'a pas désigné de Délégué à la
+> protection des données (DPO) au sens de l'art. 37 RGPD, le seuil de
+> traitement « à grande échelle » n'étant pas encore atteint. Le
+> Référent ci-dessus traite l'ensemble des demandes RGPD avec les
+> délais légaux applicables.
 
 Une preuve d'identité peut vous être demandée (copie de pièce d'identité,
 **en masquant numéro et signature**) pour traiter votre demande en

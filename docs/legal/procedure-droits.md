@@ -6,6 +6,13 @@
 > Conforme aux **art. 12, 15-22 RGPD** et **art. 25-30 nLPD**.
 >
 > Version : `1.0` — 2026-04-30.
+>
+> **Phase 1 (pas de DPO formellement désigné)** : dans toute la
+> procédure, le terme « DPO » désigne le **Référent protection des
+> données** de l'Éditeur, à savoir
+> `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`. Lorsque
+> l'Éditeur désignera formellement un DPO au sens de l'art. 37 RGPD, ce
+> document basculera automatiquement en lui transférant les responsabilités.
 
 ---
 
@@ -42,7 +49,7 @@ réception, extensible à **3 mois** en cas de complexité (art. 12.3 RGPD).
 ### 3.1 Réception
 
 **Canaux acceptés** :
-- email DPO (`[À COMPLÉTER : dpo@…]`)
+- email Référent (`[À COMPLÉTER : email pro — exemple rgpd@<domaine>]`)
 - courrier postal (`[À COMPLÉTER : adresse]`)
 - formulaire `[À COMPLÉTER : URL si publié]`
 

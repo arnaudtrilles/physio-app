@@ -6,6 +6,12 @@
 > Conforme aux **art. 33 et 34 RGPD** et **art. 24 nLPD**.
 >
 > Version : `1.0` — 2026-04-30.
+>
+> **Phase 1 (pas de DPO formellement désigné)** : dans toute la
+> procédure, le terme « DPO » désigne le **Référent protection des
+> données** de l'Éditeur, à savoir
+> `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`. Le délai
+> de notification de 72 h s'applique de la même manière.
 
 ---
 
@@ -56,8 +62,8 @@ Trois types :
    seule si nécessaire, sans détruire de preuves.
 2. **Préserver les logs** : vider Vercel/Supabase logs de la fenêtre
    concernée avant rotation (Vercel = 30 jours).
-3. **Notifier le DPO** dans l'heure (`[À COMPLÉTER : email DPO]`,
-   téléphone d'astreinte `[À COMPLÉTER]`).
+3. **Notifier le Référent** dans l'heure (`[À COMPLÉTER : email pro — exemple rgpd@<domaine>]`,
+   téléphone `[À COMPLÉTER]`).
 
 ### Phase 2 — Qualification (T0 → T+24 h)
 

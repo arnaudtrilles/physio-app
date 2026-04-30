@@ -7,6 +7,11 @@
 > sous-traitant) et à l'**art. 12 nLPD**.
 >
 > Version : `1.0` — 2026-04-30. **Date de dernière mise à jour : `[À COMPLÉTER]`**.
+>
+> **Phase 1 (pas de DPO formellement désigné)** : la tenue du registre
+> est assurée par le **Référent protection des données** de l'Éditeur,
+> à savoir `[À COMPLÉTER : Arnaud Trilles, dirigeant et fondateur]`. Le
+> registre devra être mis à jour par le DPO dès sa désignation.
 
 ---
 
@@ -19,7 +24,7 @@
 | SIREN / SIRET | `[À COMPLÉTER]` |
 | Adresse | `[À COMPLÉTER]` |
 | Représentant légal | `[À COMPLÉTER : nom + qualité]` |
-| Délégué à la protection des données | `[À COMPLÉTER]` — `[email]` |
+| Référent protection des données (Phase 1) | `[À COMPLÉTER : Arnaud Trilles]` — `[email pro]` |
 
 ---
 
