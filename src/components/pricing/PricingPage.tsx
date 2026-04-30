@@ -13,14 +13,8 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
   const [billing, setBilling] = useState<BillingInterval>('monthly')
   const [loading, setLoading] = useState<PlanId | null>(null)
 
-  const activePlan = PLANS.find(p => p.id === currentPlan) ?? PLANS[0]
-  const currentPrice = billing === 'annual'
-    ? `${activePlan.priceAnnual} CHF / an · soit ${(activePlan.priceAnnual / 12).toFixed(2)} CHF/mois`
-    : `${activePlan.priceMonthly} CHF / mois`
-
-  const upgradePlans = PLANS.filter(p => p.id !== currentPlan)
-
   async function handleChoose(planId: PlanId, priceId: string) {
+    if (planId === currentPlan) return
     setLoading(planId)
     try {
       const res = await fetch('/api/create-checkout-session', {
@@ -67,115 +61,102 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
               )}
               <button
                 onClick={() => setBilling(b => b === 'monthly' ? 'annual' : 'monthly')}
-                style={{
-                  width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
-                  background: billing === 'annual' ? 'var(--primary)' : 'var(--border-color)',
-                  position: 'relative', flexShrink: 0,
-                  transition: 'background 0.2s',
-                }}
+                style={{ width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', background: billing === 'annual' ? 'var(--primary)' : 'var(--border-color)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}
               >
-                <span style={{
-                  position: 'absolute', top: 3,
-                  left: billing === 'annual' ? 23 : 3,
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: 'white',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  transition: 'left 0.2s',
-                }} />
+                <span style={{ position: 'absolute', top: 3, left: billing === 'annual' ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
               </button>
             </div>
           </div>
 
-          {/* Plan actuel — carte gradient comme dans Settings */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
-              <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Abonnement actuel</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Votre plan PhysioScan</div>
-              </div>
-            </div>
+          {/* Les 3 forfaits */}
+          {PLANS.map(plan => {
+            const isCurrent = plan.id === currentPlan
+            const isLoading = loading === plan.id
+            const price = billing === 'annual' ? plan.priceAnnual : plan.priceMonthly
+            const hasDiscount = billing === 'annual' && plan.id !== 'basique'
+            const perMonth = billing === 'annual' ? Math.round(plan.priceAnnual / 12) : null
 
-            <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', marginBottom: '1rem', color: 'white' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Plan actuel</div>
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(255,255,255,0.2)', padding: '0.15rem 0.5rem', borderRadius: 99, border: '1px solid rgba(255,255,255,0.3)' }}>✓ Actif</span>
-              </div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 2 }}>{activePlan.name}</div>
-              <div style={{ fontSize: '0.8rem', opacity: 0.85, marginBottom: 8 }}>{currentPrice}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
-                <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
-                  Facturation {billing === 'annual' ? 'annuelle' : 'mensuelle'} · Gérer via Stripe
-                </span>
-              </div>
-            </div>
+            return (
+              <div
+                key={plan.id}
+                style={{
+                  background: 'var(--surface)',
+                  border: `1px solid ${plan.highlighted ? 'var(--primary)' : isCurrent ? 'color-mix(in srgb, var(--primary) 30%, transparent)' : 'var(--border-color)'}`,
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1rem 1.1rem',
+                  boxShadow: plan.highlighted ? '0 2px 12px rgba(15,23,138,0.10)' : '0 1px 4px rgba(0,0,0,0.04)',
+                  position: 'relative',
+                }}
+              >
+                {plan.highlighted && (
+                  <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'var(--primary)', color: 'white', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.08em', padding: '0.2rem 0.75rem', borderRadius: 99, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                    Recommandé
+                  </div>
+                )}
 
-            <div style={{ marginBottom: '0.5rem' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>Inclus dans votre plan</div>
-              {activePlan.features.map((feature, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.3rem 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
-                  <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.9rem' }}>✓</span>
-                  {feature}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Changer de plan */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>Changer de plan</div>
-
-            {upgradePlans.map(plan => {
-              const price = billing === 'annual' ? plan.priceAnnual : plan.priceMonthly
-              const perMonth = billing === 'annual' ? (plan.priceAnnual / 12).toFixed(0) : null
-              const isLoading = loading === plan.id
-
-              return (
-                <div
-                  key={plan.id}
-                  onClick={() => !isLoading && handleChoose(plan.id, plan.priceId)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-md)',
-                    border: `1px solid ${plan.highlighted ? 'var(--primary)' : 'var(--border-color)'}`,
-                    background: plan.highlighted ? 'color-mix(in srgb, var(--primary) 5%, var(--surface))' : 'var(--secondary)',
-                    marginBottom: 8, cursor: isLoading ? 'default' : 'pointer',
-                    opacity: isLoading ? 0.7 : 1,
-                    transition: 'opacity 0.15s',
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                {/* En-tête plan */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+                  <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)' }}>{plan.name}</span>
-                      {plan.highlighted && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>Populaire</span>}
-                      {billing === 'annual' && plan.id !== 'basique' && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#10b981', background: 'color-mix(in srgb, #10b981 12%, transparent)', padding: '0.1rem 0.35rem', borderRadius: 99 }}>-10%</span>}
+                      <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{plan.name}</span>
+                      {isCurrent && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', padding: '0.1rem 0.4rem', borderRadius: 99 }}>✓ Actif</span>}
+                      {hasDiscount && <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#10b981', background: 'color-mix(in srgb, #10b981 12%, transparent)', padding: '0.1rem 0.4rem', borderRadius: 99 }}>-10%</span>}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>{plan.description}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{plan.description}</div>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
-                    {isLoading ? (
-                      <span style={{ fontSize: '0.72rem', color: 'var(--primary)' }}>...</span>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>{price} CHF</div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                          {billing === 'annual' ? `/an · ${perMonth}/mois` : '/mois'}
-                        </div>
-                      </>
-                    )}
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary-dark)', letterSpacing: '-0.02em' }}>
+                      {price} <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>{plan.currency}</span>
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                      {billing === 'annual' ? `/an · ${perMonth}/mois` : '/mois'}
+                    </div>
                   </div>
                 </div>
-              )
-            })}
 
-            <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.4rem', lineHeight: 1.4 }}>
-              Paiement sécurisé par Stripe · Résiliable à tout moment
-            </p>
-          </div>
+                {/* Features */}
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', marginBottom: '0.85rem' }}>
+                  {plan.features.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.25rem 0', fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                      <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0, marginTop: 1 }}>✓</span>
+                      {f}
+                    </div>
+                  ))}
+                  {plan.notIncluded?.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '0.25rem 0', fontSize: '0.8rem', color: 'var(--text-muted)', opacity: 0.55 }}>
+                      <span style={{ flexShrink: 0, marginTop: 1 }}>✕</span>
+                      {f}
+                    </div>
+                  ))}
+                </div>
 
+                {/* Bouton */}
+                <button
+                  onClick={() => !isCurrent && !isLoading && handleChoose(plan.id, plan.priceId)}
+                  disabled={isCurrent || isLoading}
+                  style={{
+                    width: '100%', padding: '0.7rem', borderRadius: 'var(--radius-full)', border: 'none',
+                    fontWeight: 700, fontSize: '0.82rem',
+                    cursor: isCurrent ? 'default' : 'pointer',
+                    background: isCurrent ? 'var(--secondary)' : plan.highlighted ? 'var(--primary)' : 'var(--primary-dark)',
+                    color: isCurrent ? 'var(--text-muted)' : 'white',
+                    opacity: isLoading ? 0.7 : 1,
+                    transition: 'opacity 0.15s, transform 0.1s',
+                    outline: isCurrent ? '1px solid var(--border-color)' : 'none',
+                  }}
+                  onPointerDown={e => { if (!isCurrent) e.currentTarget.style.transform = 'scale(0.97)' }}
+                  onPointerUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onPointerLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                >
+                  {isLoading ? 'Redirection...' : isCurrent ? '✓ Forfait actuel' : `Passer au ${plan.name}`}
+                </button>
+              </div>
+            )
+          })}
+
+          <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
+            Paiement sécurisé par Stripe · Résiliable à tout moment
+          </p>
         </div>
       </div>
     </div>

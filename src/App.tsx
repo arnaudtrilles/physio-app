@@ -2349,8 +2349,6 @@ Mobilité articulaire lombaire
           aiAuditSuspiciousCount={dbAICallAudit.filter(e => e.scrubReplacements > 0).length}
           onExportRegister={handleExportRegister}
           onShowToast={showToast}
-          onUpgrade={() => setStep('pricing')}
-          currentPlan={profile.plan}
         />
       )}
 
