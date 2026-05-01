@@ -315,6 +315,27 @@ function App() {
     return false
   }
 
+  // setStep avec vérification plan — intercepte tous les appels y compris depuis DatabasePage
+  const GATED_STEPS: Record<string, string> = {
+    bilan_intermediaire: 'bilans_intermediaires',
+    fiche_exercice: 'fiche_exercices',
+    letter: 'lettres_medecins',
+    bilan_sortie: 'bilan_sortie',
+    evolution_ia: 'evolution_ia',
+  }
+  const guardedSetStep = (next: Step) => {
+    const feature = GATED_STEPS[next]
+    if (feature && !canAccess(feature, profile.plan)) {
+      showToast(
+        'Fonctionnalité disponible avec le plan Pro',
+        'info',
+        { onAction: () => setStep('pricing'), actionLabel: 'Voir les forfaits' }
+      )
+      return
+    }
+    setStep(next)
+  }
+
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
   const recordAIAudit = useCallback((entry: AICallAuditEntry) => {
     setDbAICallAudit(prev => {
@@ -2229,7 +2250,7 @@ Mobilité articulaire lombaire
           setSelectedPatient,
           setShowAddPatientChoice,
           setSilhouetteData,
-          setStep,
+          setStep: guardedSetStep,
           closeTreatment,
           deleteClosedEpisode,
           exportBilanFromRecord,

@@ -154,7 +154,7 @@ export interface DatabaseContextValue {
   setSelectedPatient: Dispatch<SetStateAction<string | null>>
   setShowAddPatientChoice: Dispatch<SetStateAction<boolean>>
   setSilhouetteData: Dispatch<SetStateAction<Record<string, unknown>>>
-  setStep: Dispatch<SetStateAction<Step>>
+  setStep: (step: Step) => void
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   closeTreatment: (patientKey: string, bilanType: BilanType, zone?: string) => void
