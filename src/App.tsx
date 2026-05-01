@@ -56,6 +56,8 @@ import { BilanResumeModal } from './components/BilanResumeModal'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
+import { usePlanSync } from './hooks/usePlanSync'
+import { canAccess } from './utils/planGating'
 import { AuthScreen } from './components/AuthScreen'
 import { OnboardingScreen } from './components/OnboardingScreen'
 import { Tutorial, type TutorialStep } from './components/Tutorial'
@@ -236,6 +238,8 @@ function App() {
   const [dbAICallAudit, setDbAICallAudit, aiAuditLoaded] = useIndexedDB<AICallAuditEntry[]>('physio_ai_call_audit', [])
   const [dbPrescriptions, setDbPrescriptions] = useIndexedDB<PatientPrescription[]>('physio_prescriptions', [])
   const [dbClosedTreatments, setDbClosedTreatments, closedLoaded] = useIndexedDB<ClosedTreatment[]>('physio_closed_treatments', [])
+  // Soft delete : liste des patientKeys supprimés (données conservées, juste masquées)
+  const [deletedPatientKeys, setDeletedPatientKeys] = useLocalStorage<string[]>('physio_deleted_patients', [])
   // Source de vérité unique pour le sexe d'un patient. Indépendante des BilanRecord
   // (qui peuvent être créés/supprimés/réécrits) : une fois renseigné, il persiste.
   // Clé = patientKey (`${NOM} prenom`).
@@ -255,6 +259,9 @@ function App() {
   // Vertex AI: auth is server-side, no client key needed — always truthy
   const apiKey = 'vertex'
   const allDataLoaded = dbLoaded && intLoaded && notesLoaded && objLoaded && exLoaded && docsLoaded && lettersLoaded && auditLoaded && aiAuditLoaded && profLoaded && keyLoaded && closedLoaded && sexeMapLoaded
+
+  // ── Sync plan Stripe depuis Supabase après connexion ──────────────────────
+  usePlanSync(user, profile, setProfile)
 
   // ── Sync IndexedDB ↔ Supabase ──────────────────────────────────────────────
   const { syncStatus } = useSync({
@@ -296,6 +303,14 @@ function App() {
       setOnboarded(true)
     }
   }, [onboarded, syncStatus, profile.nom, setOnboarded])
+
+  // Vérifie l'accès à une feature Pro — redirige vers la page tarifaire si non autorisé
+  const requirePlan = (feature: string): boolean => {
+    if (canAccess(feature, profile.plan)) return true
+    showToast('Disponible avec le plan Pro — voir les forfaits', 'info')
+    setStep('pricing')
+    return false
+  }
 
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
   const recordAIAudit = useCallback((entry: AICallAuditEntry) => {
@@ -2048,6 +2063,7 @@ Mobilité articulaire lombaire
   }
 
   const handleTutorialExercices = () => {
+    if (!requirePlan('fiche_exercices')) return
     setFicheBackStep('database')
     setStep('fiche_exercice')
     handleTutorialDone()
@@ -2059,6 +2075,11 @@ Mobilité articulaire lombaire
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
+
+  // Patients soft-deleted : données conservées dans IndexedDB, masquées dans l'UI
+  const visibleDb = db.filter(r =>
+    !deletedPatientKeys.includes(`${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim())
+  )
 
   // Auth gate: loading → login → app
   if (authLoading) {
@@ -2109,7 +2130,7 @@ Mobilité articulaire lombaire
       {step === 'dashboard' && (
         <DashboardPage
           profile={profile}
-          db={db}
+          db={visibleDb}
           dbIntermediaires={dbIntermediaires}
           dbNotes={dbNotes}
           dbClosedTreatments={dbClosedTreatments}
@@ -2132,7 +2153,7 @@ Mobilité articulaire lombaire
         <DatabaseProvider value={{
           apiKey,
           consultationChooserOpen,
-          db,
+          db: visibleDb,
           dbIntermediaires,
           dbNotes,
           dbObjectifs,
@@ -2263,15 +2284,13 @@ Mobilité articulaire lombaire
               <button
                 onClick={() => {
                   const patKey = deletingPatientKey
-                  setDb(prev => prev.filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() !== patKey))
-                  setDbIntermediaires(prev => prev.filter(r => r.patientKey !== patKey))
-                  setDbNotes(prev => prev.filter(r => r.patientKey !== patKey))
-                  setDbObjectifs(prev => prev.filter(r => r.patientKey !== patKey))
-                  setDbPatientDocs(prev => prev.filter(r => r.patientKey !== patKey))
-                  setDbLetters(prev => prev.filter(r => r.patientKey !== patKey))
+                  // Soft delete : on conserve les données, on masque juste le patient
+                  if (patKey && !deletedPatientKeys.includes(patKey)) {
+                    setDeletedPatientKeys(prev => [...prev, patKey])
+                  }
                   setDeletingPatientKey(null)
                   setSelectedPatient(null)
-                  showToast('Patient supprimé', 'success')
+                  showToast('Patient archivé (données conservées 30 jours)', 'success')
                 }}
                 style={{ flex: 1, padding: '0.7rem', borderRadius: 'var(--radius-lg)', background: '#dc2626', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer' }}>
                 Supprimer
@@ -2446,6 +2465,7 @@ Mobilité articulaire lombaire
           accentBg="#fff7ed"
           accentBorder="#fed7aa"
           onSelect={(zone) => {
+            if (!requirePlan('bilans_intermediaires')) { setShowIntermediaireZoneSelector(false); return }
             const bilans = getPatientBilans(selectedPatient)
             const firstRec = bilans[0]
             setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
@@ -2494,12 +2514,21 @@ Mobilité articulaire lombaire
             setCurrentNoteSeanceData(null)
             setStep('note_seance')
           } else if (action === 'intermediaire') {
+            if (!requirePlan('bilans_intermediaires')) { setLetterZonePicker(null); return }
             const firstRec = getPatientBilans(patKey)[0] ?? getPatientNotes(patKey)[0] ?? getPatientIntermediaires(patKey)[0]
             setFormData(prev => ({ ...prev, nom: firstRec?.nom ?? '', prenom: firstRec?.prenom ?? '', dateNaissance: firstRec?.dateNaissance ?? '' }))
             setBilanIntermediaireZone(zone)
             setCurrentBilanIntermediaireId(null)
             setCurrentBilanIntermediaireData(getIntermediairePreFill(patKey, zone))
             setStep('bilan_intermediaire')
+          } else if (action === 'letter') {
+            if (!requirePlan('lettres_medecins')) { setLetterZonePicker(null); return }
+            setSelectedBodyZone(zone)
+            setStep(action)
+          } else if (action === 'bilan_sortie') {
+            if (!requirePlan('bilan_sortie')) { setLetterZonePicker(null); return }
+            setSelectedBodyZone(zone)
+            setStep(action)
           } else {
             setSelectedBodyZone(zone)
             setStep(action)
@@ -2851,7 +2880,7 @@ Mobilité articulaire lombaire
           selectedBodyZone={selectedBodyZone}
           setShowZonePopup={setShowZonePopup}
           stepProgress={stepProgress}
-          db={db}
+          db={visibleDb}
           onBack={() => setStep('dashboard')}
           onQuit={handleQuitBilan}
           onNext={() => {
@@ -3429,6 +3458,7 @@ Mobilité articulaire lombaire
           onBack={() => setStep('database')}
           onGoToProfile={() => setStep('profile')}
           onFicheExercice={() => {
+            if (!requirePlan('fiche_exercices')) return
             setFicheBackStep('database')
             setStep('fiche_exercice')
           }}
@@ -3522,7 +3552,7 @@ Mobilité articulaire lombaire
           onExport={handleExportPDF}
           exporting={exportingPDF}
           onGoToProfile={() => setStep('profile')}
-          onFicheExercice={() => { setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
+          onFicheExercice={() => { if (!requirePlan('fiche_exercices')) return; setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
         />
         </Suspense>
       )}
