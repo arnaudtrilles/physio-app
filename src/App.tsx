@@ -304,11 +304,14 @@ function App() {
     }
   }, [onboarded, syncStatus, profile.nom, setOnboarded])
 
-  // Vérifie l'accès à une feature Pro — redirige vers la page tarifaire si non autorisé
+  // Vérifie l'accès à une feature Pro — affiche un toast cliquable si non autorisé
   const requirePlan = (feature: string): boolean => {
     if (canAccess(feature, profile.plan)) return true
-    showToast('Disponible avec le plan Pro — voir les forfaits', 'info')
-    setStep('pricing')
+    showToast(
+      'Fonctionnalité disponible avec le plan Pro',
+      'info',
+      { onAction: () => setStep('pricing'), actionLabel: 'Voir les forfaits' }
+    )
     return false
   }
 
