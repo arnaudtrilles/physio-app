@@ -2,6 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'node:fs'
 import path from 'node:path'
+import { checkRateLimit, getClientIp } from './_ratelimit'
+
+// 30 appels Claude par minute par IP
+const RATE_LIMIT = { maxRequests: 30, windowMs: 60_000 }
+// Timeout global : 120s (modèles lents comme Opus peuvent prendre du temps)
+const CLAUDE_TIMEOUT_MS = 120_000
 
 // Plan Vercel Pro : maxDuration jusqu'à 300s (transcriptions longues = beaucoup de tokens)
 export const config = { maxDuration: 300 }
@@ -81,6 +87,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
+  if (!checkRateLimit(`claude:${ip}`, RATE_LIMIT)) {
+    return res.status(429).json({ error: 'Trop de requêtes. Réessaie dans une minute.' })
+  }
 
   try {
     const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents } = req.body as {
@@ -164,12 +175,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let response: Anthropic.Message
     try {
-      response = await client.messages.create({
-        model,
-        max_tokens: maxOutputTokens || 8192,
-        system: systemBlocks,
-        messages,
-      })
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Claude request timeout after 120s')), CLAUDE_TIMEOUT_MS)
+      )
+      response = await Promise.race([
+        client.messages.create({
+          model,
+          max_tokens: maxOutputTokens || 8192,
+          system: systemBlocks,
+          messages,
+        }),
+        timeout,
+      ])
     } catch (e: unknown) {
       const err = e as { status?: number; message?: string }
       const status = err?.status ?? 500

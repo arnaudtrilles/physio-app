@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { checkRateLimit, getClientIp } from './_ratelimit'
+
+// 30 appels Gemini par minute par IP
+const RATE_LIMIT = { maxRequests: 30, windowMs: 60_000 }
 
 // Node.js Serverless — 60s timeout on Hobby plan (Edge was limited to 30s)
 export const config = { maxDuration: 60 }
@@ -170,6 +174,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
+  if (!checkRateLimit(`gemini:${ip}`, RATE_LIMIT)) {
+    return res.status(429).json({ error: 'Trop de requêtes. Réessaie dans une minute.' })
+  }
 
   try {
     const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents } = req.body

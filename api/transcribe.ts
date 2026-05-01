@@ -1,4 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { checkRateLimit, getClientIp } from './_ratelimit'
+
+// 10 transcriptions par minute par IP
+const RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 }
 
 export const config = {
   // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout Whisper sur audio long)
@@ -32,6 +36,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
+  if (!checkRateLimit(`transcribe:${ip}`, RATE_LIMIT)) {
+    return res.status(429).json({ error: 'Trop de requêtes. Réessaie dans une minute.' })
+  }
 
   if (!OPENAI_API_KEY) {
     return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' })

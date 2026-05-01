@@ -60,7 +60,18 @@ CREATE POLICY "admin_manage_members" ON organization_members
     )
   );
 
--- 5. Index utiles
+-- 5. Table idempotence Stripe (évite de traiter deux fois le même événement)
+CREATE TABLE IF NOT EXISTS stripe_events (
+  id TEXT PRIMARY KEY,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Purge automatique des événements > 30 jours (optionnel, via pg_cron si activé)
+-- SELECT cron.schedule('purge-stripe-events', '0 3 * * *', $$
+--   DELETE FROM stripe_events WHERE processed_at < now() - interval '30 days';
+-- $$);
+
+-- 6. Index utiles
 CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_org_members_org ON organization_members(organization_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_stripe_customer ON profiles(stripe_customer_id);

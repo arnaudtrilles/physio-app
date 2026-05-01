@@ -30,6 +30,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: message })
   }
 
+  // Idempotence : ignore les événements déjà traités
+  const { error: insertError } = await supabase
+    .from('stripe_events')
+    .insert({ id: event.id })
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      // Événement déjà traité — répondre 200 pour que Stripe arrête de réessayer
+      return res.status(200).json({ received: true, duplicate: true })
+    }
+    // Erreur inattendue sur l'insertion — on laisse passer (fail-open)
+    console.error('[stripe-webhook] stripe_events insert error:', insertError.message)
+  }
+
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
