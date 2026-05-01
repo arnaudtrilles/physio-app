@@ -227,107 +227,18 @@ INSTRUCTIONS STRICTES :
 }
 
 // ── Fiche d'exercices prompt ──────────────────────────────────────────────────
+// DM-pivot (2026-04-30) : ce prompt ne reçoit PLUS le bilan, le diagnostic, ni
+// l'historique patient. Le thérapeute fournit la liste des exercices à
+// prescrire ; l'IA rédige uniquement la description technique de chaque
+// exercice listé. Aucune inférence clinique sur le patient. Voir memory
+// `feedback_dm_design_principle.md`.
 
-export function buildFicheExercicePrompt(
-  ctx: BilanContext,
-  notesSeance: string,
-  analyseIA?: { diagnostic: { titre: string }; priseEnCharge: Array<{ titre: string }> } | null
-): string {
-  const { patient, zone, bilanData, patientHistory } = ctx
-  const { age, sexe, scrub } = anonymizePatientData(patient)
+export function buildFicheExercicePrompt(exercicesInput: string): string {
+  return `<exercices_a_decrire>
+${exercicesInput.trim()}
+</exercices_a_decrire>
 
-  const douleur = bilanData.douleur as Record<string, unknown> | undefined
-  const evn = douleur?.evnMoy ?? douleur?.evnPire ?? 'N/R'
-  const profession = scrub(patient.profession || 'Non renseignée')
-  const sport = scrub(patient.sport || 'Non renseignée')
-  const antecedents = scrub(patient.antecedents || 'Non renseignés')
-  const scrubbedNotes = scrub(notesSeance)
-
-  // Build patient history section
-  let historyBlock = ''
-  if (patientHistory && patientHistory.length > 0) {
-    const sorted = [...patientHistory].sort((a, b) => a.date.localeCompare(b.date))
-
-    const bilans = sorted.filter(h => h.type === 'bilan')
-    const intermediaires = sorted.filter(h => h.type === 'intermediaire')
-    const notes = sorted.filter(h => h.type === 'note_seance')
-
-    const parts: string[] = []
-
-    if (bilans.length > 0) {
-      parts.push(`--- BILANS INITIAUX (${bilans.length}) ---`)
-      for (const b of bilans) {
-        const d = b.data?.douleur as Record<string, unknown> | undefined
-        const scores = b.data?.scores as Record<string, unknown> | undefined
-        parts.push(`Bilan du ${b.date} — Zone : ${b.zone} — EVN : ${b.evn ?? 'N/R'}/10`)
-        if (d) parts.push(`  Douleur : type=${d.douleurType ?? 'N/R'}, évolution=${d.situation ?? 'N/R'}, nocturne=${d.douleurNocturne ?? 'N/R'}`)
-        if (scores) parts.push(`  Scores : ${scrub(JSON.stringify(scores))}`)
-      }
-    }
-
-    if (intermediaires.length > 0) {
-      parts.push(`\n--- BILANS INTERMÉDIAIRES (${intermediaires.length}) ---`)
-      for (const b of intermediaires) {
-        parts.push(`Bilan intermédiaire du ${b.date} — Zone : ${b.zone} — EVN : ${b.evn ?? 'N/R'}/10`)
-        if (b.analyseIA?.resume) parts.push(`  Résumé IA : ${scrub(b.analyseIA.resume)}`)
-        if (b.analyseIA?.evolution) parts.push(`  Évolution : ${scrub(b.analyseIA.evolution)}`)
-      }
-    }
-
-    if (notes.length > 0) {
-      parts.push(`\n--- NOTES DE SÉANCE (${notes.length}) ---`)
-      for (const n of notes) {
-        const nd = n.noteData
-        parts.push(`Séance du ${n.date} — Zone : ${n.zone} — EVA : ${nd?.eva ?? 'N/R'}/10`)
-        if (nd?.observance) parts.push(`  Observance exercices : ${nd.observance}`)
-        if (nd?.evolution) parts.push(`  Évolution : ${scrub(nd.evolution)}`)
-        if (nd?.interventions?.length) parts.push(`  Interventions : ${nd.interventions.join(', ')}`)
-        if (nd?.tolerance) parts.push(`  Tolérance : ${nd.tolerance}`)
-        if (nd?.prochaineEtape?.length) parts.push(`  Prochaines étapes : ${nd.prochaineEtape.join(', ')}`)
-        if (n.analyseIA?.focus) parts.push(`  Focus IA : ${scrub(n.analyseIA.focus)}`)
-      }
-    }
-
-    // Previous exercise sheets
-    const withFiches = sorted.filter(h => h.ficheExercice?.markdown)
-    if (withFiches.length > 0) {
-      parts.push(`\n--- FICHES D'EXERCICES PRÉCÉDENTES (${withFiches.length}) ---`)
-      for (const f of withFiches) {
-        parts.push(`Fiche du ${f.date} — Zone : ${f.zone}`)
-        // Include a summary (first 500 chars) to avoid token explosion
-        const md = f.ficheExercice!.markdown
-        parts.push(md.length > 500 ? md.slice(0, 500) + '... [tronqué]' : md)
-      }
-    }
-
-    historyBlock = `\n<historique_patient>
-${parts.join('\n')}
-</historique_patient>
-
-IMPORTANT : Utilise cet historique pour adapter les exercices au niveau actuel du patient. Tiens compte de :
-- L'évolution de la douleur dans le temps
-- L'observance et la tolérance aux exercices précédents
-- Les interventions déjà réalisées en séance
-- La progression globale pour ajuster l'intensité
-- Ne pas répéter des exercices qui n'ont pas fonctionné
-`
-  }
-
-  const antecedentsPEC = (ctx.closedAntecedents && ctx.closedAntecedents.length > 0)
-    ? `\nAntécédents d'autres PEC clôturées (contexte général, ne pas y puiser d'exercices) :\n${ctx.closedAntecedents.map(a => `- ${a}`).join('\n')}`
-    : ''
-
-  return `<notes_seance_actuelle>
-Zone traitée : ${zone}
-Patient : ${age !== null ? `${age} ans` : 'Âge N/R'}${sexe ? ` — Sexe : ${sexe}` : ''}
-EVN actuel : ${evn} / 10
-Profession : ${profession}
-Activité sportive : ${sport}
-Antécédents : ${antecedents}${antecedentsPEC}
-${analyseIA ? `\nDiagnostic retenu : ${analyseIA.diagnostic.titre}\nObjectifs thérapeutiques : ${analyseIA.priseEnCharge.map(p => p.titre).join(' | ')}` : ''}
-Notes du thérapeute pour cette séance :
-${scrubbedNotes || '(Non renseignées — générer un programme adapté au diagnostic et à la zone traitée)'}
-</notes_seance_actuelle>${historyBlock}`
+Rédige la fiche technique pour CHACUN des exercices listés ci-dessus, dans l'ordre fourni, en suivant strictement la structure indiquée par le system prompt. N'ajoute aucun exercice qui ne figure pas dans la liste.`
 }
 
 // ── Evolution prompt ──────────────────────────────────────────────────────────

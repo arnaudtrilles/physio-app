@@ -3564,7 +3564,6 @@ Mobilité articulaire lombaire
           }}
           patientKey={selectedPatient ?? `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
           onAudit={recordAIAudit}
-          analyseIA={ficheExerciceContextOverride ? null : currentAnalyseIA}
           cached={
             ficheExerciceSource?.type === 'note' ? (dbNotes.find(n => n.id === ficheExerciceSource.id)?.ficheExercice ?? null)
             : ficheExerciceSource?.type === 'intermediaire' ? (dbIntermediaires.find(r => r.id === ficheExerciceSource.id)?.ficheExercice ?? null)
@@ -3586,7 +3585,7 @@ Mobilité articulaire lombaire
               const bt = getBilanType(zone)
               setDbExerciceBank(prev => addExercicesToBank(prev, parsed, zone, bt))
             }
-            showToast('Fiche d\'exercices générée', 'success')
+            showToast('Fiche d\'exercices confectionnée', 'success')
           }}
           onBack={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setStep(ficheBackStep) }}
           onClose={() => { setFicheExerciceContextOverride(null); setFicheExerciceSource(null); setCurrentBilanDataOverride(null); goToPatientRecord() }}

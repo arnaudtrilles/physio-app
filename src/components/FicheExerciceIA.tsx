@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { jsPDF } from 'jspdf'
 import { DictableTextarea } from './VoiceMic'
-import type { FicheExercice, AnalyseIA, AICallAuditEntry } from '../types'
+import type { FicheExercice, AICallAuditEntry } from '../types'
 import { buildFicheExercicePrompt, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
 import { callClaudeSecure } from '../utils/claudeSecure'
@@ -11,7 +11,6 @@ interface FicheExerciceIAProps {
   context: BilanContext
   patientKey: string
   profession?: string
-  analyseIA?: AnalyseIA | null
   cached?: FicheExercice | null
   onAudit?: (entry: AICallAuditEntry) => void
   onResult: (fiche: FicheExercice) => void
@@ -90,7 +89,7 @@ function MarkdownFiche({ markdown }: { markdown: string }) {
   )
 }
 
-export function FicheExerciceIA({ apiKey, context, patientKey, profession, analyseIA, cached, onAudit, onResult, onBack, onClose, onGoToProfile }: FicheExerciceIAProps) {
+export function FicheExerciceIA({ apiKey, context, patientKey, profession, cached, onAudit, onResult, onBack, onClose, onGoToProfile }: FicheExerciceIAProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fiche, setFiche] = useState<FicheExercice | null>(cached ?? null)
@@ -114,6 +113,7 @@ export function FicheExerciceIA({ apiKey, context, patientKey, profession, analy
 
   const generate = async () => {
     if (!apiKey) return
+    if (!notesSeance.trim()) return
     setLoading(true)
     setError(null)
     try {
@@ -122,18 +122,23 @@ export function FicheExerciceIA({ apiKey, context, patientKey, profession, analy
       const metier = isPhysio ? 'physiothérapie' : 'kinésithérapie'
       const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
       const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
-      const systemPrompt = `Tu es un ${role} expert en biomécanique et en rééducation fonctionnelle. Ton rôle est de traduire un plan de traitement technique en une fiche d'exercices à domicile claire, professionnelle et sécurisée.
+      // DM-pivot (2026-04-30) : assistant rédactionnel, pas expert clinique.
+      // L'IA décrit techniquement les exercices listés par le ${role}. Elle
+      // n'invente rien, ne recommande rien, ne juge rien, ne fait aucune
+      // référence au patient (pathologie, diagnostic, antécédents, âge).
+      const systemPrompt = `Tu es un assistant rédactionnel pour ${role}. Ton rôle est UNIQUEMENT de rédiger la description technique d'exercices que le ${role} a déjà choisis pour son patient. Tu ne crées AUCUN exercice, tu ne recommandes RIEN, tu ne juges RIEN.
 
-Tu vas recevoir en entrée l'état actuel du patient ainsi que la demande du thérapeute dans la balise <notes_seance_actuelle>.
-Si un historique patient est fourni dans la balise <historique_patient>, tu DOIS l'analyser attentivement pour adapter les exercices : évolution de la douleur, tolérance aux exercices précédents, observance, interventions réalisées, progression globale. Propose des exercices qui s'inscrivent dans la continuité du parcours de soin.
+Tu vas recevoir dans la balise <exercices_a_decrire> la liste des exercices que le ${role} a sélectionnés. Pour CHACUN des exercices listés, tu rédiges la fiche technique selon la structure ci-dessous, dans l'ordre fourni.
 
 <regles_strictes>
-1. Rédige en français courant mais professionnel. Pas de jargon inaccessible (dis "couché sur le dos" plutôt que "décubitus dorsal"), mais utilise les vrais noms des exercices de ${metier} (ex: "Rotation externe en décubitus latéral", "Flexion isométrique contre résistance", "Proprioception unipode sur plan instable", "Étirement capsulaire postérieur en cross-body").
-2. Limite-toi à un MAXIMUM STRICT de 4 exercices pour garantir l'observance.
-3. La sécurité est absolue : chaque exercice doit avoir une limite de douleur claire.
-4. Adresse-toi directement au patient (utilise le "vous").
-5. NE COMMENCE PAS par un mot d'encouragement, de félicitations ou de "bravo". Va directement aux exercices.
-6. VOCABULAIRE PROFESSION — Tu es ${role}. Tu emploies EXCLUSIVEMENT « ${role} » et « ${metier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « kiné », « physio ». Aucune exception.
+1. Tu décris UNIQUEMENT les exercices listés. Tu n'en ajoutes pas, tu n'en remplaces pas, tu n'en supprimes pas. Si la formulation d'un exercice est ambiguë, tu le décris selon l'interprétation la plus standard sans proposer d'alternative.
+2. Tu ne fais AUCUNE référence à : pathologie du patient, diagnostic, antécédents, âge, niveau, objectif thérapeutique individuel. Le ${role} a déjà fait ce raisonnement clinique en amont.
+3. Tu n'utilises JAMAIS les formulations « je recommande », « il est conseillé », « selon votre pathologie », « vu votre cas », « adapté à votre situation ». Tu décris l'exercice de façon neutre et générique.
+4. La rubrique « Objectif » décrit l'effet GÉNÉRIQUE du type d'exercice (ex : « renforcer la coiffe des rotateurs »), jamais une cible thérapeutique personnalisée pour le patient.
+5. Français courant mais professionnel. Évite le jargon inaccessible (dis « couché sur le dos » plutôt que « décubitus dorsal »).
+6. Adresse-toi directement au patient (utilise le « vous »). NE COMMENCE PAS par un mot d'encouragement, de félicitations ou de « bravo ». Va directement aux exercices.
+7. Sécurité : chaque exercice doit comporter une limite de douleur générique (ex : « Arrêtez si la douleur dépasse 3/10 »).
+8. VOCABULAIRE PROFESSION — Tu es ${role}. Tu emploies EXCLUSIVEMENT « ${role} » et « ${metier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « kiné », « physio ». Aucune exception.
 </regles_strictes>
 
 Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
@@ -142,8 +147,8 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
 
 ---
 
-#### 1. [Nom professionnel de l'exercice]
-- **Objectif :** [Pourquoi on fait ça, en 1 phrase].
+#### 1. [Reprends le nom de l'exercice donné par le ${role}, formulé proprement]
+- **Objectif :** [Effet générique du type d'exercice, en 1 phrase neutre].
 - **Position de départ :** [Comment bien s'installer].
 - **Mouvement :**
   > 1. [Étape 1]
@@ -151,12 +156,12 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
 - **Dosage :** [Séries] x [Répétitions] — Repos [Temps]. Fréquence : [ex: 1x/jour].
 - **Limite de sécurité :** [Ex: Arrêtez si la douleur dépasse 3/10 ou si vous ressentez des fourmillements].
 
-[Répéter pour l'exercice 2, 3 et 4 maximum]`
+[Répète la même structure pour chaque exercice listé par le ${role}, dans l'ordre fourni.]`
 
       const markdown = await callClaudeSecure({
         apiKey,
         systemPrompt,
-        userPrompt: buildFicheExercicePrompt(context, notesSeance, analyseIA),
+        userPrompt: buildFicheExercicePrompt(notesSeance),
         maxOutputTokens: 8192,
         jsonMode: false,
         patient: { nom: context.patient.nom, prenom: context.patient.prenom, patientKey },
@@ -431,8 +436,8 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
             </svg>
           </div>
           <div className="ai-hero-text">
-            <h4>Fiche d'exercices personnalisée</h4>
-            <p>Programme à domicile adapté au patient, en langage simple. Maximum 4 exercices pour une observance optimale.</p>
+            <h4>Fiche d'exercices</h4>
+            <p>Listez les exercices que vous prescrivez. L'IA rédige uniquement la description technique pour le patient — elle n'invente aucun exercice.</p>
           </div>
         </div>
 
@@ -481,17 +486,17 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
               </div>
-              <h4 style={{ color: '#166534' }}>Notes de séance</h4>
+              <h4 style={{ color: '#166534' }}>Liste des exercices à prescrire</h4>
             </div>
             <div className="ai-section-body">
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-                Décrivez ce que vous avez travaillé ou ce que vous souhaitez prescrire. Laissez vide pour un programme automatique basé sur le diagnostic.
+                Listez ou dictez les exercices à prescrire (un par ligne ou en phrase). L'IA rédigera la description technique pour le patient — elle n'invente, ne propose et ne juge aucun exercice.
               </p>
               <DictableTextarea
                 value={notesSeance}
                 onChange={e => setNotesSeance(e.target.value)}
                 rows={5}
-                placeholder="Ex : Travail mobilisation active épaule, patient a bien toléré les exercices pendulaires. Prescrire renforcement coiffe des rotateurs léger + étirements capsulaires. Patient sportif — football 3x/semaine…"
+                placeholder="Ex : Pendulaire de Codman, Rotation externe avec élastique léger, Étirement capsulaire postérieur en cross-body, Renforcement isométrique des abducteurs…"
                 textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
               />
             </div>
@@ -539,7 +544,7 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
             </div>
             <div className="ai-footer">
               <div className="ai-dot" />
-              <p>Ces exercices sont personnalisés selon les données du bilan. Arrêtez en cas de douleur intense ou de symptôme inhabituel et contactez votre thérapeute.</p>
+              <p>Vous avez prescrit ces exercices. Arrêtez en cas de douleur intense ou de symptôme inhabituel et contactez votre thérapeute.</p>
             </div>
           </div>
         )}
@@ -547,19 +552,25 @@ Voici la structure EXACTE que ta réponse doit suivre en format Markdown :
         {/* Boutons d'action */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {!fiche && !loading && apiKey && (
-            <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, #059669, #047857)' }} onClick={generate}>
+            <button
+              className="btn-primary-luxe"
+              style={{ marginBottom: 0, background: 'linear-gradient(135deg, #059669, #047857)', opacity: notesSeance.trim() ? 1 : 0.5, cursor: notesSeance.trim() ? 'pointer' : 'not-allowed' }}
+              onClick={generate}
+              disabled={!notesSeance.trim()}
+              title={notesSeance.trim() ? '' : 'Listez au moins un exercice à prescrire avant de confectionner la fiche.'}
+            >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                 </svg>
-                Générer la fiche d'exercices
+                Confectionner la fiche d'exercices
               </div>
             </button>
           )}
           {loading && (
             <button className="btn-primary-luxe" disabled style={{ marginBottom: 0, opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: 'linear-gradient(135deg, #059669, #047857)' }}>
               <div className="spinner" />
-              Génération en cours…
+              Confection en cours…
             </button>
           )}
           {fiche && !loading && (
