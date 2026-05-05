@@ -8,14 +8,30 @@ interface Bucket {
 }
 
 const buckets = new Map<string, Bucket>()
+const CLEANUP_INTERVAL_MS = 10 * 60 * 1000
+let lastCleanup = Date.now()
 
 export interface RateLimitConfig {
   maxRequests: number // bucket capacity
   windowMs: number   // refill period
 }
 
+// Cleanup paresseux : ne PAS utiliser setInterval au top-level d'un module
+// chargé par des fonctions serverless Vercel — ça crash l'init de la fonction
+// ('FUNCTION_INVOCATION_FAILED' systématique). On purge à la place lors d'un
+// appel checkRateLimit, au plus toutes les 10 minutes.
+function maybeCleanup(now: number): void {
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return
+  const cutoff = now - CLEANUP_INTERVAL_MS
+  for (const [key, bucket] of buckets) {
+    if (bucket.lastRefill < cutoff) buckets.delete(key)
+  }
+  lastCleanup = now
+}
+
 export function checkRateLimit(key: string, { maxRequests, windowMs }: RateLimitConfig): boolean {
   const now = Date.now()
+  maybeCleanup(now)
   let bucket = buckets.get(key)
 
   if (!bucket) {
@@ -41,11 +57,3 @@ export function getClientIp(headers: Record<string, string | string[] | undefine
   if (Array.isArray(fwd)) return fwd[0] ?? 'unknown'
   return (fwd as string | undefined)?.split(',')[0]?.trim() ?? 'unknown'
 }
-
-// Purge stale buckets every 10 minutes to prevent memory leak
-setInterval(() => {
-  const cutoff = Date.now() - 10 * 60 * 1000
-  for (const [key, bucket] of buckets) {
-    if (bucket.lastRefill < cutoff) buckets.delete(key)
-  }
-}, 10 * 60 * 1000)
