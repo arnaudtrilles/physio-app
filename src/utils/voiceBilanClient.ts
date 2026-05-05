@@ -2,16 +2,51 @@ import { callClaude } from './claudeClient'
 import { CLAUDE_MODELS } from './claudeModels'
 import type { BilanType, NarrativeSection } from '../types'
 
+// Erreurs transitoires côté infra (Vercel down, OpenAI down, réseau jitter…).
+// Le client peut les retenter en toute sécurité.
+export class TranscriptionTransientError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'TranscriptionTransientError'
+    this.status = status
+  }
+}
+
+// Patterns d'erreur Vercel infra — page HTML/texte renvoyée AVANT que notre handler
+// ne soit invoqué (cold start crash, OOM, routing). À traiter comme transient.
+const VERCEL_INFRA_PATTERNS = [
+  'FUNCTION_INVOCATION_FAILED',
+  'FUNCTION_INVOCATION_TIMEOUT',
+  'FUNCTION_PAYLOAD_TOO_LARGE',
+  'BODY_NOT_A_STRING_FROM_FUNCTION',
+  'EDGE_FUNCTION_INVOCATION_FAILED',
+  'A server error has occurred',
+  'An error occurred with your deployment',
+  'NO_RESPONSE_FROM_FUNCTION',
+  'GATEWAY_TIMEOUT',
+]
+
 /**
  * Transcrit un blob audio via le proxy serverless /api/transcribe.
  * Utilise gpt-4o-transcribe côté OpenAI, avec un prompt de vocabulaire médical FR.
+ *
+ * Erreurs transitoires (Vercel infra, 5xx, 429, network) → TranscriptionTransientError.
+ * Erreurs définitives (400, 401, 413, 415) → Error simple, ne pas retenter.
  */
 export async function transcribeAudio(audioBlob: Blob): Promise<string> {
-  const res = await fetch('/api/transcribe', {
-    method: 'POST',
-    headers: { 'Content-Type': audioBlob.type || 'audio/webm' },
-    body: audioBlob,
-  })
+  let res: Response
+  try {
+    res = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': audioBlob.type || 'audio/webm' },
+      body: audioBlob,
+    })
+  } catch (e) {
+    // network failure (offline, DNS, TLS, abort) → transient
+    const msg = e instanceof Error ? e.message : 'fetch failed'
+    throw new TranscriptionTransientError(`Réseau : ${msg}`, 0)
+  }
 
   const body = await res.text()
   if (!res.ok) {
@@ -19,15 +54,29 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string> {
     try {
       const parsed = JSON.parse(body)
       message = parsed?.error || body
-    } catch { /* keep raw */ }
-    throw new Error(`Transcription ${res.status} : ${message.slice(0, 300)}`)
+    } catch { /* keep raw — souvent une page HTML Vercel */ }
+
+    const isVercelInfra = VERCEL_INFRA_PATTERNS.some(p => body.includes(p))
+    const isTransient = isVercelInfra
+      || res.status === 0
+      || res.status === 408
+      || res.status === 429
+      || (res.status >= 500 && res.status < 600)
+
+    const truncated = message.slice(0, 300)
+    const fullMessage = `Transcription ${res.status} : ${truncated}`
+    if (isTransient) {
+      throw new TranscriptionTransientError(fullMessage, res.status)
+    }
+    throw new Error(fullMessage)
   }
 
   let data: { text?: string }
   try {
     data = JSON.parse(body)
   } catch {
-    throw new Error('Réponse de transcription invalide')
+    // Le serveur a répondu 2xx mais avec un body non-JSON → infra bizarre, transient
+    throw new TranscriptionTransientError('Réponse de transcription invalide', res.status)
   }
 
   if (!data.text) throw new Error('Transcription vide')

@@ -29,16 +29,42 @@ export function stringifyTestResult(r: TestResult): string {
   return JSON.stringify({ status: r.status, details: r.details })
 }
 
+// ─── Initial badge ───────────────────────────────────────────────────────────
+// Discrete reminder of the result obtained at the initial bilan, displayed under
+// the label of a test or cluster in BilanSortie.
+function InitialBadge({ previousValue }: { previousValue?: string }) {
+  if (!previousValue) return null
+  const parsed = parseTestResult(previousValue)
+  const hasStatus = parsed.status === '+' || parsed.status === '-'
+  // Legacy 'positif' / 'negatif' (e.g. cheville) — fall through to free text
+  const legacy = !hasStatus && (parsed.details === 'positif' || parsed.details === 'negatif')
+  const isPos = hasStatus ? parsed.status === '+' : legacy && parsed.details === 'positif'
+  const isNeg = hasStatus ? parsed.status === '-' : legacy && parsed.details === 'negatif'
+  const labelStatus = isPos ? 'positif' : isNeg ? 'négatif' : null
+  const color = isPos ? '#991b1b' : isNeg ? '#166534' : 'var(--text-muted)'
+  const trailing = legacy ? '' : (parsed.details ? ` — ${parsed.details}` : '')
+  return (
+    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: -2, marginBottom: 6, lineHeight: 1.3 }}>
+      <span style={{ fontWeight: 600 }}>Initial :</span>{' '}
+      {labelStatus
+        ? <span style={{ color, fontWeight: 700 }}>{labelStatus}</span>
+        : (parsed.details ? <span style={{ color: 'var(--text-main)' }}>{parsed.details}</span> : <span>—</span>)}
+      {trailing && <span>{trailing}</span>}
+    </div>
+  )
+}
+
 // ─── TestResultInput ─────────────────────────────────────────────────────────
 // Row with label (+ optional info button), +/- buttons and free-text details.
 export function TestResultInput({
-  label, testKey, value, onChange, placeholder,
+  label, testKey, value, onChange, placeholder, previousValue,
 }: {
   label: string
   testKey?: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  previousValue?: string
 }) {
   const parsed = parseTestResult(value)
   const setStatus = (s: '+' | '-') => {
@@ -54,6 +80,7 @@ export function TestResultInput({
         {label}
         {testKey && <TestInfoButton testKey={testKey} />}
       </label>
+      <InitialBadge previousValue={previousValue} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <button
@@ -141,7 +168,34 @@ function stringifyCluster(s: ClusterState): string {
   return JSON.stringify(s)
 }
 
-export function ClusterLaslettInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function ClusterInitialBadge({ previousValue }: { previousValue?: string }) {
+  if (!previousValue) return null
+  const prev = parseCluster(previousValue)
+  const positives = LASLETT_SUBTESTS.filter(s => prev.subtests[s.key] === '+').length
+  const negatives = LASLETT_SUBTESTS.filter(s => prev.subtests[s.key] === '-').length
+  const evaluated = positives + negatives
+  if (evaluated === 0 && !prev.notes) {
+    return (
+      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: -2, marginBottom: 6, lineHeight: 1.3 }}>
+        <span style={{ fontWeight: 600 }}>Initial :</span> —
+      </div>
+    )
+  }
+  const allEvaluated = evaluated === LASLETT_SUBTESTS.length
+  const isPositive = positives >= 3
+  const isInflammatory = positives === 5
+  const tag = isInflammatory ? `POSITIF (5/5)` : isPositive ? `POSITIF (${positives}/5)` : allEvaluated ? `NÉGATIF (${positives}/5)` : `${positives}/5`
+  const color = isInflammatory ? '#991b1b' : isPositive ? '#92400e' : allEvaluated ? '#166534' : 'var(--text-muted)'
+  return (
+    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: -2, marginBottom: 6, lineHeight: 1.3 }}>
+      <span style={{ fontWeight: 600 }}>Initial :</span>{' '}
+      <span style={{ color, fontWeight: 700 }}>{tag}</span>
+      {prev.notes && <span> — {prev.notes}</span>}
+    </div>
+  )
+}
+
+export function ClusterLaslettInput({ value, onChange, previousValue }: { value: string; onChange: (v: string) => void; previousValue?: string }) {
   const state = parseCluster(value)
 
   const setSub = (k: string, s: '+' | '-') => {
@@ -170,6 +224,7 @@ export function ClusterLaslettInput({ value, onChange }: { value: string; onChan
         Cluster de Laslett (SIJ)
         <TestInfoButton testKey="clusterLaslett" />
       </label>
+      <ClusterInitialBadge previousValue={previousValue} />
       <div style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
         {LASLETT_SUBTESTS.map(st => {
           const v = state.subtests[st.key] ?? ''

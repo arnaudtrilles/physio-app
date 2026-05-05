@@ -1021,3 +1021,137 @@ ${narrativeBlock ? `\n${narrativeBlock}` : ''}
 ${notesLibres ? `\nNOTES DU THÉRAPEUTE :\n${scrub(notesLibres)}` : ''}
 ${analyseSection}`
 }
+
+// ── Sortie PDF prompt ────────────────────────────────────────────────────────
+
+export interface SortiePDFContext {
+  patient: BilanContext['patient']
+  zone: string
+  bilanType: string
+  /** Données du BilanSortie (motif, scores, objectifs, syntheses, recommandations…) */
+  sortieData: Record<string, unknown>
+  /** Référence du bilan initial — pour comparatif EVN / dates */
+  initialBilanRef?: {
+    evn?: number
+    dateBilan?: string
+  }
+  notesLibres?: string
+  therapistProfession?: string
+}
+
+/** Labels lisibles pour les questionnaires/scores fonctionnels usuels. */
+const SORTIE_SCORE_LABELS: Record<string, string> = {
+  ndi: 'NDI', had: 'Échelle HAD', dn4: 'DN4', painDetect: 'Pain Detect', sensibilisation: 'Sensibilisation centrale (CSI)',
+  koos: 'KOOS', fakps: 'F-AKPS', ikdc: 'IKDC', aclRsi: 'ACL-RSI', sf36: 'SF-36',
+  hoos: 'HOOS', oxfordHip: 'Oxford Hip Score', hagos: 'HAGOS', efmi: 'EFMI',
+  oss: 'OSS', constantMurley: 'Constant-Murley', dash: 'DASH', rowe: 'Rowe Score',
+  faam: 'FAAM', cumberland: 'Cumberland',
+  startBack: 'Start Back', orebro: 'Örebro', fabq: 'FABQ', eifel: 'EIFEL / Roland Morris',
+  katzAdl: 'Katz ADL', lawtonIadl: 'Lawton IADL', mnaSf: 'MNA-SF (Nutrition)', fried: 'Critères de Fried',
+  tug: 'TUG (sec)', sppbTotal: 'SPPB Total (/12)', sppbEquilibre: 'SPPB Équilibre',
+  sppbVitesse: 'SPPB Vitesse', sppbLever: 'SPPB Lever de chaise',
+  tinetti: 'Tinetti (/28)', cinqLeverTime: '5 levers de chaise (sec)',
+  fesI: 'FES-I (Peur de tomber)', miniGds: 'Mini GDS',
+  doubleTache: 'Double tâche', equilibreUnipodal: 'Équilibre unipodal (sec)',
+  vitesseMarche: 'Vitesse de marche (m/s)',
+}
+
+export function buildSortiePDFPrompt(ctx: SortiePDFContext): string {
+  const { patient, zone, sortieData, initialBilanRef, notesLibres } = ctx
+  const { age, sexe, scrub } = anonymizePatientData(patient)
+
+  const defined = (v: unknown): string | null => {
+    if (v === null || v === undefined) return null
+    if (typeof v === 'object') return null
+    const s = String(v).trim()
+    return s !== '' && s !== 'N/R' && s !== 'undefined' ? s : null
+  }
+
+  const motif = defined(sortieData.motif)
+  const motifDetails = defined(sortieData.motifDetails)
+  const dateFin = defined(sortieData.dateFin)
+  const evnFinal = defined(sortieData.evnFinal)
+  const evnInitial = initialBilanRef?.evn != null ? String(initialBilanRef.evn) : null
+  const dateInitial = initialBilanRef?.dateBilan ?? null
+
+  // Scores comparatifs (initial → final)
+  const scoresArr = Array.isArray(sortieData.scores) ? sortieData.scores as Array<{ name: string; initial: string; final: string }> : []
+  const scoresLines = scoresArr
+    .filter(s => defined(s.initial) || defined(s.final))
+    .map(s => {
+      const label = SORTIE_SCORE_LABELS[s.name] ?? s.name
+      const ini = defined(s.initial) ?? '—'
+      const fin = defined(s.final) ?? '—'
+      return `- ${label} : initial ${ini} → final ${fin}`
+    })
+    .join('\n')
+
+  // Tests spécifiques (final) — la section noyau EBP du bilan de sortie
+  const tests = sortieData.tests as Record<string, unknown> | undefined
+  const testsLines: string[] = []
+  if (tests) {
+    for (const [k, v] of Object.entries(tests)) {
+      const display = defined(v)
+      if (!display) continue
+      testsLines.push(`- ${k} : ${display}`)
+    }
+  }
+  const testsStr = testsLines.join('\n')
+
+  // Objectifs SMART avec statuts
+  const objArr = Array.isArray(sortieData.objectifs) ? sortieData.objectifs as Array<{ label: string; statut: string; commentaire: string }> : []
+  const objLines = objArr
+    .filter(o => defined(o.label))
+    .map(o => {
+      const label = scrub(String(o.label))
+      const statut = defined(o.statut) ?? 'Non renseigné'
+      const commentaire = defined(o.commentaire)
+      return `- ${label} → Statut : ${statut}${commentaire ? ` — Commentaire : ${scrub(commentaire)}` : ''}`
+    })
+    .join('\n')
+
+  const resumePEC = defined(sortieData.resumePEC)
+  const resultatsObtenus = defined(sortieData.resultatsObtenus)
+  const facteursLimitants = defined(sortieData.facteursLimitants)
+  const autoExercices = defined(sortieData.autoExercices)
+  const precautions = defined(sortieData.precautions)
+  const suiviUlterieur = sortieData.suiviUlterieur === true
+  const suiviDetails = defined(sortieData.suiviDetails)
+  const infoMedecin = defined(sortieData.infoMedecin)
+
+  const ageLine = age !== null ? `${age} ans` : null
+  const sexeNorm = sexe === 'feminin' ? 'feminin' : sexe === 'masculin' ? 'masculin' : null
+  const sexeLine = sexeNorm
+    ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur.`
+    : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
+
+  return `CONTEXTE : Bilan de SORTIE de Physiothérapie destiné au médecin prescripteur — fin de prise en charge. Tu rédiges la mise au propre du bilan de sortie : motif, comparatif algique, scores fonctionnels initial→final, objectifs SMART avec statuts, synthèse de la PEC (résumé, résultats, facteurs limitants), recommandations post-traitement (auto-rééducation, précautions, suivi). N'inclus QUE les sections qui ont des données.
+
+${sexeLine}
+
+PATIENT : ${[ageLine, sexe ? `Sexe : ${sexe}` : null].filter(Boolean).join(' | ')}
+Zone traitée : ${zone}
+
+MOTIF DE SORTIE :
+${motif ? `- Motif : ${motif}` : '- Motif : non renseigné'}
+${motifDetails ? `- Précisions : ${scrub(motifDetails)}` : ''}
+${dateFin ? `- Date de fin de prise en charge : ${dateFin}` : ''}
+${dateInitial ? `- Date du bilan initial : ${dateInitial}` : ''}
+
+BILAN ALGIQUE COMPARATIF :
+${evnInitial ? `- EVN initiale : ${evnInitial}/10` : '- EVN initiale : non renseignée'}
+${evnFinal ? `- EVN finale : ${evnFinal}/10` : '- EVN finale : non renseignée'}
+${evnInitial && evnFinal ? `- Évolution : ${(Number(evnInitial) - Number(evnFinal)).toFixed(1)} points` : ''}
+
+${scoresLines ? `SCORES FONCTIONNELS COMPARATIFS :\n${scoresLines}` : ''}
+${testsStr ? `\nTESTS SPÉCIFIQUES (final) :\n${testsStr}` : ''}
+${objLines ? `\nOBJECTIFS SMART :\n${objLines}` : ''}
+${resumePEC ? `\nRÉSUMÉ DE LA PRISE EN CHARGE :\n${scrub(resumePEC)}` : ''}
+${resultatsObtenus ? `\nRÉSULTATS OBTENUS :\n${scrub(resultatsObtenus)}` : ''}
+${facteursLimitants ? `\nFACTEURS LIMITANTS :\n${scrub(facteursLimitants)}` : ''}
+${autoExercices ? `\nAUTO-RÉÉDUCATION CONSEILLÉE :\n${scrub(autoExercices)}` : ''}
+${precautions ? `\nPRÉCAUTIONS / RECOMMANDATIONS :\n${scrub(precautions)}` : ''}
+${suiviUlterieur ? `\nSUIVI ULTÉRIEUR :\n- Suivi recommandé${suiviDetails ? ` : ${scrub(suiviDetails)}` : ''}` : ''}
+${infoMedecin ? `\nINFORMATION POUR LE MÉDECIN :\n${scrub(infoMedecin)}` : ''}
+${notesLibres ? `\nNOTES DU THÉRAPEUTE :\n${scrub(notesLibres)}` : ''}`
+}

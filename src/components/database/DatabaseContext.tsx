@@ -159,7 +159,7 @@ export interface DatabaseContextValue {
   // ── Helpers ──────────────────────────────────────────────────────────────
   closeTreatment: (patientKey: string, bilanType: BilanType, zone?: string) => void
   deleteClosedEpisode: (patientKey: string, bilanType: BilanType, ep: TreatmentEpisode) => void
-  exportBilanFromRecord: (record: BilanRecord, isIntermediaire?: boolean) => Promise<void>
+  exportBilanFromRecord: (record: BilanRecord, mode?: 'initial' | 'intermediaire' | 'sortie') => Promise<void>
   getClosureTimes: (patientKey: string, bilanType: BilanType) => number[]
   getIntermediairePreFill: (patKey: string, zone: string) => Record<string, unknown>
   getPatientBilans: (key: string) => BilanRecord[]

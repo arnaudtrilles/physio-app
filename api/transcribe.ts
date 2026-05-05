@@ -7,6 +7,10 @@ const RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 }
 export const config = {
   // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout Whisper sur audio long)
   maxDuration: 300,
+  // Mémoire élevée pour absorber le pic Buffer→Blob→FormData sans OOM
+  memory: 3008,
+  // Pinné à Frankfurt (HDS-friendly + cold starts plus rares qu'en routage variable)
+  regions: ['fra1'],
   api: {
     bodyParser: false,
   },
@@ -23,10 +27,39 @@ const MEDICAL_VOCAB_PROMPT =
 function readBody(req: VercelRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
-    req.on('data', (c: Buffer) => chunks.push(c))
-    req.on('end', () => resolve(Buffer.concat(chunks)))
+    let total = 0
+    req.on('data', (c: Buffer) => {
+      chunks.push(c)
+      total += c.length
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks, total)))
     req.on('error', reject)
   })
+}
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// Retry interne sur l'appel OpenAI — protège des 429/5xx/network jitter.
+// La logique externe (Vercel cold start, OOM…) est gérée côté client.
+async function callOpenAITranscribe(form: FormData, attempt: number): Promise<{ ok: boolean; status: number; body: string }> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 90_000)
+  try {
+    const apiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: form,
+      signal: controller.signal,
+    })
+    const body = await apiRes.text()
+    return { ok: apiRes.ok, status: apiRes.status, body }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'fetch failed'
+    console.error(`[transcribe] OpenAI fetch attempt ${attempt} failed:`, message)
+    return { ok: false, status: 0, body: message }
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -43,6 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!OPENAI_API_KEY) {
+    console.error('[transcribe] OPENAI_API_KEY not configured')
     return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' })
   }
 
@@ -54,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Limite OpenAI Whisper : 25 Mo. Au-delà → erreur claire pour que le
     // client splitte. Ce check garde-fou ne devrait jamais se déclencher si
-    // le client utilise le rolling MediaRecorder (chunks de ~3-4 Mo).
+    // le client utilise le rolling MediaRecorder (chunks de ~1-2 Mo).
     if (audioBuffer.length > 25 * 1024 * 1024) {
       return res.status(413).json({ error: 'Audio chunk too large (max 25 MB) — split client-side' })
     }
@@ -74,36 +108,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     form.append('prompt', MEDICAL_VOCAB_PROMPT)
     form.append('response_format', 'json')
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 55_000)
-
-    let apiRes: Response
-    try {
-      apiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-        body: form,
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timeoutId)
+    // Retry interne (3 tentatives) sur erreurs transitoires OpenAI : 429 (rate limit),
+    // 500/502/503/504 (panne), ou network jitter. Backoff exponentiel léger.
+    const RETRY_DELAYS_MS = [800, 2000, 5000]
+    let lastResult: { ok: boolean; status: number; body: string } | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      lastResult = await callOpenAITranscribe(form, attempt + 1)
+      if (lastResult.ok) break
+      const transient = lastResult.status === 0 || lastResult.status === 429 || (lastResult.status >= 500 && lastResult.status < 600)
+      if (!transient) break // erreur définitive (400, 401, 413…) → arrêter
+      if (attempt < 2) await sleep(RETRY_DELAYS_MS[attempt])
     }
 
-    const body = await apiRes.text()
+    if (!lastResult) {
+      return res.status(500).json({ error: 'No OpenAI response' })
+    }
 
-    if (!apiRes.ok) {
-      let message = body
+    if (!lastResult.ok) {
+      let message = lastResult.body
       try {
-        const parsed = JSON.parse(body)
-        message = parsed?.error?.message || body
+        const parsed = JSON.parse(lastResult.body)
+        message = parsed?.error?.message || lastResult.body
       } catch { /* keep raw */ }
       const truncated = message.length > 500 ? message.slice(0, 500) + '…' : message
-      return res.status(apiRes.status).json({ error: `OpenAI ${apiRes.status}: ${truncated}` })
+      const status = lastResult.status === 0 ? 502 : lastResult.status
+      return res.status(status).json({ error: `OpenAI ${lastResult.status}: ${truncated}` })
     }
 
     let data: { text?: string }
     try {
-      data = JSON.parse(body)
+      data = JSON.parse(lastResult.body)
     } catch (e) {
       return res.status(502).json({ error: `Invalid JSON from OpenAI: ${(e as Error).message}` })
     }
@@ -115,7 +149,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ text: data.text, model: TRANSCRIBE_MODEL })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    console.error('Transcribe proxy error:', message)
+    const stack = err instanceof Error ? err.stack : ''
+    console.error('[transcribe] handler crashed:', message, stack)
     return res.status(500).json({ error: message })
   }
 }

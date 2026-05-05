@@ -34,7 +34,7 @@ const LetterGenerator = lazy(() => import('./components/letters/LetterGenerator'
 import { generatePDF } from './utils/pdfGenerator'
 import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS, DEFAULT_ZONE_FOR_BILAN } from './utils/bilanRouter'
-import { buildPDFReportPrompt, computeAge } from './utils/clinicalPrompt'
+import { buildPDFReportPrompt, buildSortiePDFPrompt, computeAge } from './utils/clinicalPrompt'
 import { hashInputs, documentFingerprint, getCachedBilanPDF, setCachedBilanPDF, getCachedAnalysePDF, setCachedAnalysePDF } from './utils/pdfCache'
 import { buildGeneratedPatientDoc } from './utils/pdfPersistence'
 import type { PatientDocumentSource } from './types'
@@ -1217,29 +1217,53 @@ Règles :
     // Auto-créer des objectifs SMART depuis le contrat kiné du bilan
     if (status === 'complet' && bilanData) {
       const contrat = (bilanData.contratKine ?? bilanData.contrat) as Record<string, unknown> | undefined
-      const objText = String(contrat?.objectifsSMART ?? contrat?.objectifs ?? '').trim()
-      if (objText) {
-        const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-        const zoneName = selectedBodyZone ?? 'Général'
-        // Séparer les objectifs par ligne ou point-virgule
-        const lines = objText.split(/[\n;]+/).map(l => l.trim()).filter(l => l.length > 3)
-        const newObjectifs: SmartObjectif[] = lines.map(line => ({
-          id: Date.now() + Math.random() * 1000,
-          patientKey: patKey,
-          zone: zoneName,
-          titre: line,
-          cible: line,
-          dateCible: '',
-          status: 'en_cours' as const,
-          createdAt: new Date().toLocaleDateString('fr-FR'),
-        }))
-        if (newObjectifs.length > 0) {
-          setDbObjectifs(prev => {
-            const existingTitres = new Set(prev.filter(o => o.patientKey === patKey && o.zone === zoneName).map(o => o.titre))
-            const deduplicated = newObjectifs.filter(o => !existingTitres.has(o.titre))
-            return deduplicated.length > 0 ? [...prev, ...deduplicated] : prev
+      const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+      const zoneName = selectedBodyZone ?? 'Général'
+      const createdAt = new Date().toLocaleDateString('fr-FR')
+
+      const items = contrat?.objectifsSMARTItems
+      let newObjectifs: SmartObjectif[] = []
+
+      if (Array.isArray(items)) {
+        newObjectifs = (items as Array<Record<string, unknown>>)
+          .map((it, idx): SmartObjectif | null => {
+            const titre = String(it.titre ?? '').trim()
+            if (!titre) return null
+            return {
+              id: Number(it.id) || (Date.now() + idx),
+              patientKey: patKey,
+              zone: zoneName,
+              titre,
+              cible: String(it.cible ?? '').trim(),
+              dateCible: String(it.dateCible ?? '').trim(),
+              status: 'en_cours',
+              createdAt,
+            }
           })
+          .filter((o): o is SmartObjectif => o !== null)
+      } else {
+        const objText = String(contrat?.objectifsSMART ?? contrat?.objectifs ?? '').trim()
+        if (objText) {
+          const lines = objText.split(/[\n;]+/).map(l => l.trim()).filter(l => l.length > 3)
+          newObjectifs = lines.map((line, idx) => ({
+            id: Date.now() + idx,
+            patientKey: patKey,
+            zone: zoneName,
+            titre: line,
+            cible: '',
+            dateCible: '',
+            status: 'en_cours' as const,
+            createdAt,
+          }))
         }
+      }
+
+      if (newObjectifs.length > 0) {
+        setDbObjectifs(prev => {
+          const existingTitres = new Set(prev.filter(o => o.patientKey === patKey && o.zone === zoneName).map(o => o.titre))
+          const deduplicated = newObjectifs.filter(o => !existingTitres.has(o.titre))
+          return deduplicated.length > 0 ? [...prev, ...deduplicated] : prev
+        })
       }
     }
 
@@ -1412,6 +1436,50 @@ STRUCTURE (n'inclure une section QUE si elle a des données) :
 ### 6. Scores Fonctionnels
 ### 7. Projet Thérapeutique du Patient
 ### 8. Notes Complémentaires`
+
+  // Prompt pour "Bilan de sortie PDF" — mise au propre du bilan de fin de PEC
+  const PDF_SORTIE_SYSTEM_PROMPT = `Tu es un kinésithérapeute expérimenté chargé de rédiger la mise au propre d'un BILAN DE SORTIE de kinésithérapie pour le dossier patient et le médecin prescripteur.
+
+TON RÔLE : transformer les données brutes du bilan de fin de prise en charge en un document fluide, professionnel et structuré — comme un courrier de fin de PEC qu'un confrère expérimenté remettrait à son correspondant.
+
+RÈGLES ABSOLUES :
+- Tu n'AJOUTES aucune information qui n'est pas dans les données. Zéro invention, zéro supposition.
+- Tu ne fais AUCUN diagnostic, AUCUNE hypothèse diagnostique, AUCUNE recommandation thérapeutique au-delà de ce qui est explicitement renseigné dans les données (auto-rééducation, précautions, suivi ultérieur).
+- Si une donnée est absente (champ vide), tu ne mentionnes PAS la rubrique correspondante.
+- IMPORTANT : un test « négatif » N'EST PAS une donnée absente. C'est un résultat clinique qui DOIT figurer.
+- Tu peux reformuler pour rendre le texte plus fluide, mais le fond reste strictement identique.
+- Tu ne mentionnes jamais qu'un outil d'IA a participé à la rédaction.
+- Tu n'utilises JAMAIS le nom ou prénom du patient. Tu le désignes par « le patient » / « la patiente » selon SEXE_PATIENT.
+
+ACCORD GRAMMATICAL SELON LE SEXE DU PATIENT (règle absolue) :
+La ligne \`SEXE_PATIENT : masculin | feminin | inconnu\` du prompt utilisateur est la seule source de vérité.
+- Si feminin : « La patiente », « âgée », accords au féminin.
+- Si masculin : « Le patient », « âgé », accords au masculin.
+- Si inconnu : masculin singulier par défaut, JAMAIS de formulation inclusive.
+INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`·es\`, \`·ée\`, slashs inclusifs (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin.
+
+STYLE :
+- Professionnel, concis, clinique
+- Mélange de prose courte (motif, synthèse, recommandations) et de puces (scores comparatifs, objectifs avec statuts)
+- Données comparatives initial→final présentées en puces lisibles
+- Aère bien le document
+
+MISE EN PAGE MARKDOWN :
+- Titres de section : ### (ex: ### 2. Motif de sortie)
+- Sous-titres : **Titre**
+- Données : puces "- **Label :** valeur"
+
+STRUCTURE (n'inclure une section QUE si elle a des données) :
+### 1. Profil du Patient
+### 2. Motif de sortie
+### 3. Bilan algique comparatif
+### 4. Scores fonctionnels comparatifs
+### 5. Tests spécifiques (final)
+### 6. Objectifs SMART
+### 7. Synthèse de la prise en charge
+### 8. Recommandations post-traitement
+### 9. Suivi ultérieur
+### 10. Information pour le médecin`
 
   // Prompt pour export depuis la page Analyse IA — bilan diagnostic physiothérapique rédigé pour un médecin prescripteur
   const PDF_ANALYSE_SYSTEM_PROMPT = `Tu es un physiothérapeute / kinésithérapeute expérimenté chargé de rédiger un **Bilan de Physiothérapie** destiné au médecin prescripteur.
@@ -1884,21 +1952,41 @@ Mobilité articulaire lombaire
 **Projet thérapeutique en liste plate non structurée** — paragraphe unique énumérant *« thérapie manuelle, exercices actifs, éducation, conseils »* sans structure par axes ni formulations conditionnelles. INTERDIT. Structurer par 3 à 5 axes pertinents (contrôle antalgique, mobilité, renforcement, éducation, reprise activités) avec formulations conditionnelles (*« pourront être mobilisés »*, *« selon l'évolution »*, *« en fonction de la réponse clinique »*).`
 
   // Export un bilan depuis le dossier patient — génère avec IA puis ouvre l'aperçu modifiable
-  const exportBilanFromRecord = async (record: BilanRecord, isIntermediaire = false) => {
+  const exportBilanFromRecord = async (record: BilanRecord, mode: 'initial' | 'intermediaire' | 'sortie' = 'initial') => {
     const recSexe = record.sexe ?? getPatientSexe(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
     setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe ?? prev.sexe }))
     setPdfPreviewZone(record.zone ?? '')
-    setPdfPreviewTitle(isIntermediaire ? 'BILAN INTERMÉDIAIRE EN PHYSIOTHÉRAPIE' : 'BILAN EN PHYSIOTHÉRAPIE')
+    setPdfPreviewTitle(
+      mode === 'sortie' ? 'BILAN DE SORTIE EN PHYSIOTHÉRAPIE'
+        : mode === 'intermediaire' ? 'BILAN INTERMÉDIAIRE EN PHYSIOTHÉRAPIE'
+        : 'BILAN EN PHYSIOTHÉRAPIE'
+    )
 
     if (apiKey && record.bilanData) {
+      // Pour le bilan de sortie : récupérer la référence du bilan initial (EVN, date) pour le comparatif
+      const patKeyForRef = `${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim()
+      const initialBilanRef = mode === 'sortie'
+        ? (() => {
+            const bt = getBilanType(record.zone ?? '')
+            const first = getPatientBilans(patKeyForRef).find(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+            if (!first) return undefined
+            const evn = first.evn ?? (() => {
+              const d = first.bilanData?.douleur as Record<string, unknown> | undefined
+              const v = d?.evnPire ?? d?.evnMvt ?? d?.evnRepos ?? d?.evnMoy
+              return v != null ? Number(v) : undefined
+            })()
+            return { evn, dateBilan: first.dateBilan }
+          })()
+        : undefined
       const cacheHash = hashInputs({
         flow: 'pdf_bilan',
         bilanId: record.id,
-        isIntermediaire,
+        mode,
         zone: record.zone ?? '',
         bilanType: getBilanType(record.zone ?? '') ?? '',
         bilanData: record.bilanData,
         notesLibres: record.notes || '',
+        initialBilanRef: initialBilanRef ?? null,
         patient: {
           nom: record.nom,
           prenom: record.prenom,
@@ -1918,18 +2006,28 @@ Mobilité articulaire lombaire
       setExportingRecordId(record.id)
       showToast('Mise en forme du bilan en cours…', 'success')
       try {
-        const userPrompt = buildPDFReportPrompt({
-          patient: { nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe },
-          zone: record.zone ?? '',
-          bilanType: getBilanType(record.zone ?? '') ?? '',
-          bilanData: record.bilanData,
-          notesLibres: record.notes || undefined,
-          analyseIA: null, // Bilan PDF = pas d'analyse IA
-          therapistProfession: profile.profession,
-        })
+        const userPrompt = mode === 'sortie'
+          ? buildSortiePDFPrompt({
+              patient: { nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe },
+              zone: record.zone ?? '',
+              bilanType: getBilanType(record.zone ?? '') ?? '',
+              sortieData: record.bilanData,
+              initialBilanRef,
+              notesLibres: record.notes || undefined,
+              therapistProfession: profile.profession,
+            })
+          : buildPDFReportPrompt({
+              patient: { nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe },
+              zone: record.zone ?? '',
+              bilanType: getBilanType(record.zone ?? '') ?? '',
+              bilanData: record.bilanData,
+              notesLibres: record.notes || undefined,
+              analyseIA: null, // Bilan PDF = pas d'analyse IA
+              therapistProfession: profile.profession,
+            })
         const report = await callClaudeWithDocGuard({
           apiKey,
-          systemPrompt: PDF_BILAN_SYSTEM_PROMPT,
+          systemPrompt: mode === 'sortie' ? PDF_SORTIE_SYSTEM_PROMPT : PDF_BILAN_SYSTEM_PROMPT,
           userPrompt,
           maxOutputTokens: 8192,
           jsonMode: false,
@@ -3758,7 +3856,7 @@ Mobilité articulaire lombaire
         return (
           <>
             <header className="screen-header" style={{ padding: '0 1.5rem', marginBottom: '0.5rem' }}>
-              <button className="btn-back" onClick={() => setStep('database')}>
+              <button className="btn-back" onClick={() => { setCurrentBilanIntermediaireId(null); setCurrentBilanIntermediaireData(null); setStep('database') }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <div style={{ flex: 1 }}>
@@ -3769,9 +3867,11 @@ Mobilité articulaire lombaire
             <div className="scroll-area" style={{ padding: '0 1.5rem', paddingBottom: '9rem' }}>
             <Suspense fallback={<LazyFallback />}>
               <BilanSortie
+                key={currentBilanIntermediaireId ?? 'new-sortie'}
                 ref={(handle: import('./components/BilanSortie').BilanSortieHandle | null) => {
                   if (handle) (window as unknown as Record<string, unknown>).__bilanSortieRef = handle
                 }}
+                initialData={currentBilanIntermediaireData ?? undefined}
                 patientName={`${formData.nom} ${formData.prenom}`}
                 zone={selectedBodyZone ?? lastBilan?.zone ?? ''}
                 initialBilanData={firstBilan ? {
@@ -3806,39 +3906,37 @@ Mobilité articulaire lombaire
                   setInitialLetterType(type === 'fin_anticipee' ? 'fin_pec_anticipee' : 'fin_pec')
                   setStep('letter')
                 }}
-                onGenerateSynthese={async () => {
-                  const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
-                  if (!handle) return
-                  showToast('Création de la synthèse…', 'success')
+                onGenerateSyntheseField={async (field) => {
+                  const patKey = selectedPatient ?? ''
+                  const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
+                  const allInters = getPatientIntermediaires(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                  const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
+                  const closedLines = sortieBt ? getClosedAntecedents(patKey, sortieBt) : []
+                  const historiqueStr = [
+                    ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10 — Zone: ${b.zone ?? '?'}`),
+                    ...allInters.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${(tc.evn as Record<string, unknown>)?.pireActuel ?? '?'}/10` }),
+                    ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`),
+                    ...(closedLines.length > 0 ? ['', 'Antécédents d\'autres PEC (clôturées, contexte) :', ...closedLines.map(l => `- ${l}`)] : [])
+                  ].join('\n')
+                  const fieldPrompts: Record<'resumePEC' | 'resultatsObtenus' | 'facteursLimitants', string> = {
+                    resumePEC: "Rédige un résumé factuel de la prise en charge à partir de l'historique fourni : techniques mises en œuvre, fréquence et nombre de séances, progression observée. Reste descriptif. N'invente rien qui n'apparaît pas dans l'historique.",
+                    resultatsObtenus: "Rédige une description factuelle des résultats observés à partir de l'historique fourni : évolution EVN/EVA, scores, gains fonctionnels rapportés. Reste descriptif. N'invente rien qui n'apparaît pas dans l'historique.",
+                    facteursLimitants: "Rédige une description factuelle des facteurs limitants rencontrés pendant la PEC à partir de l'historique fourni (compliance, tolérance, autres). Si aucun n'est identifiable, écris 'Aucun facteur limitant identifié'. N'invente rien.",
+                  }
                   const maxRetries = 2
                   for (let attempt = 0; attempt <= maxRetries; attempt++) {
                     try {
-                      const patKey = selectedPatient ?? ''
-                      const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
-                      const allInters = getPatientIntermediaires(patKey).filter(r => matchBt(r.bilanType, r.zone))
-                      const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
-                      const closedLines = sortieBt ? getClosedAntecedents(patKey, sortieBt) : []
-                      const historiqueStr = [
-                        ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10 — Zone: ${b.zone ?? '?'}`),
-                        ...allInters.map(r => { const tc = (r.data?.troncCommun as Record<string, unknown>) ?? {}; return `Bilan intermédiaire ${r.dateBilan} — EVN ${(tc.evn as Record<string, unknown>)?.pireActuel ?? '?'}/10` }),
-                        ...allNotes.map(n => `Séance n°${n.numSeance} ${n.dateSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — Interventions: ${n.data.interventions.join(', ')}`),
-                        ...(closedLines.length > 0 ? ['', 'Antécédents d\'autres PEC (clôturées, contexte) :', ...closedLines.map(l => `- ${l}`)] : [])
-                      ].join('\n')
                       const raw = await callClaudeSecure({
                         apiKey,
-                        systemPrompt: 'Tu es un kinésithérapeute expert. Génère une synthèse clinique de fin de prise en charge. Sois professionnel, concis et structuré. Réponds UNIQUEMENT en JSON valide.',
-                        userPrompt: `HISTORIQUE COMPLET DU PATIENT :\n${historiqueStr}\n\nGénère en JSON :\n{"resumePEC":"résumé complet de la prise en charge (techniques, progression, nombre de séances)","resultatsObtenus":"résultats cliniques obtenus (EVN, scores, gains fonctionnels)","facteursLimitants":"facteurs limitants rencontrés pendant la PEC (si aucun, mettre 'Aucun facteur limitant identifié')"}`,
-                        maxOutputTokens: 4096, jsonMode: true,
+                        systemPrompt: 'Tu es un assistant rédactionnel pour kinésithérapeute. Tu reformules sobrement des données factuelles fournies. Tu n\'émets aucune recommandation, aucune interprétation diagnostique, aucun jugement clinique. Tu n\'inventes rien qui ne figure pas dans les données. Sois concis et professionnel. Réponds en texte brut, sans markdown.',
+                        userPrompt: `HISTORIQUE PATIENT :\n${historiqueStr}\n\n${fieldPrompts[field]}`,
+                        maxOutputTokens: 1024,
                         patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
                         category: 'bilan_analyse', onAudit: recordAIAudit,
                       })
-                      const parsed = JSON.parse(raw)
-                      const current = handle.getData()
-                      handle.setData({ ...current, resumePEC: stripMd(parsed.resumePEC ?? ''), resultatsObtenus: stripMd(parsed.resultatsObtenus ?? ''), facteursLimitants: stripMd(parsed.facteursLimitants ?? '') })
-                      showToast('Synthèse créée', 'success')
-                      return
+                      return stripMd(raw ?? '').trim()
                     } catch (err) {
-                      console.warn(`[BilanSortie] Synthèse attempt ${attempt + 1} failed:`, err)
+                      console.warn(`[BilanSortie] Synthèse field "${field}" attempt ${attempt + 1} failed:`, err)
                       if (attempt < maxRetries) {
                         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
                       } else {
@@ -3846,96 +3944,76 @@ Mobilité articulaire lombaire
                       }
                     }
                   }
-                }}
-                onGenerateRecommandations={async () => {
-                  const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
-                  if (!handle) return
-                  showToast('Création des recommandations…', 'success')
-                  const maxRetries = 2
-                  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-                    try {
-                      const patKey = selectedPatient ?? ''
-                      const allNotes = getPatientNotes(patKey).filter(r => matchBt(r.bilanType, r.zone))
-                      const lastNote = allNotes[allNotes.length - 1]
-                      const allBilans = getPatientBilans(patKey).filter(r => (r.status === 'complet' || r.bilanData) && matchBt(r.bilanType, r.zone))
-                      const firstBilanData = allBilans[0]?.bilanData
-                      const contrat = ((firstBilanData?.contratKine ?? firstBilanData?.contrat) as Record<string, unknown>) ?? {}
-                      const fichesExo: string[] = []
-                      for (const b of allBilans) { if (b.ficheExercice?.markdown) fichesExo.push(b.ficheExercice.markdown) }
-                      for (const n of allNotes) { if ((n as unknown as { ficheExercice?: { markdown?: string } }).ficheExercice?.markdown) fichesExo.push((n as unknown as { ficheExercice: { markdown: string } }).ficheExercice.markdown) }
-                      const dosages = allNotes.filter(n => n.data.detailDosage).map(n => `Séance ${n.numSeance}: ${n.data.detailDosage}`)
-                      const interventions = Array.from(new Set(allNotes.flatMap(n => n.data.interventions)))
-                      const raw = await callClaudeSecure({
-                        apiKey,
-                        systemPrompt: `Tu es un kinésithérapeute expert. Génère des recommandations de fin de prise en charge.
-
-RÈGLE ABSOLUE : Tu ne dois JAMAIS inventer d'exercices ou d'activités que le patient n'a pas fait pendant sa prise en charge. Base-toi UNIQUEMENT sur les exercices effectivement prescrits et les interventions réalisées listés ci-dessous. Si tu n'as pas assez d'informations sur les exercices, écris simplement "Poursuivre les exercices mis en place durant le traitement avec les dosages habituels."
-
-Réponds UNIQUEMENT en JSON valide.`,
-                        userPrompt: `Zone: ${selectedBodyZone ?? 'non précisée'}
-Dernière EVA: ${lastNote?.data.eva ?? '?'}/10
-Dernière évolution: ${lastNote?.data.evolution ?? '?'}
-Interventions réalisées: ${interventions.join(', ') || 'non renseignées'}
-Objectifs SMART: ${contrat.objectifsSMART ?? contrat.objectifs ?? 'non renseignés'}
-Conseils du bilan initial: ${String(firstBilanData?.conseils ?? 'non renseignés')}
-
-EXERCICES RÉELLEMENT PRESCRITS PENDANT LA PEC :
-${fichesExo.length > 0 ? fichesExo.map((f, i) => `--- Fiche ${i + 1} ---\n${f.slice(0, 500)}`).join('\n\n') : 'Aucune fiche d\'exercice enregistrée'}
-
-DOSAGES DES SÉANCES :
-${dosages.length > 0 ? dosages.join('\n') : 'Non renseignés'}
-
-Génère en JSON :
-{"autoExercices":"UNIQUEMENT les exercices déjà prescrits ci-dessus avec leurs dosages (répétitions, séries, fréquence). Ne rien inventer.","precautions":"précautions basées sur l'évolution clinique constatée","infoMedecin":"éléments factuels pour le médecin prescripteur (EVN initial/final, nombre de séances, résultats)"}`,
-                        maxOutputTokens: 4096, jsonMode: true,
-                        patient: { nom: formData.nom, prenom: formData.prenom, patientKey: patKey },
-                        category: 'bilan_analyse', onAudit: recordAIAudit,
-                      })
-                      const parsed = JSON.parse(raw)
-                      const current = handle.getData()
-                      handle.setData({ ...current, autoExercices: stripMd(parsed.autoExercices ?? ''), precautions: stripMd(parsed.precautions ?? ''), infoMedecin: stripMd(parsed.infoMedecin ?? '') })
-                      showToast('Recommandations créées', 'success')
-                      return
-                    } catch (err) {
-                      console.warn(`[BilanSortie] Recommandations attempt ${attempt + 1} failed:`, err)
-                      if (attempt < maxRetries) {
-                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
-                      } else {
-                        showToast('Erreur — réessayez dans quelques secondes', 'error')
-                      }
-                    }
-                  }
+                  return ''
                 }}
               />
             </Suspense>
             </div>
             <div className="fixed-bottom">
-              <button className="btn-primary-luxe" style={{ marginBottom: 8, background: 'linear-gradient(135deg, #059669, #047857)' }}
+              <button className="btn-primary-luxe" style={{ marginBottom: 8 }}
                 onClick={() => {
                   const handle = (window as unknown as Record<string, unknown>).__bilanSortieRef as import('./components/BilanSortie').BilanSortieHandle | undefined
                   if (!handle) return
                   const data = handle.getData()
-                  const id = Date.now()
-                  setDbIntermediaires(prev => [...prev, {
-                    id,
-                    patientKey: selectedPatient,
-                    nom: formData.nom,
-                    prenom: formData.prenom,
-                    dateNaissance: formData.dateNaissance,
-                    dateBilan: new Date().toLocaleDateString('fr-FR'),
-                    zone: selectedBodyZone ?? lastBilan?.zone ?? '',
-                    bilanType: getBilanType(selectedBodyZone ?? lastBilan?.zone ?? ''),
-                    status: 'complet',
-                    type: 'sortie',
-                    data,
-                  } as BilanIntermediaireRecord])
+                  if (currentBilanIntermediaireId !== null) {
+                    // Édition d'un bilan de sortie existant
+                    setDbIntermediaires(prev => prev.map(r =>
+                      r.id === currentBilanIntermediaireId ? { ...r, data, status: 'complet' } : r
+                    ))
+                  } else {
+                    // Nouveau bilan de sortie
+                    const id = Date.now()
+                    setDbIntermediaires(prev => [...prev, {
+                      id,
+                      patientKey: selectedPatient,
+                      nom: formData.nom,
+                      prenom: formData.prenom,
+                      dateNaissance: formData.dateNaissance,
+                      dateBilan: new Date().toLocaleDateString('fr-FR'),
+                      zone: selectedBodyZone ?? lastBilan?.zone ?? '',
+                      bilanType: getBilanType(selectedBodyZone ?? lastBilan?.zone ?? ''),
+                      status: 'complet',
+                      type: 'sortie',
+                      data,
+                    } as BilanIntermediaireRecord])
+                  }
+
+                  // Répercuter les statuts validés en sortie vers les objectifs SMART du dossier patient
+                  const sortieObjectifs = (data.objectifs as Array<{ label: string; statut: string; commentaire: string }> | undefined) ?? []
+                  if (sortieObjectifs.length > 0 && selectedPatient) {
+                    const statusMap: Record<string, 'atteint' | 'non_atteint' | 'en_cours'> = {
+                      'Atteint': 'atteint',
+                      'Non atteint': 'non_atteint',
+                      'Partiellement atteint': 'en_cours',
+                    }
+                    setDbObjectifs(prev => prev.map(o => {
+                      if (o.patientKey !== selectedPatient) return o
+                      const match = sortieObjectifs.find(s => s.label.trim() && s.label.trim() === o.titre.trim())
+                      if (!match) return o
+                      const newStatus = statusMap[match.statut] ?? o.status
+                      return newStatus === o.status ? o : { ...o, status: newStatus }
+                    }))
+                  }
+
                   showToast('Bilan de sortie enregistré', 'success')
+                  setCurrentBilanIntermediaireId(null)
+                  setCurrentBilanIntermediaireData(null)
                   setStep('database')
                 }}>
                 Enregistrer le bilan de sortie
               </button>
-              <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'var(--secondary)', color: 'var(--text-main)' }}
-                onClick={() => setStep('database')}>
+              <button
+                style={{
+                  width: '100%', padding: '0.85rem', borderRadius: 'var(--radius-full)',
+                  background: 'transparent', border: '1.5px solid var(--border-color)',
+                  color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.95rem',
+                  cursor: 'pointer', marginBottom: 0,
+                }}
+                onClick={() => {
+                  setCurrentBilanIntermediaireId(null)
+                  setCurrentBilanIntermediaireData(null)
+                  setStep('database')
+                }}>
                 Annuler
               </button>
             </div>

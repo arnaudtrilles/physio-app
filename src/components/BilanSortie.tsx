@@ -6,6 +6,11 @@ import { useQuestionnaires, type StoredResult } from './bilans/questionnaires/us
 import { SPPBInteractiveModal } from './bilans/SPPBInteractiveModal'
 import { QuestionnaireModal, TINETTI_QUESTIONS, interpretTinetti } from './bilans/QuestionnaireModal'
 import { Chrono } from './bilans/Chrono'
+import { ConfectionButton } from './letters/ConfectionButton'
+import { NoyauTestsFinal } from './bilans/NoyauTestsFinal'
+import { getBilanType } from '../utils/bilanRouter'
+
+type SyntheseField = 'resumePEC' | 'resultatsObtenus' | 'facteursLimitants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,10 +46,8 @@ interface BilanSortieProps {
   lastIntermediaire?: Record<string, unknown>
   /** Callback to navigate to letter generator */
   onGenerateLetter?: (type: 'fin_pec' | 'fin_anticipee') => void
-  /** Callback to generate synthese via AI */
-  onGenerateSynthese?: () => void | Promise<void>
-  /** Callback to generate recommandations via AI */
-  onGenerateRecommandations?: () => void | Promise<void>
+  /** Callback to generate one synthèse field via AI — returns generated text */
+  onGenerateSyntheseField?: (field: SyntheseField) => Promise<string>
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -110,11 +113,11 @@ const SCORE_LABELS: Record<string, string> = {
   vitesseMarche: 'Vitesse de marche (m/s)',
 }
 
-/** Score keys to exclude from display (internal data, not real scores) */
-const EXCLUDED_SCORE_KEYS = new Set([
-  'sppbRawData', 'tinettiAnswers', 'questionnaireAnswers', 'questionnaireResults',
-  'autres', 'morpho', 'zones', 'mobiliteCervical',
-])
+/** Whitelist : seules les clés présentes dans SCORE_LABELS sont affichées dans
+ *  la grille "Scores fonctionnels (final)". Évite que les clés de tests
+ *  spécifiques (clusterLaslett, ta, proneInstability…) splatées dans
+ *  bilanData.scores via App.tsx ne polluent la grille. */
+const KNOWN_SCORE_KEYS = new Set<string>(Object.keys(SCORE_LABELS))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -127,8 +130,8 @@ function calcImprovement(initial: number | undefined, final: number): number | n
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.88rem',
-  color: 'var(--text-main)', background: 'var(--secondary)',
-  border: '1px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8,
+  color: 'var(--text-main)', background: 'var(--input-bg)',
+  border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', marginBottom: 8,
   boxSizing: 'border-box',
 }
 
@@ -147,7 +150,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
   const {
     initialData, patientName, zone, initialBilanData, currentEvn,
     noteCount, bilanCount, prescribedSessions, notes, smartObjectifs, lastIntermediaire,
-    onGenerateLetter, onGenerateSynthese, onGenerateRecommandations,
+    onGenerateLetter, onGenerateSyntheseField,
   } = props
 
   // ── Collapsible state ──────────────────────────────────────────────────────
@@ -228,7 +231,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
     if (!entries || typeof entries !== 'object') return []
     const lastScores = prefill?.lastScores ?? {}
     return Object.entries(entries)
-      .filter(([name, val]) => !EXCLUDED_SCORE_KEYS.has(name) && val != null && String(val).trim() !== '' && typeof val !== 'object')
+      .filter(([name, val]) => KNOWN_SCORE_KEYS.has(name) && val != null && String(val).trim() !== '' && typeof val !== 'object')
       .map(([name, val]) => ({
         name,
         initial: val != null ? String(val) : '',
@@ -267,6 +270,25 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
   const evnInitial = initialBilanData?.evn
   const evnFinalNum = evnFinal !== '' ? Number(evnFinal) : undefined
   const evnImprovement = evnFinalNum != null ? calcImprovement(evnInitial, evnFinalNum) : null
+
+  // ── Tests spécifiques (final) — alignés sur le noyau EBP de la zone ───────
+  const bilanType = useMemo(() => getBilanType(zone), [zone])
+  const initialTests = useMemo<Record<string, string>>(() => {
+    const raw = initialBilanData?.bilanData?.testsSpecifiques as Record<string, unknown> | undefined
+    if (!raw) return {}
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === 'string') out[k] = v
+    }
+    return out
+  }, [initialBilanData?.bilanData])
+
+  const [tests, setTests] = useState<Record<string, string>>(
+    (initialData?.tests as Record<string, string>) ?? {}
+  )
+  const setT = useCallback((k: string, v: string) => {
+    setTests(prev => ({ ...prev, [k]: v }))
+  }, [])
 
   // ── Section 3: Objectifs SMART ─────────────────────────────────────────────
   const [objectifs, setObjectifs] = useState<ObjectifSMART[]>(() => {
@@ -307,13 +329,22 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
   const [suiviDetails, setSuiviDetails] = useState<string>((initialData?.suiviDetails as string) ?? '')
   const [infoMedecin, setInfoMedecin] = useState<string>((initialData?.infoMedecin as string) ?? '')
 
-  const [generatingSynthese, setGeneratingSynthese] = useState(false)
-  const [generatingRecommandations, setGeneratingRecommandations] = useState(false)
+  const [busySynthese, setBusySynthese] = useState<Record<SyntheseField, boolean>>({
+    resumePEC: false, resultatsObtenus: false, facteursLimitants: false,
+  })
 
-  const runGenerate = async (fn: (() => void | Promise<void>) | undefined, setLoading: (b: boolean) => void) => {
-    if (!fn) return
-    setLoading(true)
-    try { await Promise.resolve(fn()) } finally { setLoading(false) }
+  const runSyntheseField = async (
+    field: SyntheseField,
+    setter: (v: string) => void,
+  ) => {
+    if (!onGenerateSyntheseField) return
+    setBusySynthese(p => ({ ...p, [field]: true }))
+    try {
+      const text = await onGenerateSyntheseField(field)
+      if (text) setter(text)
+    } finally {
+      setBusySynthese(p => ({ ...p, [field]: false }))
+    }
   }
 
   // ── Handle ─────────────────────────────────────────────────────────────────
@@ -324,6 +355,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
       dateFin,
       evnFinal,
       scores,
+      tests,
       objectifs,
       resumePEC,
       resultatsObtenus,
@@ -344,6 +376,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
       if (d.dateFin != null) setDateFin(d.dateFin as string)
       if (d.evnFinal != null) setEvnFinal(d.evnFinal as string)
       if (d.scores != null && Array.isArray(d.scores)) setScores(d.scores as ScoreComparison[])
+      if (d.tests != null && typeof d.tests === 'object') setTests(d.tests as Record<string, string>)
       if (d.objectifs != null && Array.isArray(d.objectifs)) setObjectifs(d.objectifs as ObjectifSMART[])
       if (d.resumePEC != null) setResumePEC(d.resumePEC as string)
       if (d.resultatsObtenus != null) setResultatsObtenus(d.resultatsObtenus as string)
@@ -360,11 +393,11 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
   const needsDetails = motif === 'Autre' || motif === 'Orientation spécialiste'
 
   const sections = [
-    { id: 'motifSortie',      title: 'Motif de sortie',     color: 'var(--primary)' },
-    { id: 'bilanComparatif',  title: 'Bilan comparatif',    color: '#ea580c' },
-    { id: 'objectifsSmart',   title: 'Objectifs SMART',     color: '#7c3aed' },
-    { id: 'syntheseClinique', title: 'Synthèse clinique',   color: '#059669' },
-    { id: 'recommandations',  title: 'Recommandations',     color: '#b45309' },
+    { id: 'motifSortie',      title: 'Motif de sortie' },
+    { id: 'bilanComparatif',  title: 'Bilan comparatif' },
+    { id: 'objectifsSmart',   title: 'Objectifs SMART' },
+    { id: 'syntheseClinique', title: 'Synthèse clinique' },
+    { id: 'recommandations',  title: 'Recommandations' },
   ]
 
   return (
@@ -399,7 +432,7 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
       {/* ── Collapsible sections ──────────────────────────────────────────── */}
       {sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
-          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} />
+          <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} />
           {open[sec.id] && (
             <div style={{ paddingTop: 12, paddingBottom: 8 }}>
 
@@ -540,94 +573,130 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                       })}
                     </div>
                   )}
+
+                  {/* Tests spécifiques noyau EBP — alignés sur le bilan initial */}
+                  {(() => {
+                    const noyauZones = ['lombaire', 'epaule', 'genou', 'hanche', 'cervical', 'cheville'] as const
+                    if (!noyauZones.includes(bilanType as typeof noyauZones[number])) return null
+                    const hasInitial = Object.keys(initialTests).length > 0
+                    return (
+                      <div style={{ marginTop: 14 }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Tests spécifiques (final)
+                        </div>
+                        <NoyauTestsFinal
+                          bilanType={bilanType}
+                          tests={tests}
+                          setT={setT}
+                          initialTests={hasInitial ? initialTests : undefined}
+                        />
+                      </div>
+                    )
+                  })()}
                 </>
               )}
 
               {/* ── OBJECTIFS SMART ──────────────────────────────── */}
               {sec.id === 'objectifsSmart' && (
                 <>
-                  {objectifs.map((obj, idx) => (
-                    <div key={idx} style={{
-                      border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)',
-                      padding: '0.75rem', marginBottom: 8, background: 'var(--secondary)',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <span style={{
-                          width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                          color: 'white', fontWeight: 700, fontSize: '0.7rem', display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', flexShrink: 0,
-                        }}>{idx + 1}</span>
-                        <DictableInput
-                          value={obj.label}
-                          onChange={e => updateObjectif(idx, 'label', e.target.value)}
-                          placeholder="Décrire l'objectif..."
-                          inputStyle={{ ...inputStyle, border: 'none', borderBottom: '1px solid var(--border-color)', borderRadius: 0, padding: '0.3rem 0.4rem', flex: 1, marginBottom: 0 }}
-                        />
-                        {objectifs.length > 1 && (
-                          <button
-                            onClick={() => removeObjectif(idx)}
-                            style={{
-                              width: 24, height: 24, borderRadius: '50%', border: '1px solid #fca5a5',
-                              background: '#fef2f2', color: '#dc2626', cursor: 'pointer', display: 'flex',
-                              alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '0.85rem', fontWeight: 700,
-                            }}
-                            aria-label="Supprimer l'objectif"
-                          >
-                            &times;
-                          </button>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-                        {STATUTS_OBJECTIF.map(s => {
-                          const active = obj.statut === s
-                          const colorMap: Record<StatutObjectif, { bg: string; border: string; text: string }> = {
-                            'Atteint': { bg: '#dcfce7', border: '#86efac', text: '#166534' },
-                            'Partiellement atteint': { bg: '#fff7ed', border: '#fed7aa', text: '#92400e' },
-                            'Non atteint': { bg: '#fef2f2', border: '#fca5a5', text: '#991b1b' },
-                          }
-                          const c = colorMap[s]
-                          return (
-                            <button
-                              key={s}
-                              className={`choix-btn${active ? ' active' : ''}`}
-                              onClick={() => updateObjectif(idx, 'statut', obj.statut === s ? '' : s)}
-                              style={{
-                                border: `1.5px solid ${active ? c.border : 'var(--border-color)'}`,
-                                background: active ? c.bg : 'transparent',
-                                color: active ? c.text : 'var(--text-muted)',
+                  {objectifs.map((obj, idx) => {
+                    const statusStyle: Record<StatutObjectif, { activeBg: string; activeShadow: string }> = {
+                      'Atteint':                { activeBg: '#166534', activeShadow: '0 1px 3px rgba(22,101,52,0.25)' },
+                      'Partiellement atteint':  { activeBg: '#b45309', activeShadow: '0 1px 3px rgba(180,83,9,0.25)' },
+                      'Non atteint':            { activeBg: '#881337', activeShadow: '0 1px 3px rgba(136,19,55,0.25)' },
+                    }
+                    return (
+                      <div key={idx} style={{
+                        background: 'var(--input-bg)', border: '1px solid var(--border-color)',
+                        borderRadius: 12, padding: '0.75rem', marginBottom: 8,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <DictableInput
+                              value={obj.label}
+                              onChange={e => updateObjectif(idx, 'label', e.target.value)}
+                              placeholder="Titre de l'objectif (ex: Récupérer la flexion complète)"
+                              inputStyle={{
+                                width: '100%', padding: '0.55rem 0.75rem', fontSize: '0.85rem',
+                                border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)',
+                                boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--input-bg)',
+                                marginBottom: 0,
                               }}
+                            />
+                          </div>
+                          {objectifs.length > 1 && (
+                            <button
+                              onClick={() => removeObjectif(idx)}
+                              style={{
+                                padding: '0.4rem 0.55rem', borderRadius: 8,
+                                border: '1px solid var(--border-color)', background: 'var(--surface)',
+                                color: 'var(--text-muted)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                              }}
+                              aria-label="Supprimer l'objectif"
                             >
-                              {s}
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              </svg>
                             </button>
-                          )
-                        })}
-                      </div>
+                          )}
+                        </div>
 
-                      <DictableTextarea
-                        value={obj.commentaire}
-                        onChange={e => updateObjectif(idx, 'commentaire', e.target.value)}
-                        placeholder="Commentaire sur l'objectif..."
-                        rows={2}
-                        textareaStyle={{ ...taStyle, minHeight: 48, fontSize: '0.8rem', marginBottom: 0 }}
-                      />
-                    </div>
-                  ))}
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                          {STATUTS_OBJECTIF.map(s => {
+                            const active = obj.statut === s
+                            const c = statusStyle[s]
+                            return (
+                              <button
+                                key={s}
+                                onClick={() => updateObjectif(idx, 'statut', obj.statut === s ? '' : s)}
+                                style={{
+                                  flex: 1, padding: '0.45rem', borderRadius: 8,
+                                  border: active ? 'none' : '1px solid var(--border-color)',
+                                  background: active ? c.activeBg : 'var(--surface)',
+                                  color: active ? 'white' : 'var(--text-muted)',
+                                  fontWeight: 700, fontSize: '0.78rem',
+                                  cursor: 'pointer',
+                                  boxShadow: active ? c.activeShadow : 'none',
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                {s}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <DictableTextarea
+                          value={obj.commentaire}
+                          onChange={e => updateObjectif(idx, 'commentaire', e.target.value)}
+                          placeholder="Commentaire (optionnel)…"
+                          rows={2}
+                          textareaStyle={{
+                            width: '100%', padding: '0.55rem 0.75rem', fontSize: '0.82rem',
+                            border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)',
+                            boxSizing: 'border-box', color: 'var(--text-main)', background: 'var(--input-bg)',
+                            resize: 'vertical', minHeight: 48, lineHeight: 1.5, marginBottom: 0,
+                          }}
+                        />
+                      </div>
+                    )
+                  })}
 
                   {objectifs.length < 5 && (
                     <button
                       onClick={addObjectif}
                       style={{
-                        width: '100%', padding: '0.5rem', borderRadius: 'var(--radius-md)',
-                        border: '1.5px dashed var(--border-color)', background: 'transparent',
-                        color: '#7c3aed', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+                        width: '100%', padding: '0.55rem', borderRadius: 10,
+                        border: '1.5px solid var(--border-color)',
+                        background: 'var(--input-bg)', color: 'var(--primary-dark)',
+                        fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                      Ajouter un objectif
+                      <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> Ajouter un objectif
                     </button>
                   )}
                 </>
@@ -636,7 +705,15 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
               {/* ── SYNTHESE CLINIQUE ────────────────────────────── */}
               {sec.id === 'syntheseClinique' && (
                 <>
-                  <label style={lblStyle}>Résumé de la prise en charge</label>
+                  <label style={{ ...lblStyle, display: 'flex', alignItems: 'center' }}>
+                    <span>Résumé de la prise en charge</span>
+                    {onGenerateSyntheseField && (
+                      <ConfectionButton
+                        onConfect={() => runSyntheseField('resumePEC', setResumePEC)}
+                        busy={busySynthese.resumePEC}
+                      />
+                    )}
+                  </label>
                   <DictableTextarea
                     value={resumePEC}
                     onChange={e => setResumePEC(e.target.value)}
@@ -645,7 +722,15 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                     textareaStyle={taStyle}
                   />
 
-                  <label style={lblStyle}>Résultats obtenus</label>
+                  <label style={{ ...lblStyle, display: 'flex', alignItems: 'center' }}>
+                    <span>Résultats obtenus</span>
+                    {onGenerateSyntheseField && (
+                      <ConfectionButton
+                        onConfect={() => runSyntheseField('resultatsObtenus', setResultatsObtenus)}
+                        busy={busySynthese.resultatsObtenus}
+                      />
+                    )}
+                  </label>
                   <DictableTextarea
                     value={resultatsObtenus}
                     onChange={e => setResultatsObtenus(e.target.value)}
@@ -654,7 +739,15 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                     textareaStyle={taStyle}
                   />
 
-                  <label style={lblStyle}>Facteurs limitants rencontrés</label>
+                  <label style={{ ...lblStyle, display: 'flex', alignItems: 'center' }}>
+                    <span>Facteurs limitants rencontrés</span>
+                    {onGenerateSyntheseField && (
+                      <ConfectionButton
+                        onConfect={() => runSyntheseField('facteursLimitants', setFacteursLimitants)}
+                        busy={busySynthese.facteursLimitants}
+                      />
+                    )}
+                  </label>
                   <DictableTextarea
                     value={facteursLimitants}
                     onChange={e => setFacteursLimitants(e.target.value)}
@@ -662,26 +755,6 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                     rows={2}
                     textareaStyle={taStyle}
                   />
-
-                  {onGenerateSynthese && (
-                    <button
-                      onClick={() => runGenerate(onGenerateSynthese, setGeneratingSynthese)}
-                      disabled={generatingSynthese}
-                      style={{
-                        marginTop: 4, padding: '0.55rem 1rem', borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, #059669, #047857)', border: 'none',
-                        color: 'white', fontWeight: 700, fontSize: '0.78rem',
-                        cursor: generatingSynthese ? 'not-allowed' : 'pointer',
-                        opacity: generatingSynthese ? 0.75 : 1,
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                      }}
-                    >
-                      {generatingSynthese && (
-                        <span style={{ width: 12, height: 12, border: '1.5px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-                      )}
-                      {generatingSynthese ? 'Génération…' : 'Créer la synthèse clinique'}
-                    </button>
-                  )}
                 </>
               )}
 
@@ -743,25 +816,6 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
                     textareaStyle={taStyle}
                   />
 
-                  {onGenerateRecommandations && (
-                    <button
-                      onClick={() => runGenerate(onGenerateRecommandations, setGeneratingRecommandations)}
-                      disabled={generatingRecommandations}
-                      style={{
-                        marginTop: 4, padding: '0.55rem 1rem', borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, #b45309, #92400e)', border: 'none',
-                        color: 'white', fontWeight: 700, fontSize: '0.78rem',
-                        cursor: generatingRecommandations ? 'not-allowed' : 'pointer',
-                        opacity: generatingRecommandations ? 0.75 : 1,
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                      }}
-                    >
-                      {generatingRecommandations && (
-                        <span style={{ width: 12, height: 12, border: '1.5px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-                      )}
-                      {generatingRecommandations ? 'Génération…' : 'Créer les recommandations'}
-                    </button>
-                  )}
                 </>
               )}
 
@@ -772,23 +826,37 @@ export const BilanSortie = forwardRef<BilanSortieHandle, BilanSortieProps>(funct
 
       {/* ── Section 6: Courrier (always visible, not collapsible) ─────────── */}
       {onGenerateLetter && (
-        <div style={{ marginBottom: 14, marginTop: 8 }}>
-          <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block', marginRight: 6 }} />
-            Courrier
+        <div style={{
+          marginTop: 16, marginBottom: 16, padding: '14px 14px 12px',
+          background: 'var(--input-bg)', border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-xl)',
+        }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>
+            Courrier de sortie
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--primary)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            Les informations de ce bilan de sortie seront reprises automatiquement dans le courrier.
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+            Les informations de ce bilan seront reprises automatiquement dans le courrier.
           </p>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" onClick={() => onGenerateLetter('fin_pec')}
-              style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 'var(--radius-md)', background: 'var(--primary)', border: 'none', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              Courrier fin de PEC
+              style={{
+                flex: 1, padding: '0.75rem 0.75rem', borderRadius: 'var(--radius-xl)',
+                background: 'var(--primary)', border: '1px solid var(--primary)',
+                color: 'white', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              Fin de prise en charge
             </button>
             <button type="button" onClick={() => onGenerateLetter('fin_anticipee')}
-              style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: 'var(--radius-md)', background: 'var(--secondary)', border: '1.5px solid var(--border-soft)', color: 'var(--primary)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              style={{
+                flex: 1, padding: '0.75rem 0.75rem', borderRadius: 'var(--radius-xl)',
+                background: 'white', border: '1.5px solid var(--primary)',
+                color: 'var(--primary)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
               Fin anticipée
             </button>
           </div>

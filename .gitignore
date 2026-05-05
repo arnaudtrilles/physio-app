@@ -39,3 +39,6 @@ playwright/.cache/
 
 # Bot persona artefacts (screenshots, traces, JSON) — auto-generated
 bots/reports/
+
+# Claude Code local data (memory, sessions) — never commit
+.claude/

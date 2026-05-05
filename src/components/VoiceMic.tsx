@@ -1,10 +1,13 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
-import { transcribeAudio, reformulateTranscription } from '../utils/voiceBilanClient'
+import { transcribeAudio, reformulateTranscription, TranscriptionTransientError } from '../utils/voiceBilanClient'
 
 type VoiceMicState = 'idle' | 'recording' | 'transcribing' | 'reformulating' | 'error'
 
 const BAR_COUNT = 24
-const MAX_RETRIES = 2
+// 4 retries (5 tentatives) — l'user attend, on couvre les cold starts Vercel +
+// propagation OpenAI. Pour une dictée courte (textarea), payload léger donc on
+// peut se permettre plusieurs retries sans pénaliser l'UX outre mesure.
+const MAX_RETRIES = 4
 
 interface RecordingOverlayProps {
   bars: number[]
@@ -93,16 +96,31 @@ function ErrorOverlay({ message, onDismiss }: { message: string; onDismiss: () =
   )
 }
 
+// Backoff exponentiel + jitter — couvre cold starts Vercel et propagation OpenAI
+// sans hammering. 1s → 2s → 4s → 8s (capé), avec ±30% de bruit pour casser les
+// thundering herds quand Vercel revient après panne.
 async function transcribeWithRetry(blob: Blob, retries = MAX_RETRIES): Promise<string> {
+  const baseDelay = (attempt: number): number => {
+    const exp = Math.min(8_000, 1000 * Math.pow(2, attempt))
+    const jitter = Math.random() * 0.3 * exp
+    return Math.round(exp + jitter)
+  }
+
   let lastError: Error | null = null
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await transcribeAudio(blob)
     } catch (err) {
       lastError = err as Error
-      console.warn(`[VoiceMic] Transcription attempt ${attempt + 1} failed:`, err)
+      const isTransient = lastError instanceof TranscriptionTransientError
+      // Erreur définitive (400, 401, 413, "Aucune parole détectée"…) → on s'arrête
+      if (!isTransient) {
+        console.error(`[VoiceMic] Transcription definitive error (no retry):`, lastError.message)
+        throw lastError
+      }
+      console.warn(`[VoiceMic] Transcription attempt ${attempt + 1}/${retries + 1} failed:`, lastError.message)
       if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+        await new Promise(r => setTimeout(r, baseDelay(attempt)))
       }
     }
   }
@@ -191,12 +209,23 @@ function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
         } catch (err) {
           const msg = (err as Error).message
           console.error('[VoiceMic] Transcription failed:', msg)
-          setErrorMsg(msg.includes('parole') ? 'Aucune parole détectée' : 'Échec — réessayer')
+          let userMsg: string
+          if (msg.includes('parole')) {
+            userMsg = 'Aucune parole détectée'
+          } else if (err instanceof TranscriptionTransientError) {
+            // Toutes les tentatives ont échoué — le serveur ou le réseau est down
+            userMsg = 'Service indisponible — réessayer'
+          } else if (msg.includes('413') || msg.toLowerCase().includes('too large')) {
+            userMsg = 'Audio trop long'
+          } else {
+            userMsg = 'Échec — réessayer'
+          }
+          setErrorMsg(userMsg)
           setState('error')
           setTimeout(() => {
             setState(s => s === 'error' ? 'idle' : s)
             setErrorMsg('')
-          }, 3000)
+          }, 3500)
         }
       }
       recorder.start(200)

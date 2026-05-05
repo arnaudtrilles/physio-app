@@ -122,6 +122,8 @@ export interface BilanIntermediaireRecord {
   notes?: string
   analyseIA?: AnalyseIAIntermediaire
   ficheExercice?: FicheExercice
+  /** 'sortie' = bilan de fin de PEC, sinon bilan intermédiaire classique */
+  type?: 'intermediaire' | 'sortie'
 }
 
 export interface AnalyseSeanceMini {

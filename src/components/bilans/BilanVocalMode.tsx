@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { transcribeAudio, generateNarrativeReport } from '../../utils/voiceBilanClient'
+import { transcribeAudio, generateNarrativeReport, TranscriptionTransientError } from '../../utils/voiceBilanClient'
 import {
   saveRecovery,
   deleteRecovery,
@@ -25,8 +25,9 @@ type VocalState =
 
 const BAR_COUNT = 32
 // Durée max d'un chunk avant rotation du MediaRecorder. Avec un bitrate Opus 24 kbps
-// mono, 10 min ≈ 1.7 Mo → bien sous toutes les limites + transcription rapide en BG.
-const CHUNK_MAX_SECONDS = 10 * 60
+// mono, 5 min ≈ 900 Ko → payload léger, transcription rapide, faible risque OOM côté
+// Vercel et fenêtre de crash réduite si une lambda meurt en cours de route.
+const CHUNK_MAX_SECONDS = 5 * 60
 const AUDIO_BITRATE = 24000
 const WARN_SECONDS = 45 * 60 // alerte douce à 45 min, pas de blocage
 
@@ -98,7 +99,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
     if (!chunk || chunk.transcription || !chunk.blob) return
 
     try {
-      const text = await transcribeWithRetry(chunk.blob, 1) // 1 retry seulement en BG (plus rapide pour libérer la queue)
+      const text = await transcribeWithRetry(chunk.blob, 2) // 2 retries en BG (3 tentatives) — autres chunks attendent en queue, ne pas trop ralentir
       // Re-fetch recoveryRef au cas où d'autres chunks aient été ajoutés entre temps
       const current = recoveryRef.current
       if (!current) return
@@ -269,7 +270,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
         }
         if (!chunk.blob) continue
         setPhaseDetail(`Chunk ${i + 1} / ${rec.chunks.length} en cours…`)
-        const text = await transcribeWithRetry(chunk.blob, 2)
+        const text = await transcribeWithRetry(chunk.blob, 5) // 5 retries au stop (6 tentatives) — l'user attend, dernière chance avant erreur visible
         chunk.transcription = text
         await persistRecovery(rec)
       }
@@ -727,17 +728,37 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
   return null
 }
 
-// ─── Transcription avec retry — protège des erreurs réseau temporaires ────
+// ─── Transcription avec retry — protège des erreurs réseau et infra Vercel ──
+// Stratégie defense-in-depth :
+//   • Côté serveur (api/transcribe.ts) : 3 retries OpenAI sur 429/5xx
+//   • Côté client (ici) : retries supplémentaires sur tout ce qui passe au-dessus
+//     de Vercel (FUNCTION_INVOCATION_FAILED, cold start crash, OOM, gateway).
+// On ne retente QUE les erreurs transitoires — les erreurs définitives (400, 401,
+// 413 audio trop gros, 415 mauvais codec) propagent immédiatement.
 async function transcribeWithRetry(blob: Blob, retries: number): Promise<string> {
+  // Backoff exponentiel avec jitter — capé à 12s pour rester raisonnable côté UX.
+  // Ex: attempts 0..5 → ~1s, ~2s, ~4s, ~8s, ~12s, ~12s entre chaque retry.
+  const baseDelay = (attempt: number): number => {
+    const exp = Math.min(12_000, 1000 * Math.pow(2, attempt))
+    const jitter = Math.random() * 0.3 * exp // ±30% pour casser les thundering herds
+    return Math.round(exp + jitter)
+  }
+
   let lastErr: Error | null = null
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await transcribeAudio(blob)
     } catch (e) {
       lastErr = e as Error
-      // Backoff progressif avant retry
+      const isTransient = lastErr instanceof TranscriptionTransientError
+      // Erreur définitive → on s'arrête tout de suite (aucun retry n'aidera)
+      if (!isTransient) {
+        console.error(`[vocal] transcription definitive error (no retry):`, lastErr.message)
+        throw lastErr
+      }
+      console.warn(`[vocal] transcription attempt ${attempt + 1}/${retries + 1} failed:`, lastErr.message)
       if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+        await new Promise(r => setTimeout(r, baseDelay(attempt)))
       }
     }
   }

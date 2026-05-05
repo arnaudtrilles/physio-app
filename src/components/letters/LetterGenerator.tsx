@@ -78,10 +78,33 @@ export function LetterGenerator(props: LetterGeneratorProps) {
       if (bilanSortieData) {
         const sd = bilanSortieData
         if (sd.resumePEC) base.resumePec = String(sd.resumePEC)
-        if (sd.resultatsObtenus) base.resultats = String(sd.resultatsObtenus)
-        if (sd.autoExercices) base.recommandations = String(sd.autoExercices)
-        if (sd.precautions) base.suite = String(sd.precautions)
+
+        // Résultats : combine resultatsObtenus + état des objectifs SMART
+        const objectifs = (sd.objectifs as Array<{ label: string; statut: string; commentaire: string }> | undefined) ?? []
+        const objectifsLines = objectifs
+          .filter(o => o.label && o.label.trim())
+          .map(o => {
+            const statut = o.statut ? ` (${o.statut.toLowerCase()})` : ''
+            const commentaire = o.commentaire && o.commentaire.trim() ? ` — ${o.commentaire.trim()}` : ''
+            return `• ${o.label.trim()}${statut}${commentaire}`
+          })
+        const resultatsParts: string[] = []
+        if (sd.resultatsObtenus) resultatsParts.push(String(sd.resultatsObtenus))
+        if (objectifsLines.length > 0) resultatsParts.push(`Objectifs SMART :\n${objectifsLines.join('\n')}`)
+        if (resultatsParts.length > 0) base.resultats = resultatsParts.join('\n\n')
+
+        // Recommandations : auto-exercices + précautions
+        const recoParts: string[] = []
+        if (sd.autoExercices) recoParts.push(String(sd.autoExercices))
+        if (sd.precautions) recoParts.push(String(sd.precautions))
+        if (recoParts.length > 0) base.recommandations = recoParts.join('\n\n')
+
+        // Suite : suivi ultérieur si activé, sinon état/info médecin
+        if (sd.suiviUlterieur && sd.suiviDetails) {
+          base.suite = String(sd.suiviDetails)
+        }
         if (sd.infoMedecin) base.etatActuel = String(sd.infoMedecin)
+
         if (sd.dateFin) base.dateFinPec = String(sd.dateFin)
         if (sd.motif) base.raisonArret = String(sd.motif) + (sd.motifDetails ? ` — ${sd.motifDetails}` : '')
         if (sd.facteursLimitants) base.difficultes = String(sd.facteursLimitants)
@@ -814,6 +837,24 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
     />
   )
 
+  // DM-pivot (2026-04-30) : pour les zones où la rédaction implique un
+  // raisonnement clinique sur le patient (raison d'orientation, justification
+  // clinique, état actuel, recommandations, suite proposée, constat actuel,
+  // avis…), on rend uniquement le label sans bouton « Confectionner ». Le
+  // thérapeute saisit/dicte le contenu lui-même. Cf. memory
+  // `feedback_dm_design_principle.md`.
+  const labelOnly = (text: string) => (
+    <div style={{
+      fontSize: '0.78rem',
+      color: 'var(--text-muted)',
+      fontWeight: 600,
+      marginBottom: 4,
+      marginTop: 10,
+    }}>
+      {text}
+    </div>
+  )
+
   return (
     <div>
       {/* ── Informations communes ─── */}
@@ -896,22 +937,22 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
 
       {type === 'fin_pec' && (
         <>
-          {zone('Résultats / état actuel', 'resultats')}
+          {labelOnly('Résultats / état actuel')}
           <DictableTextarea {...field('resultats')} placeholder="Amélioration EVN, gains articulaires, scores…" textareaStyle={textareaStyle} />
-          {zone('Recommandations au patient', 'recommandations')}
+          {labelOnly('Recommandations au patient')}
           <DictableTextarea {...field('recommandations')} placeholder="Auto-rééducation, reprise sport…" textareaStyle={textareaStyle} />
-          {zone('Suite proposée', 'suite')}
+          {labelOnly('Suite proposée')}
           <input {...field('suite')} placeholder="Aucune / suivi espacé / à revoir si besoin" style={inputStyle} />
         </>
       )}
 
       {type === 'fin_pec_anticipee' && (
         <>
-          {zone("Raison de l'arrêt anticipé", 'raisonArret')}
+          {labelOnly("Raison de l'arrêt anticipé")}
           <DictableTextarea {...field('raisonArret')} placeholder="Objectifs atteints avant terme, patient autonome, etc." textareaStyle={textareaStyle} />
-          {zone('État actuel du patient', 'etatActuel')}
+          {labelOnly('État actuel du patient')}
           <DictableTextarea {...field('etatActuel')} textareaStyle={textareaStyle} />
-          {zone('Recommandations', 'recommandations')}
+          {labelOnly('Recommandations')}
           <DictableTextarea {...field('recommandations')} textareaStyle={textareaStyle} />
         </>
       )}
@@ -931,7 +972,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
             <option value="Ostéopathe">Ostéopathe</option>
             <option value="Autre spécialiste">Autre spécialiste</option>
           </select>
-          {zone("Raison de l'orientation", 'raisonOrientation')}
+          {labelOnly("Raison de l'orientation")}
           <DictableTextarea {...field('raisonOrientation')} placeholder="Composante psychologique, douleur chronique non contrôlée…" textareaStyle={textareaStyle} />
           <label style={labelStyle}>Accord du patient</label>
           <select {...field('accordPatient')} style={inputStyle}>
@@ -956,7 +997,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
           </select>
           <label style={labelStyle}>Zone anatomique</label>
           <input {...field('zoneAnatomique')} style={inputStyle} />
-          {zone('Justification clinique', 'justification')}
+          {labelOnly('Justification clinique')}
           <DictableTextarea {...field('justification')} placeholder="Récidives multiples, absence d'imagerie préalable, guider la rééducation…" textareaStyle={textareaStyle} />
           {zone('Antécédents pertinents', 'antecedents')}
           <DictableTextarea {...field('antecedents')} textareaStyle={textareaStyle} />
@@ -995,7 +1036,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
           <DictableTextarea {...field('pointsPositifs')} textareaStyle={textareaStyle} />
           {zone('Difficultés / points en cours', 'difficultes')}
           <DictableTextarea {...field('difficultes')} textareaStyle={textareaStyle} />
-          {zone('Suite prévue', 'suite')}
+          {labelOnly('Suite prévue')}
           <DictableTextarea {...field('suite')} textareaStyle={textareaStyle} />
         </>
       )}
@@ -1004,13 +1045,13 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
         <>
           {zone('Modalités de traitement essayées', 'traitementsEssayes')}
           <DictableTextarea {...field('traitementsEssayes')} placeholder="Techniques essayées, exercices, modalités…" textareaStyle={textareaStyle} />
-          {zone('Constat actuel', 'constat')}
+          {labelOnly('Constat actuel')}
           <DictableTextarea {...field('constat')} placeholder="Pas d'amélioration / dégradation / stagnation…" textareaStyle={textareaStyle} />
           {zone('Scores fonctionnels (optionnel)', 'scoresFonctionnels')}
           <DictableTextarea {...field('scoresFonctionnels')} placeholder="Ex : EIFEL 18/24, DN4 5/10…" textareaStyle={textareaStyle} />
-          {zone('Orientation proposée', 'orientation')}
+          {labelOnly('Orientation proposée')}
           <DictableTextarea {...field('orientation')} placeholder="Médecin de la douleur, RFR, hospitalisation, autre…" textareaStyle={textareaStyle} />
-          {zone('Avis / recommandations', 'avisPersonnel')}
+          {labelOnly('Avis / recommandations')}
           <DictableTextarea {...field('avisPersonnel')} textareaStyle={textareaStyle} />
         </>
       )}
