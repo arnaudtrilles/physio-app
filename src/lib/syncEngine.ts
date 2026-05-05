@@ -601,35 +601,84 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
 
 // ── Merge downloaded data with local docs ───────────────────────
 
+/**
+ * Merge cloud download with local state.
+ *
+ * Two responsibilities:
+ *  1. Préserver les blobs base64 locaux (documents, photos, signatures) qui
+ *     ne sont jamais uploadés au cloud.
+ *  2. **UNION : préserver les enregistrements local-only** créés avant que
+ *     le sync upload n'ait eu le temps de tourner (debounce 3s). Sans ça,
+ *     un refresh dans la fenêtre de debounce détruit définitivement le
+ *     bilan/séance/objectif qu'on vient de créer.
+ *
+ * Fingerprint match (cloud-assigned ids ne sont pas préservés côté local
+ * donc on matche par contenu, identique à `deduplicateLocalData`).
+ */
 export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalData {
-  // Bilans: keep local document base64
-  const db = cloud.db.map(cb => {
-    const match = local.db.find(lb =>
-      lb.nom === cb.nom && lb.prenom === cb.prenom &&
-      lb.dateBilan === cb.dateBilan && lb.bilanType === cb.bilanType &&
-      lb.zone === cb.zone
-    )
+  // ── Bilans ───────────────────────────────────────────────────
+  const bilanFp = (b: BilanRecord) =>
+    `${b.nom}|${b.prenom}|${b.dateBilan}|${b.bilanType}|${b.zone}`
+  const cloudBilanFps = new Set(cloud.db.map(bilanFp))
+  const dbCloudWithDocs = cloud.db.map(cb => {
+    const match = local.db.find(lb => bilanFp(lb) === bilanFp(cb))
     if (match?.documents?.some(d => d.data)) return { ...cb, documents: match.documents }
     return cb
   })
+  const localOnlyBilans = local.db.filter(lb => !cloudBilanFps.has(bilanFp(lb)))
+  const db = [...dbCloudWithDocs, ...localOnlyBilans]
 
-  // Patient docs: keep local base64
-  const dbPatientDocs = cloud.dbPatientDocs.map(cd => {
-    const ld = local.dbPatientDocs.find(l =>
-      l.patientKey === cd.patientKey && l.name === cd.name && l.addedAt === cd.addedAt
-    )
+  // ── Bilans intermédiaires ────────────────────────────────────
+  const intFp = (b: BilanIntermediaireRecord) =>
+    `${b.nom}|${b.prenom}|${b.dateBilan}|${b.bilanType}|${b.zone}`
+  const cloudIntFps = new Set(cloud.dbIntermediaires.map(intFp))
+  const localOnlyInt = local.dbIntermediaires.filter(li => !cloudIntFps.has(intFp(li)))
+  const dbIntermediaires = [...cloud.dbIntermediaires, ...localOnlyInt]
+
+  // ── Notes de séance ─────────────────────────────────────────
+  const noteFp = (n: NoteSeanceRecord) =>
+    `${n.nom}|${n.prenom}|${n.dateSeance}|${n.numSeance}|${n.bilanType}`
+  const cloudNoteFps = new Set(cloud.dbNotes.map(noteFp))
+  const localOnlyNotes = local.dbNotes.filter(ln => !cloudNoteFps.has(noteFp(ln)))
+  const dbNotes = [...cloud.dbNotes, ...localOnlyNotes]
+
+  // ── Objectifs SMART ─────────────────────────────────────────
+  const objFp = (o: SmartObjectif) => `${o.patientKey}|${o.titre}|${o.cible}`
+  const cloudObjFps = new Set(cloud.dbObjectifs.map(objFp))
+  const localOnlyObj = local.dbObjectifs.filter(lo => !cloudObjFps.has(objFp(lo)))
+  const dbObjectifs = [...cloud.dbObjectifs, ...localOnlyObj]
+
+  // ── Closed treatments ───────────────────────────────────────
+  const ctFp = (t: ClosedTreatment) => `${t.patientKey}|${t.bilanType}|${t.closedAt}`
+  const cloudCtFps = new Set(cloud.dbClosedTreatments.map(ctFp))
+  const localOnlyCt = local.dbClosedTreatments.filter(lt => !cloudCtFps.has(ctFp(lt)))
+  const dbClosedTreatments = [...cloud.dbClosedTreatments, ...localOnlyCt]
+
+  // ── Banque d'exercices (id-based, slug stable) ──────────────
+  const cloudExIds = new Set(cloud.dbExerciceBank.map(e => e.id))
+  const localOnlyEx = local.dbExerciceBank.filter(e => !cloudExIds.has(e.id))
+  const dbExerciceBank = [...cloud.dbExerciceBank, ...localOnlyEx]
+
+  // ── Courriers ───────────────────────────────────────────────
+  const letterFp = (l: LetterRecord) =>
+    `${l.patientKey}|${l.type}|${(l.contenu || '').slice(0, 50)}`
+  const cloudLetterFps = new Set(cloud.dbLetters.map(letterFp))
+  const localOnlyLetters = local.dbLetters.filter(ll => !cloudLetterFps.has(letterFp(ll)))
+  const dbLetters = [...cloud.dbLetters, ...localOnlyLetters]
+
+  // ── Documents patients (préserve base64 + union local-only) ─
+  const docFp = (d: PatientDocument) => `${d.patientKey}|${d.name}|${d.addedAt}`
+  const cloudDocFps = new Set(cloud.dbPatientDocs.map(docFp))
+  const dbPatientDocsBase = cloud.dbPatientDocs.map(cd => {
+    const ld = local.dbPatientDocs.find(l => docFp(l) === docFp(cd))
     return ld?.data ? { ...cd, data: ld.data, originalData: ld.originalData } : cd
   })
+  const localOnlyDocs = local.dbPatientDocs.filter(ld => !cloudDocFps.has(docFp(ld)))
+  const dbPatientDocs = [...dbPatientDocsBase, ...localOnlyDocs]
 
-  // Profile: keep local photo/signature if cloud doesn't have them
-  const profile = {
-    ...cloud.profile,
-    photo: cloud.profile.photo || local.profile.photo,
-    signatureImage: cloud.profile.signatureImage || local.profile.signatureImage,
-  }
-
-  // Prescriptions: keep local document data
-  const dbPrescriptions = cloud.dbPrescriptions.map(cp => {
+  // ── Prescriptions (1 par patient, préserve doc local) ───────
+  const cloudPrescKeys = new Set(cloud.dbPrescriptions.map(p => p.patientKey))
+  const cloudPrescriptionsWithDocs = cloud.dbPrescriptions.map(cp => {
     const lp = local.dbPrescriptions.find(l => l.patientKey === cp.patientKey)
     if (!lp) return cp
     return {
@@ -640,8 +689,60 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
       }),
     }
   })
+  const localOnlyPresc = local.dbPrescriptions.filter(lp => !cloudPrescKeys.has(lp.patientKey))
+  const dbPrescriptions = [...cloudPrescriptionsWithDocs, ...localOnlyPresc]
 
-  return { ...cloud, db, dbPatientDocs, profile, dbPrescriptions }
+  // ── Audit logs ──────────────────────────────────────────────
+  const laFp = (a: LetterAuditEntry) => `${a.patientKey}|${a.type}|${a.timestamp}`
+  const cloudLaFps = new Set(cloud.dbLetterAudit.map(laFp))
+  const localOnlyLa = local.dbLetterAudit.filter(la => !cloudLaFps.has(laFp(la)))
+  const dbLetterAudit = [...cloud.dbLetterAudit, ...localOnlyLa]
+
+  const aiFp = (a: AICallAuditEntry) => `${a.category}|${a.patientKey}|${a.timestamp}`
+  const cloudAiFps = new Set(cloud.dbAICallAudit.map(aiFp))
+  const localOnlyAi = local.dbAICallAudit.filter(a => !cloudAiFps.has(aiFp(a)))
+  const dbAICallAudit = [...cloud.dbAICallAudit, ...localOnlyAi]
+
+  // ── Profile (keep local photo/signature) ────────────────────
+  const profile = {
+    ...cloud.profile,
+    photo: cloud.profile.photo || local.profile.photo,
+    signatureImage: cloud.profile.signatureImage || local.profile.signatureImage,
+  }
+
+  return {
+    db, dbIntermediaires, dbNotes, dbObjectifs,
+    dbExerciceBank, dbPatientDocs, dbLetters,
+    dbLetterAudit, dbAICallAudit,
+    dbPrescriptions, dbClosedTreatments, profile,
+  }
+}
+
+/**
+ * Compare merged data vs cloud download to detect stores où des
+ * enregistrements local-only ont été préservés. Ces stores doivent être
+ * uploadés au cloud explicitement après le merge — sinon, le prochain
+ * cycle de sync les considérerait "in-sync" et le cloud resterait en retard.
+ */
+export function detectUnionedStores(merged: LocalData, cloud: LocalData): {
+  db: boolean; dbIntermediaires: boolean; dbNotes: boolean; dbObjectifs: boolean
+  dbClosedTreatments: boolean; dbExerciceBank: boolean; dbLetters: boolean
+  dbPatientDocs: boolean; dbPrescriptions: boolean
+  dbLetterAudit: boolean; dbAICallAudit: boolean
+} {
+  return {
+    db: merged.db.length > cloud.db.length,
+    dbIntermediaires: merged.dbIntermediaires.length > cloud.dbIntermediaires.length,
+    dbNotes: merged.dbNotes.length > cloud.dbNotes.length,
+    dbObjectifs: merged.dbObjectifs.length > cloud.dbObjectifs.length,
+    dbClosedTreatments: merged.dbClosedTreatments.length > cloud.dbClosedTreatments.length,
+    dbExerciceBank: merged.dbExerciceBank.length > cloud.dbExerciceBank.length,
+    dbLetters: merged.dbLetters.length > cloud.dbLetters.length,
+    dbPatientDocs: merged.dbPatientDocs.length > cloud.dbPatientDocs.length,
+    dbPrescriptions: merged.dbPrescriptions.length > cloud.dbPrescriptions.length,
+    dbLetterAudit: merged.dbLetterAudit.length > cloud.dbLetterAudit.length,
+    dbAICallAudit: merged.dbAICallAudit.length > cloud.dbAICallAudit.length,
+  }
 }
 
 // ── Ongoing sync: full-replace per store ────────────────────────

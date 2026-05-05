@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { User } from '@supabase/supabase-js'
 import {
-  hasCloudData, uploadAll, downloadAll, mergeWithLocalDocs,
+  hasCloudData, uploadAll, downloadAll, mergeWithLocalDocs, detectUnionedStores,
   syncProfile, replaceStore, ensurePatient,
   convertBilans, convertIntermediaires, convertNotes,
   convertObjectifs, convertClosedTreatments, convertExerciceBank,
@@ -45,6 +45,120 @@ interface UseSyncParams {
 export type SyncStatus = 'idle' | 'syncing' | 'done' | 'error'
 
 const DEBOUNCE_MS = 3000
+
+type UnionedStores = ReturnType<typeof import('../lib/syncEngine').detectUnionedStores>
+
+/**
+ * Push merged data to cloud for stores où le merge a réuni des
+ * enregistrements local-only avec le cloud. Garantit que le cloud
+ * rattrape l'état local immédiatement après init (évite la race
+ * condition refresh-dans-la-fenêtre-de-debounce).
+ */
+async function reconcileUpload(
+  userId: string, merged: LocalData, pm: PatientMap, unioned: UnionedStores,
+): Promise<void> {
+  // Ensure patients first (local-only records may reference patients not yet in cloud)
+  const ensureFor = async (records: Array<{ nom?: string; prenom?: string; dateNaissance?: string; avatarBg?: string; patientKey?: string }>) => {
+    for (const r of records) {
+      if (r.nom && r.prenom) {
+        await ensurePatient(userId, r.nom, r.prenom, r.dateNaissance || '', r.avatarBg, pm)
+      } else if (r.patientKey && !pm.has(r.patientKey)) {
+        const parts = r.patientKey.split(' ')
+        await ensurePatient(userId, parts[0] || '', parts.slice(1).join(' '), '', undefined, pm)
+      }
+    }
+  }
+
+  if (unioned.db) {
+    await ensureFor(merged.db)
+    await replaceStore(userId, 'bilans', convertBilans(merged.db, userId, pm))
+  }
+  if (unioned.dbIntermediaires) {
+    await ensureFor(merged.dbIntermediaires)
+    await replaceStore(userId, 'bilans_intermediaires', convertIntermediaires(merged.dbIntermediaires, userId, pm))
+  }
+  if (unioned.dbNotes) {
+    await ensureFor(merged.dbNotes)
+    await replaceStore(userId, 'notes_seance', convertNotes(merged.dbNotes, userId, pm))
+  }
+  if (unioned.dbObjectifs) {
+    await ensureFor(merged.dbObjectifs as Array<{ patientKey?: string }>)
+    await replaceStore(userId, 'objectifs', convertObjectifs(merged.dbObjectifs, userId, pm))
+  }
+  if (unioned.dbClosedTreatments) {
+    await ensureFor(merged.dbClosedTreatments as Array<{ patientKey?: string }>)
+    await replaceStore(userId, 'closed_treatments', convertClosedTreatments(merged.dbClosedTreatments, userId, pm))
+  }
+  if (unioned.dbExerciceBank) {
+    await replaceStore(userId, 'exercice_bank', convertExerciceBank(merged.dbExerciceBank, userId))
+  }
+  if (unioned.dbLetters) {
+    await replaceStore(userId, 'letter_audit', merged.dbLetterAudit.map(a => ({
+      practitioner_id: userId, letter_id: null,
+      patient_key: a.patientKey || null, type: a.type,
+      pseudonymized: a.pseudonymized ?? true,
+      pii_warnings_count: a.piiWarningsCount || 0,
+      model_used: a.modelUsed || null, result_length: a.resultLength || 0,
+    })))
+    await replaceStore(userId, 'letters', merged.dbLetters.map(l => ({
+      practitioner_id: userId, patient_id: pm.get(l.patientKey) || null,
+      type: l.type, form_data: l.formData || {},
+      contenu: l.contenu || '', titre_affichage: l.titreAffichage || null,
+      status: l.status || 'brouillon',
+    })))
+  } else if (unioned.dbLetterAudit) {
+    await replaceStore(userId, 'letter_audit', merged.dbLetterAudit.map(a => ({
+      practitioner_id: userId, letter_id: null,
+      patient_key: a.patientKey || null, type: a.type,
+      pseudonymized: a.pseudonymized ?? true,
+      pii_warnings_count: a.piiWarningsCount || 0,
+      model_used: a.modelUsed || null, result_length: a.resultLength || 0,
+    })))
+  }
+  if (unioned.dbAICallAudit) {
+    await replaceStore(userId, 'ai_call_audit', merged.dbAICallAudit.map(a => ({
+      practitioner_id: userId, category: a.category,
+      patient_key: a.patientKey || null, pseudonymized: a.pseudonymized ?? true,
+      scrub_replacements: a.scrubReplacements || 0,
+      has_documents: a.hasDocuments || false, documents_count: a.documentsCount || 0,
+      documents_unmasked: a.documentsUnmasked || 0,
+      model_used: a.modelUsed || null, prompt_length: a.promptLength || 0,
+      result_length: a.resultLength || 0, success: a.success ?? true,
+    })))
+  }
+  if (unioned.dbPrescriptions) {
+    const flat: Record<string, unknown>[] = []
+    for (const pp of merged.dbPrescriptions) {
+      if (!pm.has(pp.patientKey) && pp.patientKey) {
+        const parts = pp.patientKey.split(' ')
+        await ensurePatient(userId, parts[0] || '', parts.slice(1).join(' '), '', undefined, pm)
+      }
+      if (!pm.has(pp.patientKey)) continue
+      for (const pe of pp.prescriptions || []) {
+        flat.push({
+          practitioner_id: userId, patient_id: pm.get(pp.patientKey)!,
+          nb_seances: pe.nbSeances, date_prescription: pe.datePrescription || null,
+          prescripteur: pe.prescripteur || null, bilan_type: pe.bilanType || null,
+          custom_label: pe.customLabel || null,
+          document: pe.document ? { mimeType: pe.document.mimeType, name: pe.document.name } : null,
+          seances_anterieures: pp.seancesAnterieures || 0,
+        })
+      }
+    }
+    await replaceStore(userId, 'prescriptions', flat)
+  }
+  if (unioned.dbPatientDocs) {
+    await replaceStore(userId, 'patient_documents', merged.dbPatientDocs
+      .filter(d => pm.has(d.patientKey))
+      .map(d => ({
+        practitioner_id: userId,
+        patient_id: pm.get(d.patientKey)!,
+        name: d.name, mime_type: d.mimeType,
+        storage_path: null, masked: d.masked || false,
+        added_at: d.addedAt || new Date().toISOString(),
+      })))
+  }
+}
 
 export function useSync(params: UseSyncParams) {
   const {
@@ -142,9 +256,25 @@ export function useSync(params: UseSyncParams) {
 
         if (!cancelled) {
           if (cloudHasData || !localHasData) {
-            // Normal: merge cloud data with local docs
+            // Normal: merge cloud data with local docs (UNION cloud + local-only)
             const merged = mergeWithLocalDocs(cloud, localData)
             setAllFromCloud(merged)
+
+            // Reconcile: si le merge a réintégré des enregistrements local-only
+            // (créés avant qu'un sync n'ait pu les uploader, ex : refresh
+            // dans la fenêtre de debounce 3s), on les pousse au cloud
+            // immédiatement. Sans ça le prochain cycle ongoing-sync les voit
+            // comme "in-sync" (fromSync flag) et le cloud reste en retard.
+            const unioned = detectUnionedStores(merged, cloud)
+            const hasUnioned = Object.values(unioned).some(Boolean)
+            if (hasUnioned) {
+              console.warn('[Sync] reconcile: local-only records detected, pushing to cloud', unioned)
+              try {
+                await reconcileUpload(userId, merged, patientMap, unioned)
+              } catch (e) {
+                console.error('[Sync] reconcile upload failed:', e)
+              }
+            }
           } else {
             // Safety: cloud empty but local has data — keep local, don't overwrite
             console.warn('[Sync] cloud empty but local has data — keeping local state')
