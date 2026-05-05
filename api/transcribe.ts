@@ -7,10 +7,6 @@ const RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 }
 export const config = {
   // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout Whisper sur audio long)
   maxDuration: 300,
-  // Mémoire élevée pour absorber le pic Buffer→Blob→FormData sans OOM
-  memory: 3008,
-  // Pinné à Frankfurt (HDS-friendly + cold starts plus rares qu'en routage variable)
-  regions: ['fra1'],
   api: {
     bodyParser: false,
   },
