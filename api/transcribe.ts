@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { checkRateLimit, getClientIp } from './_ratelimit'
+import { checkRateLimit, getClientIp } from './_ratelimit.js'
 
 // 10 transcriptions par minute par IP
 const RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 }

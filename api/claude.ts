@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'node:fs'
 import path from 'node:path'
-import { checkRateLimit, getClientIp } from './_ratelimit'
+import { checkRateLimit, getClientIp } from './_ratelimit.js'
 
 // 30 appels Claude par minute par IP
 const RATE_LIMIT = { maxRequests: 30, windowMs: 60_000 }

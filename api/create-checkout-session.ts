@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Stripe from 'stripe'
-import { checkRateLimit, getClientIp } from './_ratelimit'
+import { checkRateLimit, getClientIp } from './_ratelimit.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
