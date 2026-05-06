@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 type Tab = 'login' | 'signup'
 
 export function AuthScreen() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, resetPassword } = useAuth()
 
   const [tab, setTab] = useState<Tab>('login')
   const [nom, setNom] = useState('')
@@ -17,6 +17,7 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   const resetForm = () => {
     setNom('')
@@ -26,6 +27,17 @@ export function AuthScreen() {
     setConfirmPassword('')
     setError(null)
     setSignupSuccess(false)
+    setResetSent(false)
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) { setError("Saisis ton adresse e-mail d'abord."); return }
+    setLoading(true)
+    setError(null)
+    const { error: err } = await resetPassword(email.trim())
+    setLoading(false)
+    if (err) { setError(friendlyError(err.message)); return }
+    setResetSent(true)
   }
 
   const switchTab = (next: Tab) => {
@@ -300,7 +312,19 @@ export function AuthScreen() {
           </div>
 
           <div>
-            <label style={labelStyle}>Mot de passe</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: spacing.xs }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>Mot de passe</label>
+              {tab === 'login' && (
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={loading}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: typography.caption, color: colors.primary, opacity: 0.7 }}
+                >
+                  Mot de passe oublié ?
+                </button>
+              )}
+            </div>
             <input
               type="password"
               value={password}
@@ -317,6 +341,11 @@ export function AuthScreen() {
                 e.currentTarget.style.boxShadow = 'none'
               }}
             />
+            {resetSent && (
+              <div style={{ ...successStyle, marginTop: spacing.sm, fontSize: typography.label }}>
+                Email de réinitialisation envoyé à <strong>{email}</strong>
+              </div>
+            )}
           </div>
 
           {tab === 'signup' && (
