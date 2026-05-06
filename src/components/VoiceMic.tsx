@@ -165,6 +165,12 @@ function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       const ctx = new AudioContext()
+      // L'AudioContext naît dans l'état "suspended" si créé après un await
+      // (le geste utilisateur initial a été consommé par getUserMedia).
+      // resume() le ré-active pour que les barres animent vraiment.
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume() } catch { /* fail silently — animation seulement */ }
+      }
       const source = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 64

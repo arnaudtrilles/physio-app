@@ -340,6 +340,12 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
 
       const audioCtx = new AudioContext()
       audioCtxRef.current = audioCtx
+      // L'AudioContext naît dans l'état "suspended" si créé après un await
+      // (le geste utilisateur initial a été consommé par getUserMedia).
+      // resume() le ré-active pour que les barres animent vraiment.
+      if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume() } catch { /* fail silently — animation seulement */ }
+      }
       const source = audioCtx.createMediaStreamSource(stream)
       const analyser = audioCtx.createAnalyser()
       analyser.fftSize = 256
