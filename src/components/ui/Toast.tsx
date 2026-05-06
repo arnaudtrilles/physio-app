@@ -35,7 +35,7 @@ function ToastIcon({ type }: { type: ToastType }) {
 export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   if (toasts.length === 0) return null
   return (
-    <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 390, width: '90%' }}>
+    <div style={{ position: 'fixed', top: 'max(16px, env(safe-area-inset-top, 0px))', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 390, width: '90%' }}>
       {toasts.map(toast => {
         const style = getToastStyle(toast.type)
         return (
