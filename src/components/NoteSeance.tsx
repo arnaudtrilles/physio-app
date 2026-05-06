@@ -92,12 +92,13 @@ const PROCHAINES = [
 interface NoteSeanceProps {
   initialData?: NoteSeanceData
   zone?: string
+  patientKey: string
   onGenerateExercices?: (prompt: string) => Promise<ExerciceDomicile[]>
   onExportExercicesPDF?: (exercices: ExerciceDomicile[]) => void
 }
 
 export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
-  ({ initialData, zone, onGenerateExercices, onExportExercicesPDF }, ref) => {
+  ({ initialData, zone, patientKey, onGenerateExercices, onExportExercicesPDF }, ref) => {
     const [mode, setMode] = useState<BilanMode>('noyau')
     const coreMode = mode === 'noyau'
     const [vocalReport, setVocalReport] = useState<NarrativeReport | null>(null)
@@ -360,7 +361,7 @@ export const NoteSeance = forwardRef<NoteSeanceHandle, NoteSeanceProps>(
       return (
         <div>
           <BilanModeToggle mode={mode} onChange={setMode} />
-          <BilanVocalMode zone={zone ?? 'Séance'} initialReport={vocalReport} onChange={setVocalReport} />
+          <BilanVocalMode zone={zone ?? 'Séance'} patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />
         </div>
       )
     }

@@ -79,7 +79,7 @@ function MobInput({ label, value, onChange }: { label: string; value: string; on
 }
 
 // ─── Composant principal ────────────────────────────────────────────────────
-export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData?: Record<string, unknown>; patientKey: string }>(({ initialData, patientKey }, ref) => {
   const init = initialData ?? {}
 
   const [mode, setMode] = useState<BilanMode>(
@@ -315,7 +315,7 @@ export const BilanGeriatrique = forwardRef<BilanGeriatriqueHandle, { initialData
   return (
     <div>
       <BilanModeToggle mode={mode} onChange={setMode} />
-      {mode === 'vocal' && <BilanVocalMode zone="Gériatrique" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode === 'vocal' && <BilanVocalMode zone="Gériatrique" patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />}
       {mode !== 'vocal' && sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />
