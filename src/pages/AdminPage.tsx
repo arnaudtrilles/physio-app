@@ -17,7 +17,33 @@ interface AdminStats {
   evnMoyen: number | null
   topExercices: { nom: string; zone: string; count: number }[]
   aiCalls30j: { total: number; byModel: Record<string, number> }
+  postHog: {
+    uniqueUsers30j: number
+    events: { name: string; count: number }[]
+    planGating: { feature: string; count: number }[]
+  } | null
   generatedAt: string
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  bilan_created: 'Bilans créés',
+  pdf_exported: 'PDFs exportés',
+  bilan_intermediaire_saved: 'Bilans intermédiaires',
+  note_seance_saved: 'Notes de séance',
+  ai_analysis_completed: 'Analyses IA',
+  plan_gating_shown: 'Paywall atteint',
+  plan_upgrade_clicked: 'Clics upgrade',
+  patient_deleted: 'Patients supprimés',
+  user_signed_out: 'Déconnexions',
+  step_changed: 'Navigations',
+}
+
+const FEATURE_LABELS: Record<string, string> = {
+  bilans_intermediaires: 'Bilans intermédiaires',
+  fiche_exercices: 'Fiche exercices',
+  lettres_medecins: 'Lettres médecins',
+  bilan_sortie: 'Bilan de sortie',
+  evolution_ia: 'Évolution IA',
 }
 
 const BILAN_TYPE_LABELS: Record<string, string> = {
@@ -299,6 +325,93 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+
+        {/* PostHog — Comportement utilisateurs */}
+        <div style={S.sectionTitle}>Analytique comportementale — 30 derniers jours (PostHog)</div>
+        {stats?.postHog == null ? (
+          <div style={{ ...S.card, marginBottom: 32, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ fontSize: '1.5rem', opacity: 0.4 }}>⬡</div>
+            <div>
+              <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: 4 }}>Données PostHog non disponibles</div>
+              <div style={{ fontSize: '0.72rem', color: '#475569', lineHeight: 1.5 }}>
+                Ajouter <code style={{ background: 'rgba(148,163,184,0.1)', padding: '1px 5px', borderRadius: 3 }}>POSTHOG_PRIVATE_KEY</code> et <code style={{ background: 'rgba(148,163,184,0.1)', padding: '1px 5px', borderRadius: 3 }}>POSTHOG_PROJECT_ID</code> dans les variables d'environnement Vercel.
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ ...S.grid4, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+              <KpiCard
+                value={stats.postHog.uniqueUsers30j}
+                label="Utilisateurs actifs"
+                sub="30 derniers jours"
+              />
+              <KpiCard
+                value={stats.postHog.events.reduce((a, e) => a + e.count, 0)}
+                label="Événements totaux"
+                sub="30 derniers jours"
+              />
+              <KpiCard
+                value={stats.postHog.events.find(e => e.name === 'bilan_created')?.count ?? 0}
+                label="Bilans créés"
+                sub="via PostHog"
+              />
+              <KpiCard
+                value={stats.postHog.events.find(e => e.name === 'pdf_exported')?.count ?? 0}
+                label="PDFs exportés"
+                sub="via PostHog"
+              />
+            </div>
+
+            <div style={S.grid2}>
+              {/* Événements par type */}
+              <div>
+                <div style={S.sectionTitle}>Événements par fonctionnalité</div>
+                <div style={S.card}>
+                  {stats.postHog.events
+                    .filter(e => e.name !== 'step_changed')
+                    .map(e => (
+                      <HBar
+                        key={e.name}
+                        label={EVENT_LABELS[e.name] ?? e.name}
+                        value={e.count}
+                        max={Math.max(1, ...stats.postHog!.events.filter(x => x.name !== 'step_changed').map(x => x.count))}
+                        color="#818cf8"
+                      />
+                    ))}
+                  {stats.postHog.events.length === 0 && (
+                    <div style={{ color: '#334155', fontSize: '0.78rem' }}>Aucun événement enregistré</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Plan gating */}
+              <div>
+                <div style={S.sectionTitle}>Paywall — fonctionnalités bloquées</div>
+                <div style={S.card}>
+                  {stats.postHog.planGating.length === 0 ? (
+                    <div style={{ color: '#334155', fontSize: '0.78rem' }}>
+                      {stats.postHog.uniqueUsers30j === 0 ? 'En attente des premiers utilisateurs' : 'Aucun paywall déclenché'}
+                    </div>
+                  ) : (
+                    stats.postHog.planGating.map(g => (
+                      <HBar
+                        key={g.feature}
+                        label={FEATURE_LABELS[g.feature] ?? g.feature}
+                        value={g.count}
+                        max={Math.max(1, ...stats.postHog!.planGating.map(x => x.count))}
+                        color="#f59e0b"
+                      />
+                    ))
+                  )}
+                  <div style={{ fontSize: '0.7rem', color: '#334155', marginTop: 12 }}>
+                    Indique quelles fonctionnalités Pro génèrent de la demande
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Conformité nLPD */}
         <div style={S.sectionTitle}>Conformité nLPD / RGPD</div>

@@ -117,6 +117,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (a.model_used) aiByModel[a.model_used] = (aiByModel[a.model_used] ?? 0) + 1
     })
 
+    // PostHog stats (optionnel — nécessite POSTHOG_PRIVATE_KEY + POSTHOG_PROJECT_ID)
+    let postHog: { uniqueUsers30j: number; events: { name: string; count: number }[]; planGating: { feature: string; count: number }[] } | null = null
+    const phPrivateKey = process.env.POSTHOG_PRIVATE_KEY
+    const phProjectId = process.env.POSTHOG_PROJECT_ID
+    const phHost = 'https://eu.posthog.com'
+
+    if (phPrivateKey && phProjectId) {
+      try {
+        const phQuery = async (sql: string) => {
+          const r = await fetch(`${phHost}/api/projects/${phProjectId}/query/`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${phPrivateKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: { kind: 'HogQLQuery', query: sql } }),
+          })
+          return r.json()
+        }
+
+        const [eventsRes, usersRes, gatingRes] = await Promise.all([
+          phQuery(`SELECT event, count() as cnt FROM events WHERE timestamp >= now() - INTERVAL 30 DAY AND event NOT LIKE '$%' GROUP BY event ORDER BY cnt DESC LIMIT 20`),
+          phQuery(`SELECT count(DISTINCT distinct_id) as users FROM events WHERE timestamp >= now() - INTERVAL 30 DAY AND event NOT LIKE '$%'`),
+          phQuery(`SELECT properties.feature as feature, count() as cnt FROM events WHERE event = 'plan_gating_shown' AND timestamp >= now() - INTERVAL 30 DAY GROUP BY feature ORDER BY cnt DESC`),
+        ])
+
+        postHog = {
+          uniqueUsers30j: (usersRes.results?.[0]?.[0] as number) ?? 0,
+          events: ((eventsRes.results ?? []) as [string, number][]).map(([name, count]) => ({ name, count })),
+          planGating: ((gatingRes.results ?? []) as [string, number][]).map(([feature, count]) => ({ feature, count })),
+        }
+      } catch (e) {
+        console.warn('[admin-stats] PostHog query failed:', e)
+      }
+    }
+
     return res.status(200).json({
       practitioners: practitionersCount ?? 0,
       patients: patientsCount ?? 0,
@@ -131,6 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       evnMoyen,
       topExercices: (exercices ?? []).slice(0, 5).map(e => ({ nom: e.nom, zone: e.zone, count: e.occurrences })),
       aiCalls30j: { total: aiAudit?.length ?? 0, byModel: aiByModel },
+      postHog,
       generatedAt: new Date().toISOString(),
     })
   } catch (err) {
