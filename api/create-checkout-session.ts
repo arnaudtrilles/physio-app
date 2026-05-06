@@ -1,11 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Stripe from 'stripe'
-import { checkRateLimit, getClientIp } from './_ratelimit.js'
+import { rateLimit, getClientIp } from './_ratelimit.js'
+import { extractUserId } from './_auth.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
-// 5 tentatives de checkout par minute par IP (anti-spam)
-const RATE_LIMIT = { maxRequests: 5, windowMs: 60_000 }
+// 10/min par utilisateur authentifié (un user qui re-tente peut cliquer plusieurs
+// fois), 5/min par IP en fallback anti-spam anonyme.
+const RATE_LIMIT_CONFIG = {
+  name: 'checkout',
+  perUser: { max: 10, windowMs: 60_000 },
+  perIp: { max: 5, windowMs: 60_000 },
+}
 
 // Seuls ces price IDs sont autorisés (liste blanche)
 const ALLOWED_PRICE_IDS = new Set([
@@ -18,8 +24,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
-  if (!checkRateLimit(`checkout:${ip}`, RATE_LIMIT)) {
-    return res.status(429).json({ error: 'Trop de tentatives. Réessaie dans une minute.' })
+  const tokenUserId = extractUserId(req)
+  const rl = await rateLimit({ config: RATE_LIMIT_CONFIG, userId: tokenUserId, ip })
+  if (!rl.allowed) {
+    const retrySec = Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000))
+    res.setHeader('Retry-After', String(retrySec))
+    return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${retrySec}s.` })
   }
 
   const { priceId, userId, userEmail, successUrl, cancelUrl } = req.body

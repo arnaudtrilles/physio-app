@@ -1,8 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { checkRateLimit, getClientIp } from './_ratelimit.js'
+import { rateLimit, getClientIp } from './_ratelimit.js'
+import { extractUserId } from './_auth.js'
 
-// 10 transcriptions par minute par IP
-const RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 }
+// 60/min par utilisateur authentifié (large headroom : un séance vocale 30 min
+// = 6 chunks ; un kiné qui dicte rapidement = ~5/min). Pas de faux positif sur
+// cabinet partagé / 4G CGNAT puisque c'est par userId Supabase, pas par IP.
+// Fallback anonyme (token JWT absent ou invalide) : 15/min par IP — anti-abus.
+const RATE_LIMIT_CONFIG = {
+  name: 'transcribe',
+  perUser: { max: 60, windowMs: 60_000 },
+  perIp: { max: 15, windowMs: 60_000 },
+}
 
 export const config = {
   // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout Whisper sur audio long)
@@ -67,8 +75,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
-  if (!checkRateLimit(`transcribe:${ip}`, RATE_LIMIT)) {
-    return res.status(429).json({ error: 'Trop de requêtes. Réessaie dans une minute.' })
+  const userId = extractUserId(req)
+  const rl = await rateLimit({ config: RATE_LIMIT_CONFIG, userId, ip })
+  if (!rl.allowed) {
+    const retrySec = Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000))
+    res.setHeader('Retry-After', String(retrySec))
+    return res.status(429).json({ error: `Trop de requêtes. Réessaie dans ${retrySec}s.` })
   }
 
   if (!OPENAI_API_KEY) {
@@ -103,6 +115,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     form.append('language', 'fr')
     form.append('prompt', MEDICAL_VOCAB_PROMPT)
     form.append('response_format', 'json')
+    // Anti-hallucination : température 0 = décodage déterministe, le modèle
+    // s'en tient au plus probable au lieu d'« inventer » des reformulations
+    // (« travail de relevé de sol » → « initiation du relevé de sol »).
+    form.append('temperature', '0')
 
     // Retry interne (3 tentatives) sur erreurs transitoires OpenAI : 429 (rate limit),
     // 500/502/503/504 (panne), ou network jitter. Backoff exponentiel léger.

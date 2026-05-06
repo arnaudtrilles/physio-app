@@ -1,5 +1,6 @@
 import { callClaude } from './claudeClient'
 import { CLAUDE_MODELS } from './claudeModels'
+import { authHeaders } from './apiAuth'
 import type { BilanType, NarrativeSection } from '../types'
 
 // Erreurs transitoires côté infra (Vercel down, OpenAI down, réseau jitter…).
@@ -37,9 +38,10 @@ const VERCEL_INFRA_PATTERNS = [
 export async function transcribeAudio(audioBlob: Blob): Promise<string> {
   let res: Response
   try {
+    const auth = await authHeaders()
     res = await fetch('/api/transcribe', {
       method: 'POST',
-      headers: { 'Content-Type': audioBlob.type || 'audio/webm' },
+      headers: { 'Content-Type': audioBlob.type || 'audio/webm', ...auth },
       body: audioBlob,
     })
   } catch (e) {

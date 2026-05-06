@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PLANS } from '../../config/stripePlans'
+import { authHeaders } from '../../utils/apiAuth'
 import type { PlanId, BillingInterval } from '../../config/stripePlans'
 
 interface PricingPageProps {
@@ -25,9 +26,10 @@ export function PricingPage({ currentPlan = 'basique', userId, userEmail, onClos
     if (planId === currentPlan) return
     setLoading(planId)
     try {
+      const auth = await authHeaders()
       const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...auth },
         body: JSON.stringify({
           priceId,
           userId,

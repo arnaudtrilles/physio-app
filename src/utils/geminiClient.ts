@@ -1,3 +1,4 @@
+import { authHeaders } from './apiAuth'
 import type { BilanDocument } from '../types'
 
 export class GeminiAuthError extends Error {
@@ -33,9 +34,10 @@ export async function callGemini(
 
   let res: Response
   try {
+    const auth = await authHeaders()
     res = await fetch('/api/gemini', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({
         systemPrompt,
         userPrompt,

@@ -39,6 +39,12 @@ export interface SecureCallOptions {
    * des documents non masqués. Permet de tracer l'override dans l'audit.
    */
   userAcknowledgedUnmasked?: boolean
+  /**
+   * Température Claude. Défaut côté serveur = 0 (déterminisme — bilans
+   * cliniques, anti-hallucination). Le client peut surcharger pour des cas
+   * créatifs (rare).
+   */
+  temperature?: number
 }
 
 /**
@@ -77,7 +83,7 @@ function buildFinalScrubber(nom?: string, prenom?: string): { scrub: (t: string)
 export async function callClaudeSecure(opts: SecureCallOptions): Promise<string> {
   const {
     apiKey, systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel,
-    documents, patient, category, onAudit, userAcknowledgedUnmasked,
+    documents, patient, category, onAudit, userAcknowledgedUnmasked, temperature,
   } = opts
 
   // ── Garde-fou documents non masqués ────────────────────────────────────
@@ -109,6 +115,7 @@ export async function callClaudeSecure(opts: SecureCallOptions): Promise<string>
       jsonMode ?? false,
       preferredModel,
       documents,
+      temperature,
     )
     success = true
     return result
