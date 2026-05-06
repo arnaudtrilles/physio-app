@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { applyInitialTheme } from './hooks/useTheme'
+import { initPostHog } from './lib/posthog'
 
 applyInitialTheme()
+initPostHog()
 
 // Recharge automatiquement quand un nouveau service worker prend le contrôle
 if ('serviceWorker' in navigator) {

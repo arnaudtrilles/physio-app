@@ -76,6 +76,7 @@ import { ZonePickerSheet } from './components/shared/ZonePicker'
 import { IdentityStep } from './components/wizard/IdentityStep'
 import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
 import './App.css'
+import { phCapture, phIdentify, phReset, phOptIn, phOptOut, phIsOptedIn } from './lib/posthog'
 
 type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'pricing' | 'identity' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
@@ -141,6 +142,7 @@ function App() {
   const [theme, setTheme] = useTheme()
   const [language, setLanguage] = useLocalStorage<'fr' | 'de' | 'en'>('physio_lang', 'fr')
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage<boolean>('physio_notif', true)
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(() => phIsOptedIn())
 
   const appContainerRef = useRef<HTMLDivElement | null>(null)
   const [showSplash, setShowSplash] = useState(() => {
@@ -265,6 +267,15 @@ function App() {
   // ── Sync plan Stripe depuis Supabase après connexion ──────────────────────
   usePlanSync(user, profile, setProfile)
 
+  // ── PostHog : identification utilisateur ─────────────────────────────────
+  useEffect(() => {
+    if (user) {
+      phIdentify(user.id, { email: user.email, plan: profile.plan ?? 'basique' })
+    } else {
+      phReset()
+    }
+  }, [user?.id, profile.plan])
+
   // ── Sync IndexedDB ↔ Supabase ──────────────────────────────────────────────
   const { syncStatus, patientMapRef } = useSync({
     user, allDataLoaded,
@@ -328,18 +339,21 @@ function App() {
   const guardedSetStep = (next: Step) => {
     const feature = GATED_STEPS[next]
     if (feature && !canAccess(feature, profile.plan)) {
+      phCapture('plan_gating_shown', { feature, plan: profile.plan ?? 'basique', step: next })
       showToast(
         'Fonctionnalité disponible avec le plan Pro',
         'info',
-        { onAction: () => setStep('pricing'), actionLabel: 'Voir les forfaits' }
+        { onAction: () => { phCapture('plan_upgrade_clicked', { from: next }); setStep('pricing') }, actionLabel: 'Voir les forfaits' }
       )
       return
     }
+    phCapture('step_changed', { step: next })
     setStep(next)
   }
 
   // Helper pour enregistrer une entrée d'audit AI (cap à 2000 entrées récentes pour éviter la saturation)
   const recordAIAudit = useCallback((entry: AICallAuditEntry) => {
+    phCapture('ai_analysis_completed', { category: entry.category })
     setDbAICallAudit(prev => {
       const next = [...prev, entry]
       return next.length > 2000 ? next.slice(next.length - 2000) : next
@@ -766,6 +780,7 @@ function App() {
     setCurrentBilanIntermediaireId(null)
     setCurrentBilanIntermediaireData(null)
     setBilanIntermediaireZone(null)
+    phCapture('bilan_intermediaire_saved', { status, zone: bilanIntermediaireZone, bilanType: getBilanType(bilanIntermediaireZone ?? '') })
     const key = patKey
     setSelectedPatient(key)
     setStep('database')
@@ -873,6 +888,7 @@ Règles :
     setCurrentNoteSeanceId(null)
     setCurrentNoteSeanceData(null)
     setNoteSeanceZone(null)
+    phCapture('note_seance_saved', { zone: noteSeanceZone, bilanType })
     setSelectedPatient(patKey)
     setStep('database')
     showToast('Note de séance enregistrée ✓', 'success')
@@ -1317,6 +1333,7 @@ Règles :
       setDb(prev => [...prev, record])
       setCurrentBilanId(newId)
       showToast(status === 'complet' ? 'Bilan enregistré' : 'Brouillon sauvegardé', 'success')
+      phCapture('bilan_created', { status, bilanType, zone: selectedBodyZone ?? null, evn: evnValue ?? null })
       if (status === 'complet') return newId
     }
 
@@ -2059,6 +2076,7 @@ Mobilité articulaire lombaire
 
   // Export un bilan depuis le dossier patient — génère avec IA puis ouvre l'aperçu modifiable
   const exportBilanFromRecord = async (record: BilanRecord, mode: 'initial' | 'intermediaire' | 'sortie' = 'initial') => {
+    phCapture('pdf_exported', { mode, bilanType: record.bilanType ?? null, zone: record.zone ?? null })
     const recSexe = record.sexe ?? getPatientSexe(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
     setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe ?? prev.sexe }))
     setPdfPreviewZone(record.zone ?? '')
@@ -2544,6 +2562,7 @@ Mobilité articulaire lombaire
                   if (patKey && !deletedPatientKeys.includes(patKey)) {
                     setDeletedPatientKeys(prev => [...prev, patKey])
                   }
+                  phCapture('patient_deleted')
                   setDeletingPatientKey(null)
                   setSelectedPatient(null)
                   showToast('Patient archivé (données conservées 30 jours)', 'success')
@@ -2650,7 +2669,12 @@ Mobilité articulaire lombaire
           onProfile={() => setStep('profile')}
           onPricing={() => setStep('pricing')}
           onRelaunchTutorial={() => { setTutorialIdx(0); setTutorialActive(true); localStorage.removeItem('physio_tutorial_done'); setStep('dashboard') }}
-          onSignOut={() => signOut()}
+          onSignOut={() => { phCapture('user_signed_out'); phReset(); signOut() }}
+          analyticsEnabled={analyticsEnabled}
+          onToggleAnalytics={(v) => {
+            if (v) { phOptIn(); } else { phOptOut(); }
+            setAnalyticsEnabled(v)
+          }}
         />
       )}
 

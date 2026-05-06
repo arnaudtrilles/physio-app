@@ -17,6 +17,8 @@ type SettingsPageProps = {
   onPricing: () => void
   onRelaunchTutorial: () => void
   onSignOut: () => void
+  analyticsEnabled: boolean
+  onToggleAnalytics: (enabled: boolean) => void
 }
 
 const SYNC_STATUS_CONFIG: Record<SyncStatus, { color: string; bg: string; label: string }> = {
@@ -44,6 +46,7 @@ export function SettingsPage({
   notificationsEnabled, onToggleNotifications,
   syncStatus, isOnline,
   onBack, onProfile, onPricing, onRelaunchTutorial, onSignOut,
+  analyticsEnabled, onToggleAnalytics,
 }: SettingsPageProps) {
   const syncConfig = SYNC_STATUS_CONFIG[syncStatus]
 
@@ -221,6 +224,49 @@ export function SettingsPage({
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: syncConfig.color }} />
                 <span style={{ fontSize: '0.72rem', color: syncConfig.color, fontWeight: 500 }}>{isOnline ? syncConfig.label : 'Hors ligne'}</span>
               </div>
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.75rem' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Confidentialité & Analytique</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Données d'usage anonymisées (PostHog · EU)</div>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--secondary)', borderRadius: 'var(--radius-md)' }}>
+              PhysioScan collecte des données d'usage <strong>anonymisées</strong> pour améliorer l'application&nbsp;: écrans visités, actions effectuées (bilan créé, PDF exporté…), version utilisée. <strong>Aucune donnée patient n'est transmise.</strong> Hébergé sur serveurs EU (PostHog Cloud Europe). Vous pouvez vous désabonner à tout moment.
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  {analyticsEnabled ? 'Statistiques activées' : 'Statistiques désactivées'}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                  {analyticsEnabled ? 'Vous contribuez à l\'amélioration de l\'app' : 'Aucune donnée d\'usage collectée'}
+                </div>
+              </div>
+              <button
+                onClick={() => onToggleAnalytics(!analyticsEnabled)}
+                style={{
+                  width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
+                  background: analyticsEnabled ? 'var(--primary)' : 'var(--border-color)',
+                  position: 'relative', flexShrink: 0,
+                  transition: 'background 0.2s',
+                }}
+              >
+                <span style={{
+                  position: 'absolute', top: 3,
+                  left: analyticsEnabled ? 23 : 3,
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  transition: 'left 0.2s',
+                }} />
+              </button>
             </div>
           </div>
 
