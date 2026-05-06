@@ -13,8 +13,20 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const isAdminRoute = window.location.pathname === '/admin'
+
+if (isAdminRoute) {
+  import('./pages/AdminPage').then(({ default: AdminPage }) => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <AdminPage />
+      </StrictMode>,
+    )
+  })
+} else {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
