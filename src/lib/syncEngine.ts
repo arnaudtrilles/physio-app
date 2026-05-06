@@ -186,6 +186,65 @@ export async function ensurePatient(
   return data.id
 }
 
+/**
+ * Rename a patient in Supabase. Met à jour la ligne `patients` ayant
+ * (nom=oldNom, prenom=oldPrenom) avec les nouvelles valeurs. Le patient_id
+ * (UUID) ne change pas → toutes les FK (bilans/notes/etc) restent valides.
+ *
+ * Met aussi à jour le PatientMap : supprime l'ancienne clé, ajoute la
+ * nouvelle clé pointant vers le même UUID. Sans ça, le prochain
+ * `ensurePatient` croirait à un nouveau patient et créerait un doublon.
+ */
+export async function renamePatientInCloud(
+  userId: string,
+  oldNom: string, oldPrenom: string,
+  newNom: string, newPrenom: string,
+  newDateNaissance: string, newSexe: string | undefined,
+  pm: PatientMap,
+): Promise<void> {
+  const newNomNorm = newNom.trim().toUpperCase()
+  const newPrenomNorm = newPrenom.trim().replace(/\b\w/g, c => c.toUpperCase())
+
+  const { data: existing } = await supabase.from('patients')
+    .select('id')
+    .eq('practitioner_id', userId)
+    .eq('nom', oldNom)
+    .eq('prenom', oldPrenom)
+    .limit(1)
+    .single()
+
+  if (!existing) {
+    // Pas trouvé en cloud (cas : création locale jamais syncée).
+    // Pas grave : la prochaine sync upload créera la ligne avec le bon nom.
+    const oldKey = pk(oldNom, oldPrenom)
+    const newKey = pk(newNomNorm, newPrenomNorm)
+    if (pm.has(oldKey)) {
+      const uuid = pm.get(oldKey)!
+      pm.delete(oldKey)
+      pm.set(newKey, uuid)
+    }
+    return
+  }
+
+  const { error } = await supabase.from('patients')
+    .update({
+      nom: newNomNorm, prenom: newPrenomNorm,
+      date_naissance: newDateNaissance || null,
+    })
+    .eq('id', existing.id)
+  if (error) throw new Error(`Rename patient: ${error.message}`)
+
+  // Met à jour le PatientMap pour refléter le nouveau key
+  const oldKey = pk(oldNom, oldPrenom)
+  const newKey = pk(newNomNorm, newPrenomNorm)
+  pm.delete(oldKey)
+  pm.set(newKey, existing.id)
+
+  // newSexe : pas de colonne `sexe` dans la table patients (registre local
+  // dbPatientSexe seulement). Rien à faire côté cloud pour ce champ.
+  void newSexe
+}
+
 // ── Upload all (initial migration) ──────────────────────────────
 
 export async function uploadAll(userId: string, data: LocalData): Promise<PatientMap> {

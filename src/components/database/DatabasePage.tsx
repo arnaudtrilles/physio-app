@@ -91,6 +91,7 @@ export function DatabasePage() {
     setSearchQuery,
     setSelectedBodyZone,
     setSelectedPatient,
+    setEditingPatientKey,
     setShowAddPatientChoice,
     setSilhouetteData,
     setStep,
@@ -377,6 +378,7 @@ export function DatabasePage() {
                           { label: 'Séances', value: String(getPatientNotes(selectedPatient ?? '').length + bilans.length + getPatientIntermediaires(selectedPatient ?? '').length) },
                         ]}
                         onBack={() => setSelectedPatient(null)}
+                        onMenu={selectedPatient ? () => setEditingPatientKey(selectedPatient) : undefined}
                       />
                       <PatientHeroCard
                         activeZones={(() => {

@@ -469,5 +469,7 @@ export function useSync(params: UseSyncParams) {
       dbPatientDocs, dbLetters, dbLetterAudit, dbAICallAudit,
       dbPrescriptions, dbClosedTreatments, profile, user])
 
-  return { syncStatus }
+  // Le PatientMap est exposé pour permettre les opérations cloud directes
+  // (ex: renamePatientInCloud) qui ont besoin de patcher le mapping.
+  return { syncStatus, patientMapRef: pmRef }
 }
