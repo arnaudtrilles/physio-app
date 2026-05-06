@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { colors, spacing, radius, typography } from '../../design/tokens'
-import { IconBack, IconMoreH } from '../../design/icons'
+import { IconBack, IconEdit } from '../../design/icons'
 
 interface PatientHeaderProps {
   name: string
@@ -48,7 +48,8 @@ export function PatientHeader({ name, initials, birthday, infoLine, stats, onBac
         {onMenu ? (
           <button
             onClick={onMenu}
-            aria-label="Options patient"
+            aria-label="Modifier le profil patient"
+            title="Modifier le profil patient"
             style={{
               width: 38, height: 38, borderRadius: radius.md,
               background: 'var(--input-bg)', border: `1px solid ${colors.borderSoft}`,
@@ -57,7 +58,7 @@ export function PatientHeader({ name, initials, birthday, infoLine, stats, onBac
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
           >
-            <IconMoreH size={18} />
+            <IconEdit size={16} />
           </button>
         ) : (
           <div style={{ width: 38 }} />

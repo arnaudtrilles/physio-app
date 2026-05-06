@@ -213,19 +213,19 @@ function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
           if (msg.includes('parole')) {
             userMsg = 'Aucune parole détectée'
           } else if (err instanceof TranscriptionTransientError) {
-            // Toutes les tentatives ont échoué — le serveur ou le réseau est down
             userMsg = 'Service indisponible — réessayer'
           } else if (msg.includes('413') || msg.toLowerCase().includes('too large')) {
             userMsg = 'Audio trop long'
           } else {
-            userMsg = 'Échec — réessayer'
+            // DIAG: afficher le vrai message pour debug temporaire
+            userMsg = msg.length > 80 ? msg.slice(0, 80) + '…' : msg
           }
           setErrorMsg(userMsg)
           setState('error')
           setTimeout(() => {
             setState(s => s === 'error' ? 'idle' : s)
             setErrorMsg('')
-          }, 3500)
+          }, 6000)
         }
       }
       recorder.start(200)

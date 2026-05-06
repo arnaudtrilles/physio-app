@@ -152,6 +152,7 @@ export interface DatabaseContextValue {
   setSearchQuery: Dispatch<SetStateAction<string>>
   setSelectedBodyZone: Dispatch<SetStateAction<string | null>>
   setSelectedPatient: Dispatch<SetStateAction<string | null>>
+  setEditingPatientKey: Dispatch<SetStateAction<string | null>>
   setShowAddPatientChoice: Dispatch<SetStateAction<boolean>>
   setSilhouetteData: Dispatch<SetStateAction<Record<string, unknown>>>
   setStep: (step: Step) => void

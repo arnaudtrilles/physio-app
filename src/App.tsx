@@ -56,6 +56,8 @@ import { BilanResumeModal } from './components/BilanResumeModal'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
+import { pk, renamePatientInCloud } from './lib/syncEngine'
+import { PatientEditModal } from './components/database/PatientEditModal'
 import { usePlanSync } from './hooks/usePlanSync'
 import { canAccess } from './utils/planGating'
 import { AuthScreen } from './components/AuthScreen'
@@ -264,7 +266,7 @@ function App() {
   usePlanSync(user, profile, setProfile)
 
   // ── Sync IndexedDB ↔ Supabase ──────────────────────────────────────────────
-  const { syncStatus } = useSync({
+  const { syncStatus, patientMapRef } = useSync({
     user, allDataLoaded,
     db, setDb, dbIntermediaires, setDbIntermediaires,
     dbNotes, setDbNotes, dbObjectifs, setDbObjectifs,
@@ -441,6 +443,110 @@ function App() {
   const toggleTimeline = (key: string) => setOpenTimelineKey(k => k === key ? null : key)
   const [showAddPatientChoice, setShowAddPatientChoice] = useState(false)
   const [deletingPatientKey, setDeletingPatientKey] = useState<string | null>(null)
+  // Édition du profil patient (correction de faute d'orthographe nom/prénom/date/sexe)
+  const [editingPatientKey, setEditingPatientKey] = useState<string | null>(null)
+
+  /**
+   * Renomme un patient (correction de faute d'orthographe nom/prénom +
+   * date naissance + sexe). Met à jour TOUS les stores locaux qui référencent
+   * le patient (par nom/prenom dénormalisé OU par patientKey), plus la ligne
+   * Supabase `patients` (FK préservée → bilans/notes/etc inchangés côté cloud).
+   *
+   * Si l'utilisateur n'est pas connecté à Supabase, l'update reste local et
+   * sera propagé au prochain login via la sync normale.
+   */
+  const renamePatient = useCallback(async (
+    oldKey: string,
+    next: { nom: string; prenom: string; dateNaissance: string; sexe: '' | 'masculin' | 'feminin' },
+  ): Promise<void> => {
+    const newNomNorm = next.nom.trim().toUpperCase()
+    const newPrenomNorm = next.prenom.trim().replace(/\b\w/g, (c0: string) => c0.toUpperCase())
+    const newKey = pk(newNomNorm, newPrenomNorm)
+
+    // Récupère l'ancien nom/prénom depuis un BilanRecord (source dénormalisée
+    // la plus fiable) — fallback : split de oldKey.
+    const sample = db.find(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === oldKey)
+      || dbNotes.find(n => n.patientKey === oldKey)
+      || dbIntermediaires.find(i => i.patientKey === oldKey)
+    let oldNom = sample?.nom ?? ''
+    let oldPrenom = sample?.prenom ?? ''
+    if (!oldNom || !oldPrenom) {
+      const parts = oldKey.split(' ')
+      oldNom = parts[0] || ''
+      oldPrenom = parts.slice(1).join(' ')
+    }
+
+    // 1. Cloud : update la ligne patients (et patch le PatientMap pour
+    //    éviter qu'ensurePatient ne crée un doublon au prochain sync).
+    if (user && patientMapRef) {
+      try {
+        await renamePatientInCloud(
+          user.id, oldNom, oldPrenom, newNomNorm, newPrenomNorm,
+          next.dateNaissance, next.sexe || undefined,
+          patientMapRef.current,
+        )
+      } catch (e) {
+        console.error('[renamePatient] cloud update failed:', e)
+        throw e
+      }
+    }
+
+    // 2. Local : maj de tous les stores qui référencent ce patient
+    setDb(prev => prev.map(r => {
+      const k = `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()
+      if (k !== oldKey) return r
+      return {
+        ...r,
+        nom: newNomNorm, prenom: newPrenomNorm,
+        dateNaissance: next.dateNaissance,
+        sexe: next.sexe || r.sexe,
+      }
+    }))
+    setDbIntermediaires(prev => prev.map(r => {
+      const k = r.patientKey || `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()
+      if (k !== oldKey) return r
+      return {
+        ...r,
+        nom: newNomNorm, prenom: newPrenomNorm,
+        dateNaissance: next.dateNaissance,
+        patientKey: newKey,
+      }
+    }))
+    setDbNotes(prev => prev.map(n => {
+      const k = n.patientKey || `${(n.nom || '').toUpperCase()} ${n.prenom}`.trim()
+      if (k !== oldKey) return n
+      return {
+        ...n,
+        nom: newNomNorm, prenom: newPrenomNorm,
+        dateNaissance: next.dateNaissance,
+        patientKey: newKey,
+      }
+    }))
+    setDbObjectifs(prev => prev.map(o => o.patientKey === oldKey ? { ...o, patientKey: newKey } : o))
+    setDbClosedTreatments(prev => prev.map(t => t.patientKey === oldKey ? { ...t, patientKey: newKey } : t))
+    setDbLetters(prev => prev.map(l => l.patientKey === oldKey ? { ...l, patientKey: newKey } : l))
+    setDbLetterAudit(prev => prev.map(a => a.patientKey === oldKey ? { ...a, patientKey: newKey } : a))
+    setDbAICallAudit(prev => prev.map(a => a.patientKey === oldKey ? { ...a, patientKey: newKey } : a))
+    setDbPatientDocs(prev => prev.map(d => d.patientKey === oldKey ? { ...d, patientKey: newKey } : d))
+    setDbPrescriptions(prev => prev.map(p => p.patientKey === oldKey ? { ...p, patientKey: newKey } : p))
+    setDbPatientSexe(prev => {
+      if (!prev[oldKey] && !next.sexe) return prev
+      const nextSexe = { ...prev }
+      delete nextSexe[oldKey]
+      if (next.sexe === 'masculin' || next.sexe === 'feminin') nextSexe[newKey] = next.sexe
+      else if (prev[oldKey]) nextSexe[newKey] = prev[oldKey]
+      return nextSexe
+    })
+
+    // 3. Si le patient était sélectionné, met à jour la sélection
+    setSelectedPatient(prev => prev === oldKey ? newKey : prev)
+  }, [
+    user, patientMapRef, db, dbNotes, dbIntermediaires,
+    setDb, setDbIntermediaires, setDbNotes, setDbObjectifs,
+    setDbClosedTreatments, setDbLetters, setDbLetterAudit,
+    setDbAICallAudit, setDbPatientDocs, setDbPrescriptions,
+    setDbPatientSexe,
+  ])
   // Migration sexe : popup bloquante déclenchée à l'ouverture d'une fiche patient
   // créée avant l'introduction du champ sexe (aucun BilanRecord du patient ne le porte).
   // Une seule complétion par patient → data propagée à tous ses bilans (update batch).
@@ -2346,6 +2452,7 @@ Mobilité articulaire lombaire
           setSearchQuery,
           setSelectedBodyZone,
           setSelectedPatient,
+          setEditingPatientKey,
           setShowAddPatientChoice,
           setSilhouetteData,
           setStep: guardedSetStep,
@@ -2380,6 +2487,33 @@ Mobilité articulaire lombaire
           <DatabasePage />
         </DatabaseProvider>
       )}
+
+      {/* ── Edit patient profile (correct typo, fix DOB, set sexe) ─────────── */}
+      {editingPatientKey && (() => {
+        // Sexe : seul BilanRecord le porte (registre dbPatientSexe est la source canonique)
+        const bilan = db.find(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === editingPatientKey)
+        const sample = bilan
+          || dbNotes.find(n => n.patientKey === editingPatientKey)
+          || dbIntermediaires.find(i => i.patientKey === editingPatientKey)
+        const sexeFromRegistry = dbPatientSexe[editingPatientKey]
+        const initial = {
+          nom: sample?.nom ?? editingPatientKey.split(' ')[0] ?? '',
+          prenom: sample?.prenom ?? editingPatientKey.split(' ').slice(1).join(' '),
+          dateNaissance: sample?.dateNaissance ?? '',
+          sexe: (sexeFromRegistry ?? bilan?.sexe ?? '') as '' | 'masculin' | 'feminin',
+        }
+        return (
+          <PatientEditModal
+            initial={initial}
+            onCancel={() => setEditingPatientKey(null)}
+            onSave={async (next) => {
+              await renamePatient(editingPatientKey, next)
+              setEditingPatientKey(null)
+              showToast('Profil patient mis à jour', 'success')
+            }}
+          />
+        )
+      })()}
 
       {/* ── Delete patient confirmation ─────────────────────────────────────────── */}
       {deletingPatientKey && (
