@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { checkRateLimit, getClientIp } from './_ratelimit.js'
+import { applyCors } from './_cors.js'
 
 const ADMIN_EMAILS = new Set(['elkamelelyes@gmail.com', 'arnaud.trilles@gmail.com'])
 const RATE_LIMIT = { maxRequests: 60, windowMs: 60_000 }
@@ -8,11 +9,7 @@ const RATE_LIMIT = { maxRequests: 60, windowMs: 60_000 }
 export const config = { maxDuration: 30 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-
-  if (req.method === 'OPTIONS') return res.status(204).end()
+  if (!applyCors(req, res, 'GET, OPTIONS', 'Content-Type, Authorization')) return
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)

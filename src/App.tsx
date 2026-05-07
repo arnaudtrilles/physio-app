@@ -478,13 +478,14 @@ function App() {
     const newPrenomNorm = next.prenom.trim().replace(/\b\w/g, (c0: string) => c0.toUpperCase())
     const newKey = pk(newNomNorm, newPrenomNorm)
 
-    // Récupère l'ancien nom/prénom depuis un BilanRecord (source dénormalisée
-    // la plus fiable) — fallback : split de oldKey.
+    // Récupère l'ancien nom/prénom + dateNaissance depuis un BilanRecord
+    // (source dénormalisée la plus fiable) — fallback : split de oldKey.
     const sample = db.find(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === oldKey)
       || dbNotes.find(n => n.patientKey === oldKey)
       || dbIntermediaires.find(i => i.patientKey === oldKey)
     let oldNom = sample?.nom ?? ''
     let oldPrenom = sample?.prenom ?? ''
+    const oldDateNaissance = sample?.dateNaissance ?? ''
     if (!oldNom || !oldPrenom) {
       const parts = oldKey.split(' ')
       oldNom = parts[0] || ''
@@ -493,10 +494,13 @@ function App() {
 
     // 1. Cloud : update la ligne patients (et patch le PatientMap pour
     //    éviter qu'ensurePatient ne crée un doublon au prochain sync).
+    //    oldDateNaissance désambigue les homonymes — sans ça, le rename
+    //    pourrait toucher la mauvaise ligne dans la table `patients`.
     if (user && patientMapRef) {
       try {
         await renamePatientInCloud(
-          user.id, oldNom, oldPrenom, newNomNorm, newPrenomNorm,
+          user.id, oldNom, oldPrenom, oldDateNaissance,
+          newNomNorm, newPrenomNorm,
           next.dateNaissance, next.sexe || undefined,
           patientMapRef.current,
         )

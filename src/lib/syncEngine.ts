@@ -74,22 +74,60 @@ export function deduplicateLocalData(data: LocalData): LocalData {
   }
 }
 
-export function pk(nom: string, prenom: string): string {
-  return `${nom.trim().toUpperCase()} ${prenom.trim().replace(/\b\w/g, c => c.toUpperCase())}`
+/**
+ * Clé patient locale (utilisée comme FK dans objectifs/docs/lettres/etc).
+ *
+ * Avec `dateNaissance` : `"NOM Prenom|YYYY-MM-DD"` — désambigue les
+ * homonymes (deux Pierre Martin nés à des dates différentes ne fusionnent
+ * plus leurs objectifs/docs/lettres entre eux).
+ *
+ * Sans `dateNaissance` : `"NOM Prenom"` (rétro-compat : 361 call sites
+ * existants à travers l'app n'ont pas de DOB sous la main et continuent
+ * à fonctionner). Les records avec clé courte coexistent avec les nouveaux.
+ *
+ * Pour lookup cloud (`ensurePatient`) et keying du PatientMap dans les
+ * upload converters, TOUJOURS passer dateNaissance — sinon `single()`
+ * Supabase peut renvoyer le mauvais UUID pour deux homonymes.
+ */
+export function pk(nom: string, prenom: string, dateNaissance?: string): string {
+  const base = `${nom.trim().toUpperCase()} ${prenom.trim().replace(/\b\w/g, c => c.toUpperCase())}`
+  const dob = dateNaissance?.trim()
+  return dob ? `${base}|${dob}` : base
+}
+
+/**
+ * Peuple le PatientMap avec deux formats de clé pour le même UUID :
+ *   - LONG  ("NOM Prenom|YYYY-MM-DD") — clé canonique post-fix homonymes
+ *   - SHORT ("NOM Prenom") — alias pour rétro-compat avec les patientKey
+ *     stockés dans les records existants (objectifs/docs/lettres créés
+ *     avant la migration).
+ *
+ * Pour les homonymes : la clé SHORT pointe vers le PREMIER UUID rencontré
+ * (les suivants sont ignorés sur le slot SHORT). C'est le comportement
+ * dégradé pré-existant — pas de régression. La clé LONG, elle, garantit
+ * un mapping correct par homonym.
+ */
+function setPatientMap(pm: PatientMap, nom: string, prenom: string, dateNaissance: string, uuid: string): void {
+  pm.set(pk(nom, prenom, dateNaissance), uuid)
+  const shortKey = pk(nom, prenom)
+  if (!pm.has(shortKey)) pm.set(shortKey, uuid)
 }
 
 function extractPatients(data: LocalData) {
   const seen = new Map<string, { nom: string; prenom: string; dateNaissance: string; avatarBg?: string }>()
+  // Clé désambigée par dateNaissance — sans ça, deux homonymes (Pierre Martin
+  // 1980 / 1995) fusionneraient leurs records dans la Map et seraient uploadés
+  // comme un seul patient en cloud (cross-patient leak).
   for (const r of data.db) {
-    const k = pk(r.nom, r.prenom)
+    const k = pk(r.nom, r.prenom, r.dateNaissance)
     if (!seen.has(k)) seen.set(k, { nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance, avatarBg: r.avatarBg })
   }
   for (const r of data.dbIntermediaires) {
-    const k = r.patientKey || pk(r.nom, r.prenom)
+    const k = pk(r.nom, r.prenom, r.dateNaissance)
     if (!seen.has(k)) seen.set(k, { nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance, avatarBg: r.avatarBg })
   }
   for (const r of data.dbNotes) {
-    const k = r.patientKey || pk(r.nom, r.prenom)
+    const k = pk(r.nom, r.prenom, r.dateNaissance)
     if (!seen.has(k)) seen.set(k, { nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance, avatarBg: r.avatarBg })
   }
   const keyOnly = [
@@ -159,20 +197,26 @@ export async function ensurePatient(
   dateNaissance: string, avatarBg: string | undefined,
   pm: PatientMap,
 ): Promise<string> {
-  const key = pk(nom, prenom)
+  const key = pk(nom, prenom, dateNaissance)
   if (pm.has(key)) return pm.get(key)!
 
-  // Check DB first to avoid duplicates
-  const { data: existing } = await supabase.from('patients')
+  // Check DB first to avoid duplicates — désambigue par date_naissance pour
+  // ne pas confondre deux homonymes (Pierre Martin 1980 / 1995). Sans cette
+  // condition, `.single()` peut renvoyer le mauvais UUID quand deux lignes
+  // matchent (nom, prenom) seuls → tout patient B finit attaché aux records
+  // du patient A (cross-patient data leak).
+  let query = supabase.from('patients')
     .select('id')
     .eq('practitioner_id', userId)
     .eq('nom', nom)
     .eq('prenom', prenom)
-    .limit(1)
-    .single()
+  query = dateNaissance
+    ? query.eq('date_naissance', dateNaissance)
+    : query.is('date_naissance', null)
+  const { data: existing } = await query.limit(1).single()
 
   if (existing) {
-    pm.set(key, existing.id)
+    setPatientMap(pm, nom, prenom, dateNaissance, existing.id)
     return existing.id
   }
 
@@ -182,7 +226,7 @@ export async function ensurePatient(
     .insert({ practitioner_id: userId, nom: nomNorm, prenom: prenomNorm, date_naissance: dateNaissance || null, avatar_bg: avatarBg || null })
     .select('id').single()
   if (error) throw new Error(`Ensure patient: ${error.message}`)
-  pm.set(key, data.id)
+  setPatientMap(pm, nomNorm, prenomNorm, dateNaissance, data.id)
   return data.id
 }
 
@@ -197,7 +241,7 @@ export async function ensurePatient(
  */
 export async function renamePatientInCloud(
   userId: string,
-  oldNom: string, oldPrenom: string,
+  oldNom: string, oldPrenom: string, oldDateNaissance: string,
   newNom: string, newPrenom: string,
   newDateNaissance: string, newSexe: string | undefined,
   pm: PatientMap,
@@ -205,23 +249,30 @@ export async function renamePatientInCloud(
   const newNomNorm = newNom.trim().toUpperCase()
   const newPrenomNorm = newPrenom.trim().replace(/\b\w/g, c => c.toUpperCase())
 
-  const { data: existing } = await supabase.from('patients')
+  // Désambigue par date_naissance : sans ça, deux Pierre Martin (1980/1995)
+  // font matcher la mauvaise ligne et le rename écrase le mauvais patient.
+  let lookup = supabase.from('patients')
     .select('id')
     .eq('practitioner_id', userId)
     .eq('nom', oldNom)
     .eq('prenom', oldPrenom)
-    .limit(1)
-    .single()
+  lookup = oldDateNaissance
+    ? lookup.eq('date_naissance', oldDateNaissance)
+    : lookup.is('date_naissance', null)
+  const { data: existing } = await lookup.limit(1).single()
 
   if (!existing) {
     // Pas trouvé en cloud (cas : création locale jamais syncée).
     // Pas grave : la prochaine sync upload créera la ligne avec le bon nom.
-    const oldKey = pk(oldNom, oldPrenom)
-    const newKey = pk(newNomNorm, newPrenomNorm)
-    if (pm.has(oldKey)) {
-      const uuid = pm.get(oldKey)!
-      pm.delete(oldKey)
-      pm.set(newKey, uuid)
+    const oldLongKey = pk(oldNom, oldPrenom, oldDateNaissance)
+    const oldShortKey = pk(oldNom, oldPrenom)
+    if (pm.has(oldLongKey)) {
+      const uuid = pm.get(oldLongKey)!
+      pm.delete(oldLongKey)
+      // Supprime l'alias SHORT seulement s'il pointait vers ce même UUID
+      // (sinon il appartient à un homonyme et doit rester).
+      if (pm.get(oldShortKey) === uuid) pm.delete(oldShortKey)
+      setPatientMap(pm, newNomNorm, newPrenomNorm, newDateNaissance, uuid)
     }
     return
   }
@@ -235,10 +286,11 @@ export async function renamePatientInCloud(
   if (error) throw new Error(`Rename patient: ${error.message}`)
 
   // Met à jour le PatientMap pour refléter le nouveau key
-  const oldKey = pk(oldNom, oldPrenom)
-  const newKey = pk(newNomNorm, newPrenomNorm)
-  pm.delete(oldKey)
-  pm.set(newKey, existing.id)
+  const oldLongKey = pk(oldNom, oldPrenom, oldDateNaissance)
+  const oldShortKey = pk(oldNom, oldPrenom)
+  pm.delete(oldLongKey)
+  if (pm.get(oldShortKey) === existing.id) pm.delete(oldShortKey)
+  setPatientMap(pm, newNomNorm, newPrenomNorm, newDateNaissance, existing.id)
 
   // newSexe : pas de colonne `sexe` dans la table patients (registre local
   // dbPatientSexe seulement). Rien à faire côté cloud pour ce champ.
@@ -270,30 +322,30 @@ export async function uploadAll(userId: string, data: LocalData): Promise<Patien
   const patients = extractPatients(data)
   const pm: PatientMap = new Map()
 
-  // Load existing patients into map
+  // Load existing patients into map (clé LONG + alias SHORT pour rétro-compat)
   const existingPatients = await fetchAll('patients', userId)
   for (const p of existingPatients) {
-    pm.set(pk(p.nom as string, p.prenom as string), p.id as string)
+    setPatientMap(pm, p.nom as string, p.prenom as string, (p.date_naissance as string) || '', p.id as string)
   }
 
   // Insert only patients not already in Supabase
-  const newPatients = patients.filter(p => !pm.has(pk(p.nom, p.prenom)))
+  const newPatients = patients.filter(p => !pm.has(pk(p.nom, p.prenom, p.dateNaissance)))
   if (newPatients.length > 0) {
     const { data: ins, error } = await supabase.from('patients')
       .insert(newPatients.map(p => ({
         practitioner_id: userId, nom: p.nom, prenom: p.prenom,
         date_naissance: p.dateNaissance || null, avatar_bg: p.avatarBg || null,
-      }))).select('id, nom, prenom')
+      }))).select('id, nom, prenom, date_naissance')
     if (error) throw new Error(`Create patients: ${error.message}`)
-    for (const p of ins || []) pm.set(pk(p.nom, p.prenom), p.id)
+    for (const p of ins || []) setPatientMap(pm, p.nom, p.prenom, p.date_naissance || '', p.id)
   }
 
-  // 3. Bilans
+  // 3. Bilans (clé désambigée par dateNaissance)
   try {
     const bilanRows = data.db
-      .filter(b => pm.has(pk(b.nom, b.prenom)))
+      .filter(b => pm.has(pk(b.nom, b.prenom, b.dateNaissance)))
       .map(b => ({
-        practitioner_id: userId, patient_id: pm.get(pk(b.nom, b.prenom))!,
+        practitioner_id: userId, patient_id: pm.get(pk(b.nom, b.prenom, b.dateNaissance))!,
         date_bilan: b.dateBilan || null, zone_count: b.zoneCount || 0,
         evn: b.evn ?? null, zone: b.zone || null, pathologie: b.pathologie || null,
         status: b.status || 'complet', custom_label: b.customLabel || null,
@@ -308,10 +360,10 @@ export async function uploadAll(userId: string, data: LocalData): Promise<Patien
   // 4. Intermédiaires
   try {
     const intRows = data.dbIntermediaires
-      .filter(b => pm.has(b.patientKey || pk(b.nom, b.prenom)))
+      .filter(b => pm.has(pk(b.nom, b.prenom, b.dateNaissance)))
       .map(b => ({
         practitioner_id: userId,
-        patient_id: pm.get(b.patientKey || pk(b.nom, b.prenom))!,
+        patient_id: pm.get(pk(b.nom, b.prenom, b.dateNaissance))!,
         date_bilan: b.dateBilan || null, zone: b.zone || null,
         bilan_type: b.bilanType || null, data: b.data || {},
         status: b.status || 'complet', notes: b.notes || null,
@@ -323,10 +375,10 @@ export async function uploadAll(userId: string, data: LocalData): Promise<Patien
   // 5. Notes de séance
   try {
     const noteRows = data.dbNotes
-      .filter(n => pm.has(n.patientKey || pk(n.nom, n.prenom)))
+      .filter(n => pm.has(pk(n.nom, n.prenom, n.dateNaissance)))
       .map(n => ({
         practitioner_id: userId,
-        patient_id: pm.get(n.patientKey || pk(n.nom, n.prenom))!,
+        patient_id: pm.get(pk(n.nom, n.prenom, n.dateNaissance))!,
         date_seance: n.dateSeance || null, num_seance: n.numSeance || null,
         zone: n.zone || null, bilan_type: n.bilanType || null,
         data: n.data || {}, analyse_ia: n.analyseIA || null,
@@ -476,19 +528,24 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
     specialisationsLibelle: prac?.specialisations_libelle || undefined,
   }
 
-  // 2. Patients
+  // 2. Patients (PatientMap : clé LONG canonique + alias SHORT pour rétro-compat
+  // avec les patientKey stockés dans les records existants pré-migration)
   const patientsRows = await fetchAll('patients', userId)
   for (const p of patientsRows) {
     const n = p.nom as string, pr = p.prenom as string
-    pm.set(pk(n, pr), p.id as string)
+    const dob = (p.date_naissance as string) || ''
+    setPatientMap(pm, n, pr, dob, p.id as string)
     idToPatient.set(p.id as string, {
       nom: n, prenom: pr,
-      dateNaissance: (p.date_naissance as string) || '',
+      dateNaissance: dob,
       avatarBg: (p.avatar_bg as string) || undefined,
     })
   }
 
   const pi = (patientId: string) => idToPatient.get(patientId) || { nom: '', prenom: '', dateNaissance: '', avatarBg: undefined }
+  // pkey() conserve le format SHORT (sans dateNaissance) pour rester compatible
+  // avec les patientKey existants stockés localement (objectifs/docs/lettres
+  // créés avant ce fix). Une migration séparée pourra réécrire en bulk plus tard.
   const pkey = (patientId: string) => { const p = pi(patientId); return pk(p.nom, p.prenom) }
 
   // 3. Bilans
@@ -834,9 +891,9 @@ export async function replaceStore(
 
 export function convertBilans(bilans: BilanRecord[], userId: string, pm: PatientMap) {
   return bilans
-    .filter(b => pm.has(pk(b.nom, b.prenom)))
+    .filter(b => pm.has(pk(b.nom, b.prenom, b.dateNaissance)))
     .map(b => ({
-      practitioner_id: userId, patient_id: pm.get(pk(b.nom, b.prenom))!,
+      practitioner_id: userId, patient_id: pm.get(pk(b.nom, b.prenom, b.dateNaissance))!,
       date_bilan: b.dateBilan || null, zone_count: b.zoneCount || 0,
       evn: b.evn ?? null, zone: b.zone || null, pathologie: b.pathologie || null,
       status: b.status || 'complet', custom_label: b.customLabel || null,
@@ -849,10 +906,10 @@ export function convertBilans(bilans: BilanRecord[], userId: string, pm: Patient
 
 export function convertIntermediaires(items: BilanIntermediaireRecord[], userId: string, pm: PatientMap) {
   return items
-    .filter(b => pm.has(b.patientKey || pk(b.nom, b.prenom)))
+    .filter(b => pm.has(pk(b.nom, b.prenom, b.dateNaissance)))
     .map(b => ({
       practitioner_id: userId,
-      patient_id: pm.get(b.patientKey || pk(b.nom, b.prenom))!,
+      patient_id: pm.get(pk(b.nom, b.prenom, b.dateNaissance))!,
       date_bilan: b.dateBilan || null, zone: b.zone || null,
       bilan_type: b.bilanType || null, data: b.data || {},
       status: b.status || 'complet', notes: b.notes || null,
@@ -862,10 +919,10 @@ export function convertIntermediaires(items: BilanIntermediaireRecord[], userId:
 
 export function convertNotes(items: NoteSeanceRecord[], userId: string, pm: PatientMap) {
   return items
-    .filter(n => pm.has(n.patientKey || pk(n.nom, n.prenom)))
+    .filter(n => pm.has(pk(n.nom, n.prenom, n.dateNaissance)))
     .map(n => ({
       practitioner_id: userId,
-      patient_id: pm.get(n.patientKey || pk(n.nom, n.prenom))!,
+      patient_id: pm.get(pk(n.nom, n.prenom, n.dateNaissance))!,
       date_seance: n.dateSeance || null, num_seance: n.numSeance || null,
       zone: n.zone || null, bilan_type: n.bilanType || null,
       data: n.data || {}, analyse_ia: n.analyseIA || null,

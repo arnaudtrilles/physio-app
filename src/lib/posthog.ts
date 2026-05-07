@@ -11,7 +11,13 @@ export function initPostHog() {
     autocapture: false,
     capture_pageview: false,
     capture_pageleave: true,
-    disable_session_recording: false,
+    // PHI safeguard: session replay désactivé — le DOM contient nom/prénom/date_naissance.
+    // Ne PAS réactiver sans DPA HDS + maskAllInputs + maskTextSelector strict.
+    disable_session_recording: true,
+    session_recording: {
+      maskAllInputs: true,
+      maskTextSelector: '*',
+    },
     loaded: (ph) => {
       // Respecte l'opt-out persisté
       if (localStorage.getItem('physio_analytics_enabled') === 'false') {
