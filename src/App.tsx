@@ -44,6 +44,7 @@ import { callClaudeSecure, UnmaskedDocumentsError } from './utils/claudeSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
 import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
 import { backupSchema } from './utils/validation'
+import { objectifsToItems } from './utils/contratObjectifs'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
@@ -1344,42 +1345,22 @@ Règles :
       const zoneName = selectedBodyZone ?? 'Général'
       const createdAt = new Date().toLocaleDateString('fr-FR')
 
-      const items = contrat?.objectifsSMARTItems
-      let newObjectifs: SmartObjectif[] = []
-
-      if (Array.isArray(items)) {
-        newObjectifs = (items as Array<Record<string, unknown>>)
-          .map((it, idx): SmartObjectif | null => {
-            const titre = String(it.titre ?? '').trim()
-            if (!titre) return null
-            return {
-              id: Number(it.id) || (Date.now() + idx),
-              patientKey: patKey,
-              zone: zoneName,
-              titre,
-              cible: String(it.cible ?? '').trim(),
-              dateCible: String(it.dateCible ?? '').trim(),
-              status: 'en_cours',
-              createdAt,
-            }
-          })
-          .filter((o): o is SmartObjectif => o !== null)
-      } else {
-        const objText = String(contrat?.objectifsSMART ?? contrat?.objectifs ?? '').trim()
-        if (objText) {
-          const lines = objText.split(/[\n;]+/).map(l => l.trim()).filter(l => l.length > 3)
-          newObjectifs = lines.map((line, idx) => ({
-            id: Date.now() + idx,
-            patientKey: patKey,
-            zone: zoneName,
-            titre: line,
-            cible: '',
-            dateCible: '',
-            status: 'en_cours' as const,
-            createdAt,
-          }))
-        }
-      }
+      // Source des objectifs, en priorité décroissante :
+      //   1. `objectifsSMARTItems` — tableau riche {titre,cible,dateCible} (ancien BilanEpaule)
+      //   2. `objectifs` — tableau {titre,cible,dateCible} (Genou/Cheville/Hanche/Generique/Geriatrique/Cervical/Lombaire)
+      //   3. `objectifsSMART` — string déjà jointe (BilanEpaule actuel)
+      // `objectifsToItems` normalise les 3 formes et empêche `String(array)` → `"[object Object],…"`
+      const itemsRaw = contrat?.objectifsSMARTItems ?? contrat?.objectifs ?? contrat?.objectifsSMART
+      const newObjectifs: SmartObjectif[] = objectifsToItems(itemsRaw).map((it, idx) => ({
+        id: Date.now() + idx,
+        patientKey: patKey,
+        zone: zoneName,
+        titre: it.titre,
+        cible: it.cible,
+        dateCible: it.dateCible,
+        status: 'en_cours' as const,
+        createdAt,
+      }))
 
       if (newObjectifs.length > 0) {
         setDbObjectifs(prev => {

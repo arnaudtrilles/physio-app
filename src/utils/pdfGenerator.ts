@@ -7,6 +7,13 @@ import { composeBodyChart, BODY_CHART_W, BODY_CHART_H } from '../components/Body
 // Robuste face au texte généré par IA : guillemets typographiques, tirets,
 // bullets, exposants, flèches… tout ce qui n'est pas WinAnsi est filtré pour
 // éviter les crashs jsPDF.
+//
+// WinAnsi-1252 inclut des caractères au-delà de U+00FF qu'il faut PRÉSERVER :
+//   Œ (U+0152), œ (U+0153), Š (U+0160), š (U+0161), Ÿ (U+0178),
+//   Ž (U+017D), ž (U+017E), ƒ (U+0192), ˆ (U+02C6), ˜ (U+02DC),
+//   € (U+20AC), † (U+2020), ‡ (U+2021), ‰ (U+2030), ™ (U+2122)
+const PRESERVE_BEYOND_LATIN1 = /[ŒœŠšŸŽžƒˆ˜€†‡‰™]/
+
 const sanitize = (text: string): string => {
   if (text == null) return ''
   return String(text)
@@ -38,10 +45,18 @@ const sanitize = (text: string): string => {
     .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
     .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
     .replace(/[\u{2500}-\u{27BF}]/gu, '') // box drawing, geometric shapes, arrows, dingbats
-    // Catch-all : tout char hors WinAnsi (>0x00FF) non explicitement remplace
-    // ci-dessus est strippe pour eviter la corruption layout jsPDF (espacement
-    // extreme des lettres sur la ligne contenant un char mal encode).
-    .replace(/[\u{0100}-\u{FFFF}]/gu, '')
+    // Translittère les chars Latin Extended A/B hors WinAnsi via NFD :
+    //   ľ → l, č → c, ą → a, đ → d, š → s (mais š est en WinAnsi → préservé)
+    //   Conserve les noms slaves/baltes lisibles (Karoľ Šimák, Łukasz, …)
+    .replace(/[\u{0100}-\u{024F}]/gu, c =>
+      PRESERVE_BEYOND_LATIN1.test(c)
+        ? c
+        : c.normalize('NFD').replace(/[\u0300-\u036F]/g, ''))
+    // Catch-all : tout char hors WinAnsi (>0x00FF) non explicitement préservé
+    // est strippé pour éviter la corruption layout jsPDF (espacement extrême
+    // des lettres sur la ligne contenant un char mal encodé).
+    .replace(/[\u{0100}-\u{FFFF}]/gu, c =>
+      PRESERVE_BEYOND_LATIN1.test(c) ? c : '')
 }
 
 // ── Couleurs ──────────────────────────────────────────────────────────────────

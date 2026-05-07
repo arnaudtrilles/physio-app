@@ -151,16 +151,38 @@ export function IdentityStep({
         </div>
       </div>
 
-      <div className="fixed-bottom">
-        <button
-          className="btn-primary-luxe"
-          disabled={!selectedBodyZone}
-          style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
-          onClick={onNext}
-        >
-          Étape suivante
-        </button>
-      </div>
+      {(() => {
+        // Empêche de créer un bilan avec patient ou zone manquants — sinon
+        // l'IA reçoit nom: "", zone: "" et hallucine ou crashe en aval.
+        const nomOk = !!formData.nom?.trim()
+        const prenomOk = !!formData.prenom?.trim()
+        const zoneOk = !!selectedBodyZone
+        const canProceed = nomOk && prenomOk && zoneOk
+
+        const missing: string[] = []
+        if (!nomOk) missing.push('nom')
+        if (!prenomOk) missing.push('prénom')
+        if (!zoneOk) missing.push('zone du bilan')
+        const hint = canProceed ? null : `Renseigne : ${missing.join(', ')}`
+
+        return (
+          <div className="fixed-bottom">
+            {hint && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>
+                {hint}
+              </div>
+            )}
+            <button
+              className="btn-primary-luxe"
+              disabled={!canProceed}
+              style={{ opacity: canProceed ? 1 : 0.5 }}
+              onClick={onNext}
+            >
+              Étape suivante
+            </button>
+          </div>
+        )
+      })()}
     </div>
   )
 }

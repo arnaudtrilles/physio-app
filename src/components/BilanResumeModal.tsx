@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { BilanRecord } from '../types'
+import { objectifsToString } from '../utils/contratObjectifs'
 
 // ---------------------------------------------------------------------------
 // Deterministic extractor — reads fields from bilanData
@@ -48,34 +49,8 @@ function positiveTests(obj: Record<string, unknown> | undefined, max = 3): strin
   return out
 }
 
-// Les bilans avec section "Contrat kiné" stockent `objectifs` comme tableau
-// d'objets {id, titre, cible, dateCible} (BilanGenou, Cheville, Hanche,
-// Generique, Geriatrique, Cervical, Lombaire), tandis que BilanEpaule stocke
-// `contratKine.objectifsSMART` en string déjà jointe. Cette fonction normalise
-// les deux formes — sans elle, `.trim()` sur un array crashait toute l'app.
-function objectifsToString(raw: unknown): string | null {
-  if (raw == null) return null
-  if (typeof raw === 'string') {
-    const t = raw.trim()
-    return t || null
-  }
-  if (Array.isArray(raw)) {
-    const lines = raw
-      .map(it => {
-        if (typeof it === 'string') return it.trim()
-        if (it && typeof it === 'object') {
-          const o = it as Record<string, unknown>
-          const titre = typeof o.titre === 'string' ? o.titre.trim() : ''
-          const cible = typeof o.cible === 'string' ? o.cible.trim() : ''
-          return cible ? `${titre} — ${cible}`.trim() : titre
-        }
-        return ''
-      })
-      .filter(Boolean)
-    return lines.length ? lines.join(' · ') : null
-  }
-  return null
-}
+// Normalisation `objectifs` ↔ string : voir src/utils/contratObjectifs.ts
+// (helper extrait pour être ré-utilisé dans App.tsx — auto-création SmartObjectifs).
 
 function scoresSummary(obj: Record<string, unknown> | undefined, max = 2): Array<{ label: string; value: string }> {
   if (!obj) return []
