@@ -1797,7 +1797,7 @@ Tu appliques les principes suivants :
 - **Pas de gros pavés.** Paragraphes courts (3 à 6 lignes max), denses en contenu clinique, sans phrases de remplissage.
 - **Condensation, pas reproduction verbatim, des hésitations patient.**
   - « 2 à 3 fois voire 4 fois par semaine »  →  *« environ 3 à 4×/semaine »*
-  - « depuis environ 2 ou peut-être 3 mois »  →  *« depuis ≈ 2-3 mois »*
+  - « depuis environ 2 ou peut-être 3 mois »  →  *« depuis environ 2-3 mois »*
   - « il a essayé un peu de kiné, enfin une dizaine de séances je crois »  →  *« une dizaine de séances de kinésithérapie antérieures »*
 - **Pas de phrases meublantes.** Tu attaques chaque paragraphe directement sur le contenu clinique (cf. règle E : interdits « En effet », « Par ailleurs », « De plus », « Il convient de noter »…).
 - **Information utile au prescripteur d'abord** : éléments qui changent la conduite à tenir > détails de procédure d'examen.

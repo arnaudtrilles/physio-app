@@ -26,6 +26,8 @@ const sanitize = (text: string): string => {
     .replace(/\u2265/g, '>=')                       // ≥
     .replace(/\u2264/g, '<=')                       // ≤
     .replace(/\u2260/g, '!=')                       // ≠
+    .replace(/\u2248/g, '~')                        // ≈ (cassait l'espacement jsPDF)
+    .replace(/\u221E/g, 'infini')                   // ∞
     .replace(/\u00B1/g, '+/-')                      // ±
     .replace(/\u00D7/g, 'x')                        // ×
     .replace(/\u00F7/g, '/')                        // ÷
@@ -36,6 +38,10 @@ const sanitize = (text: string): string => {
     .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
     .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
     .replace(/[\u{2500}-\u{27BF}]/gu, '') // box drawing, geometric shapes, arrows, dingbats
+    // Catch-all : tout char hors WinAnsi (>0x00FF) non explicitement remplace
+    // ci-dessus est strippe pour eviter la corruption layout jsPDF (espacement
+    // extreme des lettres sur la ligne contenant un char mal encode).
+    .replace(/[\u{0100}-\u{FFFF}]/gu, '')
 }
 
 // ── Couleurs ──────────────────────────────────────────────────────────────────
