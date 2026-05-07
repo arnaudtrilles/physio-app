@@ -48,6 +48,35 @@ function positiveTests(obj: Record<string, unknown> | undefined, max = 3): strin
   return out
 }
 
+// Les bilans avec section "Contrat kiné" stockent `objectifs` comme tableau
+// d'objets {id, titre, cible, dateCible} (BilanGenou, Cheville, Hanche,
+// Generique, Geriatrique, Cervical, Lombaire), tandis que BilanEpaule stocke
+// `contratKine.objectifsSMART` en string déjà jointe. Cette fonction normalise
+// les deux formes — sans elle, `.trim()` sur un array crashait toute l'app.
+function objectifsToString(raw: unknown): string | null {
+  if (raw == null) return null
+  if (typeof raw === 'string') {
+    const t = raw.trim()
+    return t || null
+  }
+  if (Array.isArray(raw)) {
+    const lines = raw
+      .map(it => {
+        if (typeof it === 'string') return it.trim()
+        if (it && typeof it === 'object') {
+          const o = it as Record<string, unknown>
+          const titre = typeof o.titre === 'string' ? o.titre.trim() : ''
+          const cible = typeof o.cible === 'string' ? o.cible.trim() : ''
+          return cible ? `${titre} — ${cible}`.trim() : titre
+        }
+        return ''
+      })
+      .filter(Boolean)
+    return lines.length ? lines.join(' · ') : null
+  }
+  return null
+}
+
 function scoresSummary(obj: Record<string, unknown> | undefined, max = 2): Array<{ label: string; value: string }> {
   if (!obj) return []
   const out: Array<{ label: string; value: string }> = []
@@ -90,22 +119,26 @@ function extractSummary(record: BilanRecord): ExtractedSummary {
   const evnPire = (douleur?.evnPire ?? evn?.pireActuel) as string | number | undefined
   const evnMoy = (douleur?.evnMoy ?? evn?.moyActuel) as string | number | undefined
 
-  const objectifs = (contrat?.objectifs ?? contrat?.objectifsSMART) as string | undefined
+  const objectifs = objectifsToString(contrat?.objectifs ?? contrat?.objectifsSMART)
+  const douleurTypeRaw = douleur?.douleurType
+  const douleurType = typeof douleurTypeRaw === 'string' && douleurTypeRaw.trim() ? douleurTypeRaw : null
 
   return {
     diagnostic: record.analyseIA?.diagnostic?.titre ?? null,
     zone: record.zone ?? null,
     evnPire: evnPire != null && evnPire !== '' ? String(evnPire) : null,
     evnMoy: evnMoy != null && evnMoy !== '' ? String(evnMoy) : null,
-    douleurType: (douleur?.douleurType as string) || null,
+    douleurType,
     douleurNocturne: isPositive(douleur?.douleurNocturne),
     redFlags: positiveFlagsList(redFlags),
     yellowFlags: positiveFlagsList(yellowFlags, 2),
     testsPositifs: positiveTests(tests),
     scores: scoresSummary(scores),
-    objectifs: objectifs && objectifs.trim() ? objectifs.trim() : null,
-    priseEnChargePhases: record.analyseIA?.priseEnCharge?.map(p => p.titre) ?? [],
-    alertes: record.analyseIA?.alertes ?? [],
+    objectifs,
+    priseEnChargePhases: (record.analyseIA?.priseEnCharge ?? [])
+      .map(p => (p && typeof p === 'object' && typeof p.titre === 'string' ? p.titre : ''))
+      .filter(Boolean),
+    alertes: (record.analyseIA?.alertes ?? []).filter((a): a is string => typeof a === 'string' && a.trim() !== ''),
   }
 }
 

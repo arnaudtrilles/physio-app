@@ -2757,11 +2757,13 @@ Mobilité articulaire lombaire
 
       {/* ── Résumé bilan modal ─────────────────────────────────────────────────── */}
       {resumeBilan && (
-        <BilanResumeModal
-          record={resumeBilan.record}
-          bilanNum={resumeBilan.bilanNum}
-          onClose={() => setResumeBilan(null)}
-        />
+        <ErrorBoundary onReset={() => setResumeBilan(null)}>
+          <BilanResumeModal
+            record={resumeBilan.record}
+            bilanNum={resumeBilan.bilanNum}
+            onClose={() => setResumeBilan(null)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* ── Delete confirmation dialog ─────────────────────────────────────────── */}
