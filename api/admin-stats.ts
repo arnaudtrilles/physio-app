@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { checkRateLimit, getClientIp } from './_ratelimit.js'
+import { rateLimit, getClientIp } from './_ratelimit.js'
 import { applyCors } from './_cors.js'
 
 const ADMIN_EMAILS = new Set(['elkamelelyes@gmail.com', 'arnaud.trilles@gmail.com'])
-const RATE_LIMIT = { maxRequests: 60, windowMs: 60_000 }
+const RATE_LIMIT = { max: 60, windowMs: 60_000 }
 
 export const config = { maxDuration: 30 }
 
@@ -13,9 +13,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
-  if (!checkRateLimit(`admin:${ip}`, RATE_LIMIT)) {
-    return res.status(429).json({ error: 'Too many requests' })
-  }
+  const rl = await rateLimit({
+    config: { name: 'admin', perUser: RATE_LIMIT, perIp: { max: 30, windowMs: 60_000 } },
+    userId: null,
+    ip,
+  })
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' })
 
   const authHeader = req.headers.authorization
   if (!authHeader?.startsWith('Bearer ')) {
