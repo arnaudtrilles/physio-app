@@ -75,11 +75,12 @@ import { DatabaseProvider } from './components/database/DatabaseContext'
 import { DatabasePage } from './components/database/DatabasePage'
 import { ZonePickerSheet } from './components/shared/ZonePicker'
 import { IdentityStep } from './components/wizard/IdentityStep'
+import { ConsentForm } from './components/consent/ConsentForm'
 import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
 import './App.css'
 import { phCapture, phIdentify, phReset, phOptIn, phOptOut, phIsOptedIn } from './lib/posthog'
 
-type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'pricing' | 'identity' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
+type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'pricing' | 'identity' | 'consent' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
 const LazyFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
@@ -3229,8 +3230,41 @@ Mobilité articulaire lombaire
           onQuit={handleQuitBilan}
           onNext={() => {
             setBilanZoneBackStep('identity')
+            // Consentement obligatoire pour nouveau patient — skip si déjà signé
+            // (évite de redemander à chaque bilan d'un patient existant).
+            const pk = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+            const alreadySigned = dbPatientDocs.some(
+              d => d.patientKey === pk && d.source === 'consentement'
+            )
+            if (patientMode === 'new' && !alreadySigned) {
+              setStep('consent')
+            } else {
+              setStep('bilan_zone')
+            }
+          }}
+        />
+      )}
+
+      {/* ── Consent step — entre Identity et Bilan, nouveau patient uniquement ── */}
+      {step === 'consent' && (
+        <ConsentForm
+          patient={{
+            nom: formData.nom,
+            prenom: formData.prenom,
+            dateNaissance: formData.dateNaissance,
+          }}
+          therapist={{
+            nom: profile.nom,
+            prenom: profile.prenom,
+            email: profile.email,
+          }}
+          onSigned={({ blob, fileName }) => {
+            const pk = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+            attachPdfToPatient(blob, fileName, pk, 'consentement')
+            showToast('Consentement enregistré', 'success')
             setStep('bilan_zone')
           }}
+          onCancel={() => setStep('identity')}
         />
       )}
 

@@ -14,7 +14,7 @@ import { composeBodyChart, BODY_CHART_W, BODY_CHART_H } from '../components/Body
 //   € (U+20AC), † (U+2020), ‡ (U+2021), ‰ (U+2030), ™ (U+2122)
 const PRESERVE_BEYOND_LATIN1 = /[ŒœŠšŸŽžƒˆ˜€†‡‰™]/
 
-const sanitize = (text: string): string => {
+export const sanitize = (text: string): string => {
   if (text == null) return ''
   return String(text)
     .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
