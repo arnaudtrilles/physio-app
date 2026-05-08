@@ -2,10 +2,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'node:fs'
 import path from 'node:path'
-import { checkRateLimit, getClientIp } from './_ratelimit.js'
+import { rateLimit, getClientIp } from './_ratelimit.js'
+import { extractUserId } from './_auth.js'
+import { applyCors } from './_cors.js'
 
-// 30 appels Claude par minute par IP
-const RATE_LIMIT = { maxRequests: 30, windowMs: 60_000 }
+// 60/min par utilisateur authentifié, 10/min par IP en fallback anonyme.
+// Per-user → pas de faux positif sur cabinet partagé / 4G CGNAT.
+const RATE_LIMIT_CONFIG = {
+  name: 'claude',
+  perUser: { max: 60, windowMs: 60_000 },
+  perIp: { max: 10, windowMs: 60_000 },
+}
 // Timeout global : 120s (modèles lents comme Opus peuvent prendre du temps)
 const CLAUDE_TIMEOUT_MS = 120_000
 
@@ -80,30 +87,38 @@ const IMAGE_MIMES: ReadonlySet<SupportedImageMime> = new Set<SupportedImageMime>
 
 // ── Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
-  if (req.method === 'OPTIONS') return res.status(204).end()
+  if (!applyCors(req, res, 'POST, OPTIONS')) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
-  if (!checkRateLimit(`claude:${ip}`, RATE_LIMIT)) {
-    return res.status(429).json({ error: 'Trop de requêtes. Réessaie dans une minute.' })
+  const userId = extractUserId(req)
+  const rl = await rateLimit({ config: RATE_LIMIT_CONFIG, userId, ip })
+  if (!rl.allowed) {
+    const retrySec = Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000))
+    res.setHeader('Retry-After', String(retrySec))
+    return res.status(429).json({ error: `Trop de requêtes. Réessaie dans ${retrySec}s.` })
   }
 
   try {
-    const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents } = req.body as {
+    const { systemPrompt, userPrompt, maxOutputTokens, jsonMode, preferredModel, documents, temperature } = req.body as {
       systemPrompt?: string
       userPrompt?: string
       maxOutputTokens?: number
       jsonMode?: boolean
       preferredModel?: string
       documents?: WireDoc[]
+      temperature?: number
     }
 
     if (!userPrompt) return res.status(400).json({ error: 'userPrompt is required' })
+
+    // Température : défaut 0 (déterminisme — bilans cliniques, pas de créativité).
+    // Le client peut passer une autre valeur si besoin (ex: brainstorm). On clampe
+    // dans [0, 1] (Anthropic accepte aussi >1 mais on protège du non-sens).
+    const sanitizedTemperature = (() => {
+      if (typeof temperature !== 'number' || !Number.isFinite(temperature)) return 0
+      return Math.max(0, Math.min(1, temperature))
+    })()
 
     // Sélection du modèle
     let model = DEFAULT_MODEL
@@ -182,6 +197,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         client.messages.create({
           model,
           max_tokens: maxOutputTokens || 8192,
+          temperature: sanitizedTemperature,
           system: systemBlocks,
           messages,
         }),

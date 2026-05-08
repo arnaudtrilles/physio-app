@@ -53,6 +53,7 @@ export function sourceBadgeLabel(source?: PatientDocumentSource): string | null 
     case 'bilan': return 'Bilan PDF'
     case 'analyse-ia': return 'Analyse IA'
     case 'evolution': return 'Évolution'
+    case 'consentement': return 'Consentement signé'
     default: return null
   }
 }

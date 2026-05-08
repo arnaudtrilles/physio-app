@@ -2,10 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { checkRateLimit, getClientIp } from './_ratelimit.js'
+import { rateLimit, getClientIp } from './_ratelimit.js'
+import { extractUserId } from './_auth.js'
+import { applyCors } from './_cors.js'
 
-// 30 appels Gemini par minute par IP
-const RATE_LIMIT = { maxRequests: 30, windowMs: 60_000 }
+// 60/min par utilisateur authentifié, 10/min par IP en fallback anonyme.
+const RATE_LIMIT_CONFIG = {
+  name: 'gemini',
+  perUser: { max: 60, windowMs: 60_000 },
+  perIp: { max: 10, windowMs: 60_000 },
+}
 
 // Node.js Serverless — 60s timeout on Hobby plan (Edge was limited to 30s)
 export const config = { maxDuration: 60 }
@@ -167,17 +173,16 @@ async function getAccessToken(): Promise<string> {
 // ── Handler ──
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
-  if (req.method === 'OPTIONS') return res.status(204).end()
+  if (!applyCors(req, res, 'POST, OPTIONS')) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
-  if (!checkRateLimit(`gemini:${ip}`, RATE_LIMIT)) {
-    return res.status(429).json({ error: 'Trop de requêtes. Réessaie dans une minute.' })
+  const userId = extractUserId(req)
+  const rl = await rateLimit({ config: RATE_LIMIT_CONFIG, userId, ip })
+  if (!rl.allowed) {
+    const retrySec = Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000))
+    res.setHeader('Retry-After', String(retrySec))
+    return res.status(429).json({ error: `Trop de requêtes. Réessaie dans ${retrySec}s.` })
   }
 
   try {

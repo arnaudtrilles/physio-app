@@ -5,6 +5,7 @@ import { callClaudeSecure } from '../../utils/claudeSecure'
 import { pdfToImages } from '../../utils/pdfToImages'
 import { analyseSeanceMiniSchema } from '../../utils/validation'
 import { colors as c } from '../../design/tokens'
+import { pk } from '../../lib/syncEngine'
 import { PatientHeader } from '../patient/PatientHeader'
 import { PatientHeroCard } from '../patient/PatientHeroCard'
 import { ConsultationChooser } from '../patient/ConsultationChooser'
@@ -156,7 +157,10 @@ export function DatabasePage() {
                 {(() => {
                   const patientsMap = new Map<string, { key: string; nom: string; prenom: string; dateNaissance: string; pathologie?: string; avatarBg?: string; records: BilanRecord[] }>()
                   db.forEach(r => {
-                    const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+                    // Clé canonique identique à `pk()` (cloud) — sans ça un patient
+                    // tapé en casse mixte vs renvoyé par le cloud (uppercase nom +
+                    // titlecase prenom) générait deux entrées distinctes.
+                    const key = pk(r.nom || 'Anonyme', r.prenom || '')
                     if (!patientsMap.has(key)) patientsMap.set(key, { key, nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance, pathologie: r.pathologie, avatarBg: r.avatarBg, records: [] })
                     patientsMap.get(key)!.records.push(r)
                   })
@@ -1387,7 +1391,7 @@ export function DatabasePage() {
                                                     try {
                                                       const patKey = note.patientKey
                                                       const allNotes = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === zt).sort((a, b) => a.id - b.id)
-                                                      const allBilans = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
+                                                      const allBilans = db.filter(r => pk(r.nom || '', r.prenom || '') === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
                                                       const allInters = dbIntermediaires.filter(r => r.patientKey === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === zt)
                                                       const bilansStr = allBilans.map(b => {
                                                         const d = b.bilanData?.douleur as Record<string, unknown> | undefined
@@ -1451,7 +1455,7 @@ export function DatabasePage() {
                                                     const patKey = note.patientKey
                                                     const bt = note.bilanType ?? getBilanType(note.zone ?? '')
                                                     const allNotesForZone = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt).sort((a, b) => a.id - b.id)
-                                                    const allBilansForZone = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+                                                    const allBilansForZone = db.filter(r => pk(r.nom || '', r.prenom || '') === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
                                                     const allIntersForZone = dbIntermediaires.filter(r => r.patientKey === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
                                                     const historiqueStr = [
                                                       ...allBilansForZone.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
@@ -1618,7 +1622,7 @@ export function DatabasePage() {
                                                     const patKey = rec.patientKey
                                                     const bt = rec.bilanType ?? getBilanType(rec.zone ?? '')
                                                     const allNotes = dbNotes.filter(n => n.patientKey === patKey && (n.bilanType ?? getBilanType(n.zone ?? '')) === bt)
-                                                    const allBilans = db.filter(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
+                                                    const allBilans = db.filter(r => pk(r.nom || '', r.prenom || '') === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === bt)
                                                     const historiqueStr = [
                                                       ...allBilans.map(b => `Bilan initial ${b.dateBilan} — EVN ${b.evn ?? '?'}/10`),
                                                       ...allNotes.map(n => `Séance n°${n.numSeance} — EVA ${n.data.eva}/10 — ${n.data.evolution} — ${n.data.interventions.join(', ')}`),

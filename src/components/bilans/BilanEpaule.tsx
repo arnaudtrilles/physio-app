@@ -12,7 +12,7 @@ import { InfosGeneralesSection } from './InfosGeneralesSection'
 
 export type BilanEpauleHandle = BilanHandle
 
-const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<string, unknown>; patientKey: string }>(({ initialData, patientKey }, ref) => {
   const _d  = (initialData?.douleur        as Record<string, unknown>) ?? {}
   const _rf = (initialData?.redFlags       as Record<string, unknown>) ?? {}
   const _yf = (initialData?.yellowFlags    as Record<string, unknown>) ?? {}
@@ -392,7 +392,7 @@ const BilanEpauleInner = forwardRef<BilanEpauleHandle, { initialData?: Record<st
   return (
     <div>
       <BilanModeToggle mode={mode} onChange={setMode} />
-      {mode === 'vocal' && <BilanVocalMode zone="Épaule" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode === 'vocal' && <BilanVocalMode zone="Épaule" patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />}
       {mode !== 'vocal' && sectionList.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />

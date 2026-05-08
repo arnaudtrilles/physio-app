@@ -24,7 +24,7 @@ export interface BilanGeneriqueHandle {
   setData: (d: Record<string, unknown>) => void
 }
 
-export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: Record<string, unknown>; patientKey: string }>(({ initialData, patientKey }, ref) => {
   const init = initialData ?? {}
 
   const [mode, setMode] = useState<BilanMode>(
@@ -146,7 +146,7 @@ export const BilanGenerique = forwardRef<BilanGeneriqueHandle, { initialData?: R
       </div>
 
       <BilanModeToggle mode={mode} onChange={setMode} />
-      {mode === 'vocal' && <BilanVocalMode zone="Générique" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode === 'vocal' && <BilanVocalMode zone="Générique" patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />}
       {mode !== 'vocal' && sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />

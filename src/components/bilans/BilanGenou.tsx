@@ -54,7 +54,7 @@ const ABDO_KEYS: [string, string][] = [
   ['transverse', 'Transverse'], ['droitsAbdomen', 'Droits de l’abdomen'], ['obliques', 'Obliques'],
 ]
 
-export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<string, unknown>; patientKey: string }>(({ initialData, patientKey }, ref) => {
   const init = initialData ?? {}
 
   const [mode, setMode] = useState<BilanMode>(
@@ -285,7 +285,7 @@ export const BilanGenou = forwardRef<BilanGenouHandle, { initialData?: Record<st
   return (
     <div>
       <BilanModeToggle mode={mode} onChange={setMode} />
-      {mode === 'vocal' && <BilanVocalMode zone="Genou" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode === 'vocal' && <BilanVocalMode zone="Genou" patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />}
       {mode !== 'vocal' && sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />

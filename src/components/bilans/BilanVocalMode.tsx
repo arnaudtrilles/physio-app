@@ -33,11 +33,12 @@ const WARN_SECONDS = 45 * 60 // alerte douce à 45 min, pas de blocage
 
 interface Props {
   zone: string
+  patientKey: string
   initialReport: NarrativeReport | null
   onChange: (report: NarrativeReport) => void
 }
 
-export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
+export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Props) {
   const [state, setState] = useState<VocalState>(initialReport ? 'done' : 'idle')
   const [context, setContext] = useState<VocalContext>('dictee')
   const [report, setReport] = useState<NarrativeReport | null>(initialReport)
@@ -136,19 +137,23 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
   // ── Recovery detection au mount ─────────────────────────────────────────
   useEffect(() => {
     if (initialReport) return // déjà un rapport, pas de reprise
+    if (!patientKey) return  // patient non identifié → on ne propose rien
     let cancelled = false
-    listIncompleteRecoveries()
+    listIncompleteRecoveries(patientKey)
       .then(recs => {
         if (cancelled || recs.length === 0) return
-        // On prend le plus récent qui correspond grosso modo à la zone.
-        // (Si une autre zone a un recovery en attente, l'utilisateur le verra dans la zone correspondante.)
-        const match = recs.find(r => r.zone === zone) || recs[0]
+        // Match strict sur la zone — on ne propose plus de fallback cross-zone
+        // pour éviter qu'un recovery d'une autre zone du même patient ressurgisse
+        // ici par erreur. Si l'user a oublié un recovery sur une autre zone, il
+        // le retrouvera en ouvrant le bilan de cette zone.
+        const match = recs.find(r => r.zone === zone)
+        if (!match) return
         setPendingRecovery(match)
         setState('recovery-prompt')
       })
       .catch(e => console.warn('[vocal] recovery scan failed', e))
     return () => { cancelled = true }
-  }, [initialReport, zone])
+  }, [initialReport, zone, patientKey])
 
   // ── Animation barres ───────────────────────────────────────────────────
   const animateBars = useCallback(() => {
@@ -340,6 +345,12 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
 
       const audioCtx = new AudioContext()
       audioCtxRef.current = audioCtx
+      // L'AudioContext naît dans l'état "suspended" si créé après un await
+      // (le geste utilisateur initial a été consommé par getUserMedia).
+      // resume() le ré-active pour que les barres animent vraiment.
+      if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume() } catch { /* fail silently — animation seulement */ }
+      }
       const source = audioCtx.createMediaStreamSource(stream)
       const analyser = audioCtx.createAnalyser()
       analyser.fftSize = 256
@@ -351,6 +362,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       recoveryIdRef.current = id
       const rec: VocalRecovery = {
         id,
+        patientKey,
         zone,
         context,
         createdAt: new Date().toISOString(),
@@ -383,7 +395,7 @@ export function BilanVocalMode({ zone, initialReport, onChange }: Props) {
       setError(`Impossible d'accéder au microphone : ${(e as Error).message}`)
       setState('error')
     }
-  }, [zone, context, animateBars, persistRecovery, startNewChunkRecorder, finalizeCurrentChunk, stopAllAudio, warned])
+  }, [zone, patientKey, context, animateBars, persistRecovery, startNewChunkRecorder, finalizeCurrentChunk, stopAllAudio, warned])
 
   // ── Arrêt utilisateur ──────────────────────────────────────────────────
   const stopRecording = useCallback(() => {

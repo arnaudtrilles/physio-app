@@ -1,5 +1,6 @@
 import type { BilanRecord } from '../../types'
 import { ZoneIcon, ZONE_PICKER_ITEMS } from '../shared/ZonePicker'
+import { pk } from '../../lib/syncEngine'
 
 type IdentityFormData = {
   nom: string
@@ -82,16 +83,16 @@ export function IdentityStep({
               }}
             >
               <option value="" disabled>-- Dossiers récents --</option>
-              {Array.from(new Map(db.map(r => [`${(r.nom || '').toUpperCase()} ${r.prenom}`, r])).values()).map(r => (
+              {Array.from(new Map(db.map(r => [pk(r.nom || '', r.prenom || ''), r])).values()).map(r => (
                 <option key={r.id} value={JSON.stringify({ nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance })}>
-                  {(r.nom || '').toUpperCase()} {r.prenom}
+                  {pk(r.nom || '', r.prenom || '')}
                 </option>
               ))}
             </select>
             {formData.nom && (
               <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface)', borderRadius: 'var(--radius-md)', color: 'var(--primary)', fontWeight: 600, border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Dossier actif : {(formData.nom || '').toUpperCase()} {formData.prenom}
+                Dossier actif : {pk(formData.nom || '', formData.prenom || '')}
               </div>
             )}
           </div>
@@ -151,16 +152,38 @@ export function IdentityStep({
         </div>
       </div>
 
-      <div className="fixed-bottom">
-        <button
-          className="btn-primary-luxe"
-          disabled={!selectedBodyZone}
-          style={{ opacity: selectedBodyZone ? 1 : 0.5 }}
-          onClick={onNext}
-        >
-          Étape suivante
-        </button>
-      </div>
+      {(() => {
+        // Empêche de créer un bilan avec patient ou zone manquants — sinon
+        // l'IA reçoit nom: "", zone: "" et hallucine ou crashe en aval.
+        const nomOk = !!formData.nom?.trim()
+        const prenomOk = !!formData.prenom?.trim()
+        const zoneOk = !!selectedBodyZone
+        const canProceed = nomOk && prenomOk && zoneOk
+
+        const missing: string[] = []
+        if (!nomOk) missing.push('nom')
+        if (!prenomOk) missing.push('prénom')
+        if (!zoneOk) missing.push('zone du bilan')
+        const hint = canProceed ? null : `Renseigne : ${missing.join(', ')}`
+
+        return (
+          <div className="fixed-bottom">
+            {hint && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>
+                {hint}
+              </div>
+            )}
+            <button
+              className="btn-primary-luxe"
+              disabled={!canProceed}
+              style={{ opacity: canProceed ? 1 : 0.5 }}
+              onClick={onNext}
+            >
+              Étape suivante
+            </button>
+          </div>
+        )
+      })()}
     </div>
   )
 }

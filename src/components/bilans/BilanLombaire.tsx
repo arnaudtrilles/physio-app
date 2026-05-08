@@ -35,7 +35,7 @@ const MOB_LOMB_KEYS: [string, string][] = [
   ['rotationD', 'Rotation D'], ['rotationG', 'Rotation G'],
 ]
 
-export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Record<string, unknown> }>(({ initialData }, ref) => {
+export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Record<string, unknown>; patientKey: string }>(({ initialData, patientKey }, ref) => {
   const init = initialData ?? {}
 
   // Mode Noyau (EBP minimum) activé par défaut pour tout nouveau bilan.
@@ -209,7 +209,7 @@ export const BilanLombaire = forwardRef<BilanLombaireHandle, { initialData?: Rec
   return (
     <div>
       <BilanModeToggle mode={mode} onChange={setMode} />
-      {mode === 'vocal' && <BilanVocalMode zone="Lombaire" initialReport={vocalReport} onChange={setVocalReport} />}
+      {mode === 'vocal' && <BilanVocalMode zone="Lombaire" patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />}
       {mode !== 'vocal' && sections.map(sec => (
         <div key={sec.id} style={{ marginBottom: 4 }}>
           <SectionHeader title={sec.title} open={!!open[sec.id]} onToggle={() => toggle(sec.id)} color={sec.color} badge={sec.priority === 'approfondissement' ? 'approfondissement' : undefined} />

@@ -60,8 +60,8 @@ interface SectionDef {
 
 export const BilanDrainageLymphatique = forwardRef<
   BilanDrainageLymphatiqueHandle,
-  { initialData?: Record<string, unknown> }
->(({ initialData }, ref) => {
+  { initialData?: Record<string, unknown>; patientKey: string }
+>(({ initialData, patientKey }, ref) => {
   const [mode, setMode] = useState<BilanMode>(
     (initialData?._mode as BilanMode | undefined) ?? 'noyau'
   )
@@ -193,7 +193,7 @@ export const BilanDrainageLymphatique = forwardRef<
       <BilanModeToggle mode={mode} onChange={setMode} />
 
       {mode === 'vocal' && (
-        <BilanVocalMode zone="Drainage Lymphatique" initialReport={vocalReport} onChange={setVocalReport} />
+        <BilanVocalMode zone="Drainage Lymphatique" patientKey={patientKey} initialReport={vocalReport} onChange={setVocalReport} />
       )}
 
       {mode !== 'vocal' && (

@@ -1,3 +1,4 @@
+import { authHeaders } from './apiAuth'
 import type { BilanDocument } from '../types'
 
 export class ClaudeAuthError extends Error {
@@ -36,21 +37,24 @@ export async function callClaude(
   jsonMode = false,
   preferredModel?: string,
   documents?: BilanDocument[],
+  temperature?: number,
 ): Promise<string> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS)
 
   let res: Response
   try {
+    const auth = await authHeaders()
     res = await fetch('/api/claude', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({
         systemPrompt,
         userPrompt,
         maxOutputTokens,
         jsonMode,
         preferredModel,
+        temperature,
         documents: documents?.map(d => ({
           mimeType: d.mimeType,
           data: d.data,

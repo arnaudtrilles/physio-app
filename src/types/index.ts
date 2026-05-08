@@ -50,7 +50,7 @@ export interface BilanDocument {
  * (photos, ordonnances) des PDF auto-générés par l'app (bilan, analyse IA,
  * évolution) — affichage d'un badge dédié dans DossierDocuments.
  */
-export type PatientDocumentSource = 'upload' | 'bilan' | 'analyse-ia' | 'evolution'
+export type PatientDocumentSource = 'upload' | 'bilan' | 'analyse-ia' | 'evolution' | 'consentement'
 
 export interface PatientDocument {
   id: string
