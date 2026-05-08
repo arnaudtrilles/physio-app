@@ -6,21 +6,41 @@ import crypto from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 
 function transcribeDevProxy(): Plugin {
-  let openaiKey = ''
+  let azureEndpoint = ''
+  let azureKey = ''
+  let azureSoloDeployment = ''
+  let azureSessionDeployment = ''
+  let azureApiVersion = '2025-03-01-preview'
   return {
     name: 'transcribe-dev-proxy',
     configResolved(config) {
       const env = loadEnv(config.mode, config.root, '')
-      openaiKey = env.OPENAI_API_KEY || ''
+      azureEndpoint = env.AZURE_OPENAI_ENDPOINT || ''
+      azureKey = env.AZURE_OPENAI_KEY || ''
+      azureSoloDeployment = env.AZURE_OPENAI_SOLO_DEPLOYMENT || ''
+      azureSessionDeployment = env.AZURE_OPENAI_SESSION_DEPLOYMENT || ''
+      azureApiVersion = env.AZURE_OPENAI_API_VERSION || '2025-03-01-preview'
     },
     configureServer(server) {
       server.middlewares.use('/api/transcribe', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*')
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-transcribe-mode')
         if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
         if (req.method !== 'POST') { res.writeHead(405); res.end(JSON.stringify({ error: 'Method not allowed' })); return }
-        if (!openaiKey) { res.writeHead(500); res.end(JSON.stringify({ error: 'OPENAI_API_KEY not set' })); return }
+        if (!azureEndpoint || !azureKey || !azureSoloDeployment) {
+          res.writeHead(500)
+          res.end(JSON.stringify({ error: 'Azure OpenAI not configured (set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_SOLO_DEPLOYMENT in .env)' }))
+          return
+        }
+
+        // Mode = solo (default) | session — match le handler prod.
+        const headerMode = req.headers['x-transcribe-mode']
+        const rawMode = (Array.isArray(headerMode) ? headerMode[0] : headerMode || 'solo').toString().toLowerCase()
+        const mode = rawMode === 'session' ? 'session' : 'solo'
+        const deployment = mode === 'session'
+          ? (azureSessionDeployment || azureSoloDeployment)
+          : azureSoloDeployment
 
         const chunks: Buffer[] = []
         req.on('data', (c: Buffer) => chunks.push(c))
@@ -32,7 +52,7 @@ function transcribeDevProxy(): Plugin {
               res.end(JSON.stringify({ error: 'Empty audio body' }))
               return
             }
-            console.log(`[transcribe] Received ${audioBuffer.length} bytes of audio`)
+            console.log(`[transcribe] Received ${audioBuffer.length} bytes (mode=${mode}, deployment=${deployment})`)
 
             const incomingType = (req.headers['content-type'] as string) || 'audio/webm'
             const ext = incomingType.includes('mp4') ? 'mp4' : incomingType.includes('wav') ? 'wav' : 'webm'
@@ -40,11 +60,12 @@ function transcribeDevProxy(): Plugin {
             const prompt = 'Transcription kinésithérapie français. EVA, EVN, PSFS, MRC, ROM, flexion, extension, abduction, rotation.'
 
             const boundary = '----ViteDev' + Date.now().toString(36)
+            // Sur Azure, le modèle est porté par le deployment-id dans l'URL.
             const fields = [
-              ['model', 'gpt-4o-transcribe'],
               ['language', 'fr'],
               ['prompt', prompt],
-              ['response_format', 'json'],
+              ['response_format', mode === 'session' ? 'verbose_json' : 'json'],
+              ['temperature', '0'],
             ]
             const parts: Buffer[] = []
             for (const [name, value] of fields) {
@@ -62,12 +83,14 @@ function transcribeDevProxy(): Plugin {
             const controller = new AbortController()
             const timeoutId = setTimeout(() => controller.abort(), 55_000)
 
+            const url = `${azureEndpoint.replace(/\/+$/, '')}/openai/deployments/${encodeURIComponent(deployment)}/audio/transcriptions?api-version=${encodeURIComponent(azureApiVersion)}`
+
             let apiRes: Response
             try {
-              apiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+              apiRes = await fetch(url, {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${openaiKey}`,
+                  'api-key': azureKey,
                   'Content-Type': `multipart/form-data; boundary=${boundary}`,
                 },
                 body,
@@ -78,7 +101,7 @@ function transcribeDevProxy(): Plugin {
             }
 
             const responseBody = await apiRes.text()
-            console.log(`[transcribe] OpenAI ${apiRes.status}: ${responseBody.slice(0, 200)}`)
+            console.log(`[transcribe] Azure ${apiRes.status}: ${responseBody.slice(0, 200)}`)
             res.writeHead(apiRes.status, { 'Content-Type': 'application/json' })
             res.end(responseBody)
           } catch (err) {
