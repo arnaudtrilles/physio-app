@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import type { Plugin } from 'vite'
 import crypto from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
@@ -394,6 +395,12 @@ export default defineConfig({
     claudeDevProxy(),
     geminiDevProxy(),
     claudeDevProxy(),
+    sentryVitePlugin({
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: true,
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
@@ -461,6 +468,9 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    sourcemap: true,
+  },
   server: {
     host: true,
     port: 5173,
