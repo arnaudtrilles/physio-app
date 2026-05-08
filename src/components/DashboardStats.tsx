@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { pk } from '../lib/syncEngine'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, ClosedTreatment } from '../types'
 
 interface DashboardStatsProps {
@@ -76,7 +77,7 @@ export const DashboardStats = memo(function DashboardStats({ bilans, intermediai
 
     for (const b of bilans) {
       if (b.evn == null) continue
-      const patKey = `${(b.nom || '').toUpperCase()} ${b.prenom}`.trim()
+      const patKey = pk(b.nom || '', b.prenom || '')
       const bt = getBilanTypeForRecord(b)
       const treatmentKey = `${patKey}|${bt}`
       // Skip closed treatments

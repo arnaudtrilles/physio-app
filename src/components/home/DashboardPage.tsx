@@ -1,6 +1,7 @@
 import type { CSSProperties, MutableRefObject, TouchEvent } from 'react'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, ProfileData, ClosedTreatment } from '../../types'
 import { DashboardStats } from '../DashboardStats'
+import { pk } from '../../lib/syncEngine'
 
 type Activity = { patientKey: string; date: number; dateStr: string; type: string; zone?: string }
 
@@ -16,7 +17,7 @@ function buildActivities(
 ): Activity[] {
   return [
     ...db.filter(r => r.status === 'complet' || r.bilanData).map(r => ({
-      patientKey: `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim(),
+      patientKey: pk(r.nom || '', r.prenom || ''),
       date: parseFR(r.dateBilan),
       dateStr: r.dateBilan,
       type: 'Bilan initial',

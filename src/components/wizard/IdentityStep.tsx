@@ -1,5 +1,6 @@
 import type { BilanRecord } from '../../types'
 import { ZoneIcon, ZONE_PICKER_ITEMS } from '../shared/ZonePicker'
+import { pk } from '../../lib/syncEngine'
 
 type IdentityFormData = {
   nom: string
@@ -82,16 +83,16 @@ export function IdentityStep({
               }}
             >
               <option value="" disabled>-- Dossiers récents --</option>
-              {Array.from(new Map(db.map(r => [`${(r.nom || '').toUpperCase()} ${r.prenom}`, r])).values()).map(r => (
+              {Array.from(new Map(db.map(r => [pk(r.nom || '', r.prenom || ''), r])).values()).map(r => (
                 <option key={r.id} value={JSON.stringify({ nom: r.nom, prenom: r.prenom, dateNaissance: r.dateNaissance })}>
-                  {(r.nom || '').toUpperCase()} {r.prenom}
+                  {pk(r.nom || '', r.prenom || '')}
                 </option>
               ))}
             </select>
             {formData.nom && (
               <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface)', borderRadius: 'var(--radius-md)', color: 'var(--primary)', fontWeight: 600, border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Dossier actif : {(formData.nom || '').toUpperCase()} {formData.prenom}
+                Dossier actif : {pk(formData.nom || '', formData.prenom || '')}
               </div>
             )}
           </div>

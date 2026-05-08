@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { pk } from '../lib/syncEngine'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData } from '../types'
 
 interface AdminDashboardProps {
@@ -125,7 +126,7 @@ export function AdminDashboard({ db, dbIntermediaires, dbNotes, dbObjectifs, dbE
   const updatedAt = now.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })
 
   const metrics = useMemo(() => {
-    const patientKeys = new Set(db.map(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()))
+    const patientKeys = new Set(db.map(r => pk(r.nom || '', r.prenom || '')))
     const totalPatients = patientKeys.size
     const totalBilansComplets = db.filter(r => r.status === 'complet').length
     const totalBilansIncomplets = db.filter(r => r.status !== 'complet').length
@@ -134,7 +135,7 @@ export function AdminDashboard({ db, dbIntermediaires, dbNotes, dbObjectifs, dbE
     const patientEvnMap: Record<string, number[]> = {}
     db.forEach(r => {
       if (r.evn == null) return
-      const key = `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()
+      const key = pk(r.nom || '', r.prenom || '')
       if (!patientEvnMap[key]) patientEvnMap[key] = []
       patientEvnMap[key].push(r.evn)
     })
@@ -202,7 +203,7 @@ export function AdminDashboard({ db, dbIntermediaires, dbNotes, dbObjectifs, dbE
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     const lastBilanByPatient: Record<string, Date> = {}
     db.forEach(r => {
-      const key = `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()
+      const key = pk(r.nom || '', r.prenom || '')
       const p = (r.dateBilan || '').split('/')
       if (p.length < 3) return
       const d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]))

@@ -481,7 +481,7 @@ function App() {
 
     // Récupère l'ancien nom/prénom + dateNaissance depuis un BilanRecord
     // (source dénormalisée la plus fiable) — fallback : split de oldKey.
-    const sample = db.find(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === oldKey)
+    const sample = db.find(r => pk(r.nom || '', r.prenom || '') === oldKey)
       || dbNotes.find(n => n.patientKey === oldKey)
       || dbIntermediaires.find(i => i.patientKey === oldKey)
     let oldNom = sample?.nom ?? ''
@@ -513,7 +513,7 @@ function App() {
 
     // 2. Local : maj de tous les stores qui référencent ce patient
     setDb(prev => prev.map(r => {
-      const k = `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()
+      const k = pk(r.nom || '', r.prenom || '')
       if (k !== oldKey) return r
       return {
         ...r,
@@ -523,7 +523,7 @@ function App() {
       }
     }))
     setDbIntermediaires(prev => prev.map(r => {
-      const k = r.patientKey || `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim()
+      const k = r.patientKey || pk(r.nom || '', r.prenom || '')
       if (k !== oldKey) return r
       return {
         ...r,
@@ -533,7 +533,7 @@ function App() {
       }
     }))
     setDbNotes(prev => prev.map(n => {
-      const k = n.patientKey || `${(n.nom || '').toUpperCase()} ${n.prenom}`.trim()
+      const k = n.patientKey || pk(n.nom || '', n.prenom || '')
       if (k !== oldKey) return n
       return {
         ...n,
@@ -613,7 +613,7 @@ function App() {
     setFormData(prev => ({ ...prev, [field]: value })), [])
 
   const goToPatientRecord = useCallback(() => {
-    const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+    const key = pk(formData.nom || 'Anonyme', formData.prenom)
     setSelectedPatient(key)
     setStep('database')
   }, [formData.nom, formData.prenom])
@@ -626,7 +626,7 @@ function App() {
         saveBilan('incomplet')
       }
     }
-    const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+    const key = pk(formData.nom || 'Anonyme', formData.prenom)
     resetForm()
     setSelectedBodyZone(null)
     setSelectedPatient(key)
@@ -762,8 +762,8 @@ function App() {
       : bilanIntermediaireRef.current?.getData()
     ) ?? {}
     const now = new Date().toLocaleDateString('fr-FR')
-    const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-    const avatarBg = db.find(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey)?.avatarBg
+    const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
+    const avatarBg = db.find(r => pk(r.nom || 'Anonyme', r.prenom || '') === patKey)?.avatarBg
     if (currentBilanIntermediaireId !== null) {
       setDbIntermediaires(prev => prev.map(r =>
         r.id === currentBilanIntermediaireId ? { ...r, data, status } : r
@@ -838,7 +838,7 @@ Règles :
       userPrompt: prompt,
       maxOutputTokens: 4096,
       jsonMode: true,
-      patient: { nom: formData.nom || '', prenom: formData.prenom || '', patientKey: `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim() },
+      patient: { nom: formData.nom || '', prenom: formData.prenom || '', patientKey: pk(formData.nom || 'Anonyme', formData.prenom) },
       category: 'fiche_exercice',
     })
 
@@ -866,8 +866,8 @@ Règles :
     const data = noteSeanceRef.current?.getData()
     if (!data) return
     const now = new Date().toLocaleDateString('fr-FR')
-    const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-    const avatarBg = db.find(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey)?.avatarBg
+    const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
+    const avatarBg = db.find(r => pk(r.nom || 'Anonyme', r.prenom || '') === patKey)?.avatarBg
     const bilanType = getBilanType(noteSeanceZone ?? '')
     const numSeance = currentNoteSeanceId !== null
       ? (dbNotes.find(r => r.id === currentNoteSeanceId)?.numSeance ?? '')
@@ -904,7 +904,7 @@ Règles :
     const patKey = rec.patientKey
     const bilanType = rec.bilanType ?? getBilanType(rec.zone ?? '')
     const initiaux = db
-      .filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey)
+      .filter(r => pk(r.nom || 'Anonyme', r.prenom || '') === patKey)
       .filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType)
       .sort((a, b) => a.id - b.id)
     const interms = dbIntermediaires
@@ -922,7 +922,7 @@ Règles :
   }
 
   const getPatientBilans = (key: string) =>
-    db.filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === key)
+    db.filter(r => pk(r.nom || 'Anonyme', r.prenom || '') === key)
       .sort((a, b) => a.id - b.id)
 
   // Sexe = source de vérité unique au niveau du patient.
@@ -941,7 +941,7 @@ Règles :
   // a déjà un sexe enregistré dans la base, on le récupère. Sinon on garde la
   // valeur courante (permet à l'utilisateur de choisir pour un nouveau patient).
   useEffect(() => {
-    const key = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+    const key = pk(formData.nom || 'Anonyme', formData.prenom)
     const saved = getPatientSexe(key)
     if (saved && formData.sexe !== saved) {
       setFormData(prev => ({ ...prev, sexe: saved }))
@@ -958,7 +958,7 @@ Règles :
     const fromBilans: Record<string, 'masculin' | 'feminin'> = {}
     db.forEach(r => {
       if (r.sexe === 'masculin' || r.sexe === 'feminin') {
-        const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+        const key = pk(r.nom || 'Anonyme', r.prenom || '')
         if (!fromBilans[key]) fromBilans[key] = r.sexe
       }
     })
@@ -973,13 +973,13 @@ Règles :
     const merged: Record<string, 'masculin' | 'feminin'> = { ...dbPatientSexe, ...registryUpdates }
     const needsPatch = db.some(r => {
       if (r.sexe === 'masculin' || r.sexe === 'feminin') return false
-      const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+      const key = pk(r.nom || 'Anonyme', r.prenom || '')
       return !!merged[key]
     })
     if (needsPatch) {
       setDb(prev => prev.map(r => {
         if (r.sexe === 'masculin' || r.sexe === 'feminin') return r
-        const key = `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim()
+        const key = pk(r.nom || 'Anonyme', r.prenom || '')
         return merged[key] ? { ...r, sexe: merged[key] } : r
       }))
     }
@@ -1000,7 +1000,7 @@ Règles :
       return
     }
     // Pas de sexe → déclencher popup. Chercher un bilan pour récupérer nom/prénom affichables.
-    const first = db.find(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === selectedPatient)
+    const first = db.find(r => pk(r.nom || 'Anonyme', r.prenom || '') === selectedPatient)
     if (!first) return
     if (!sexeMigrationTarget || sexeMigrationTarget.patKey !== selectedPatient) {
       setSexeMigrationTarget({ patKey: selectedPatient, nom: first.nom, prenom: first.prenom })
@@ -1028,7 +1028,7 @@ Règles :
     if (closureTimes.length === 0) return false
     const latest = closureTimes[closureTimes.length - 1]
     const hasBilanAfter = db.some(r =>
-      `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patientKey
+      pk(r.nom || 'Anonyme', r.prenom || '') === patientKey
       && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
       && r.id > latest
     )
@@ -1095,7 +1095,7 @@ Règles :
     // (ou aucune clôture du tout). Sinon on ne crée pas de carte "active" vide.
     const hasRecordAfter = (cutoff: number): boolean => {
       const hitBilan = db.some(r =>
-        `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patientKey
+        pk(r.nom || 'Anonyme', r.prenom || '') === patientKey
         && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
         && r.id > cutoff
       )
@@ -1150,7 +1150,7 @@ Règles :
     const matchZone = (bt: BilanType | undefined, zone: string | undefined) =>
       (bt ?? getBilanType(zone ?? '')) === bilanType
     setDb(prev => prev.filter(r => !(
-      `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patientKey
+      pk(r.nom || 'Anonyme', r.prenom || '') === patientKey
       && matchZone(r.bilanType, r.zone)
       && inWin(r.id)
     )))
@@ -1301,10 +1301,16 @@ Règles :
 
     const sexeValue = (formData.sexe === 'masculin' || formData.sexe === 'feminin') ? formData.sexe : undefined
 
+    // Normalisation nom/prenom identique à `pk()` (cloud canonical) pour qu'un
+    // round-trip sync ne crée pas un doublon de profil par mismatch de casse
+    // (« Mamo molalign » local vs « MAMO Molalign » cloud).
+    const nomNorm = (formData.nom || 'Anonyme').trim().toUpperCase()
+    const prenomNorm = (formData.prenom || '').trim().replace(/\b\w/g, c => c.toUpperCase())
+
     // Persiste le sexe dans le registre patient dès qu'il est connu, pour qu'il
     // survive même si le bilan est supprimé/réécrit.
     if (sexeValue) {
-      const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+      const patKey = `${nomNorm} ${prenomNorm}`.trim()
       if (dbPatientSexe[patKey] !== sexeValue) {
         setDbPatientSexe(prev => ({ ...prev, [patKey]: sexeValue }))
       }
@@ -1319,8 +1325,8 @@ Règles :
       const newId = Math.max(0, ...db.map(r => r.id)) + 1
       const record: BilanRecord = {
         id: newId,
-        nom: formData.nom || 'Anonyme',
-        prenom: formData.prenom,
+        nom: nomNorm,
+        prenom: prenomNorm,
         dateBilan: new Date().toLocaleDateString('fr-FR'),
         dateNaissance: formData.dateNaissance,
         sexe: sexeValue,
@@ -1346,7 +1352,7 @@ Règles :
     // Auto-créer des objectifs SMART depuis le contrat kiné du bilan
     if (status === 'complet' && bilanData) {
       const contrat = (bilanData.contratKine ?? bilanData.contrat) as Record<string, unknown> | undefined
-      const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+      const patKey = `${nomNorm} ${prenomNorm}`.trim()
       const zoneName = selectedBodyZone ?? 'Général'
       const createdAt = new Date().toLocaleDateString('fr-FR')
 
@@ -1427,7 +1433,7 @@ Règles :
       if (cached) {
         setPdfPreviewMarkdown(cached)
         setPdfPreviewSource('analyse-ia')
-        setPdfPreviewPatientKey(`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim())
+        setPdfPreviewPatientKey(pk(formData.nom || 'Anonyme', formData.prenom))
         setStep('pdf_preview')
         return
       }
@@ -1453,7 +1459,7 @@ Règles :
           patient: {
             nom: formData.nom,
             prenom: formData.prenom,
-            patientKey: `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim(),
+            patientKey: pk(formData.nom || 'Anonyme', formData.prenom),
           },
           category: 'pdf_analyse',
           onAudit: recordAIAudit,
@@ -1461,7 +1467,7 @@ Règles :
         setCachedAnalysePDF(cacheHash, report)
         setPdfPreviewMarkdown(report)
         setPdfPreviewSource('analyse-ia')
-        setPdfPreviewPatientKey(`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim())
+        setPdfPreviewPatientKey(pk(formData.nom || 'Anonyme', formData.prenom))
         setStep('pdf_preview')
       } catch (err) {
         // Annulation volontaire utilisateur (docs non masqués) → rien à faire
@@ -1471,7 +1477,7 @@ Règles :
           return
         }
         showToast('Erreur analyse — export classique', 'error')
-        const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+        const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
         const patBilans = getPatientBilans(patKey).filter(r => r.evn != null)
         const entries: ImprovementEntry[] = patBilans.map((r, i) => ({
           num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
@@ -1489,7 +1495,7 @@ Règles :
     }
 
     // No API key — classic PDF direct
-    const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+    const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
     const patBilans = getPatientBilans(patKey).filter(r => r.evn != null)
     const entries: ImprovementEntry[] = patBilans.map((r, i) => ({
       num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
@@ -2140,7 +2146,7 @@ Mobilité articulaire lombaire
   // Export un bilan depuis le dossier patient — génère avec IA puis ouvre l'aperçu modifiable
   const exportBilanFromRecord = async (record: BilanRecord, mode: 'initial' | 'intermediaire' | 'sortie' = 'initial') => {
     phCapture('pdf_exported', { mode, bilanType: record.bilanType ?? null, zone: record.zone ?? null })
-    const recSexe = record.sexe ?? getPatientSexe(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
+    const recSexe = record.sexe ?? getPatientSexe(pk(record.nom || 'Anonyme', record.prenom || ''))
     setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance, sexe: recSexe ?? prev.sexe }))
     setPdfPreviewZone(record.zone ?? '')
     setPdfPreviewTitle(
@@ -2151,7 +2157,7 @@ Mobilité articulaire lombaire
 
     if (apiKey && record.bilanData) {
       // Pour le bilan de sortie : récupérer la référence du bilan initial (EVN, date) pour le comparatif
-      const patKeyForRef = `${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim()
+      const patKeyForRef = pk(record.nom || 'Anonyme', record.prenom || '')
       const initialBilanRef = mode === 'sortie'
         ? (() => {
             const bt = getBilanType(record.zone ?? '')
@@ -2186,7 +2192,7 @@ Mobilité articulaire lombaire
       if (cached) {
         setPdfPreviewMarkdown(cached)
         setPdfPreviewSource('bilan')
-        setPdfPreviewPatientKey(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
+        setPdfPreviewPatientKey(pk(record.nom || 'Anonyme', record.prenom || ''))
         setStep('pdf_preview')
         return
       }
@@ -2222,7 +2228,7 @@ Mobilité articulaire lombaire
           patient: {
             nom: record.nom,
             prenom: record.prenom,
-            patientKey: `${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim(),
+            patientKey: pk(record.nom || 'Anonyme', record.prenom || ''),
           },
           category: 'pdf_bilan',
           onAudit: recordAIAudit,
@@ -2230,7 +2236,7 @@ Mobilité articulaire lombaire
         setCachedBilanPDF(cacheHash, report)
         setPdfPreviewMarkdown(report)
         setPdfPreviewSource('bilan')
-        setPdfPreviewPatientKey(`${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim())
+        setPdfPreviewPatientKey(pk(record.nom || 'Anonyme', record.prenom || ''))
         setStep('pdf_preview')
       } catch (err) {
         if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
@@ -2238,7 +2244,7 @@ Mobilité articulaire lombaire
           return
         }
         showToast('Erreur analyse — export classique', 'error')
-        const patKey = `${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim()
+        const patKey = pk(record.nom || 'Anonyme', record.prenom || '')
         const patBilans = getPatientBilans(patKey).filter(r => r.evn != null)
         const entries: ImprovementEntry[] = patBilans.map((r, i) => ({
           num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
@@ -2255,7 +2261,7 @@ Mobilité articulaire lombaire
       }
     } else {
       // Sans clé API — fallback PDF classique direct
-      const patKey = `${(record.nom || 'Anonyme').toUpperCase()} ${record.prenom}`.trim()
+      const patKey = pk(record.nom || 'Anonyme', record.prenom || '')
       const patBilans = getPatientBilans(patKey).filter(r => r.evn != null)
       const entries: ImprovementEntry[] = patBilans.map((r, i) => ({
         num: i + 1, date: r.dateBilan, evn: r.evn ?? null,
@@ -2365,7 +2371,7 @@ Mobilité articulaire lombaire
   }
 
   const handleTutorialIA = () => {
-    const patBilans = selectedPatient ? db.filter(r => `${r.nom.toUpperCase()} ${r.prenom}`.trim() === selectedPatient) : []
+    const patBilans = selectedPatient ? db.filter(r => pk(r.nom || '', r.prenom || '') === selectedPatient) : []
     const last = patBilans[patBilans.length - 1]
     if (last) { setCurrentBilanId(last.id); setStep('analyse_ia') }
     handleTutorialDone()
@@ -2387,7 +2393,7 @@ Mobilité articulaire lombaire
 
   // Patients soft-deleted : données conservées dans IndexedDB, masquées dans l'UI
   const visibleDb = db.filter(r =>
-    !deletedPatientKeys.includes(`${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim())
+    !deletedPatientKeys.includes(pk(r.nom || 'Anonyme', r.prenom || ''))
   )
 
   // Auth gate: loading → login → app
@@ -2572,7 +2578,7 @@ Mobilité articulaire lombaire
       {/* ── Edit patient profile (correct typo, fix DOB, set sexe) ─────────── */}
       {editingPatientKey && (() => {
         // Sexe : seul BilanRecord le porte (registre dbPatientSexe est la source canonique)
-        const bilan = db.find(r => `${(r.nom || '').toUpperCase()} ${r.prenom}`.trim() === editingPatientKey)
+        const bilan = db.find(r => pk(r.nom || '', r.prenom || '') === editingPatientKey)
         const sample = bilan
           || dbNotes.find(n => n.patientKey === editingPatientKey)
           || dbIntermediaires.find(i => i.patientKey === editingPatientKey)
@@ -2676,7 +2682,7 @@ Mobilité articulaire lombaire
                 setDbPatientSexe(prev => ({ ...prev, [patKey]: chosen }))
                 // Backfill bilans existants pour les prompts/PDF qui lisent encore r.sexe
                 setDb(prev => prev.map(r =>
-                  `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey
+                  pk(r.nom || 'Anonyme', r.prenom || '') === patKey
                     ? { ...r, sexe: chosen }
                     : r
                 ))
@@ -3183,10 +3189,14 @@ Mobilité articulaire lombaire
                 const avatarBg = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
                 const newId = Math.max(0, ...db.map(r => r.id)) + 1
                 const sexeQA = (quickAddData.sexe === 'masculin' || quickAddData.sexe === 'feminin') ? quickAddData.sexe : undefined
+                // Normalisation cohérente avec `pk()` (cloud canonical) — évite la
+                // divergence local/cloud après round-trip qui dédoublait le profil.
+                const nomNorm = quickAddData.nom.trim().toUpperCase()
+                const prenomNorm = quickAddData.prenom.trim().replace(/\b\w/g, c => c.toUpperCase())
                 const record: BilanRecord = {
                   id: newId,
-                  nom: quickAddData.nom.trim(),
-                  prenom: quickAddData.prenom.trim(),
+                  nom: nomNorm,
+                  prenom: prenomNorm,
                   dateBilan: new Date().toLocaleDateString('fr-FR'),
                   dateNaissance: quickAddData.dateNaissance || '',
                   sexe: sexeQA,
@@ -3201,7 +3211,7 @@ Mobilité articulaire lombaire
                 }
                 setDb(prev => [...prev, record])
                 setShowQuickAddPatient(false)
-                const patKey = `${quickAddData.nom.trim().toUpperCase()} ${quickAddData.prenom.trim()}`.trim()
+                const patKey = `${nomNorm} ${prenomNorm}`.trim()
                 if (sexeQA) setDbPatientSexe(prev => ({ ...prev, [patKey]: sexeQA }))
                 setSelectedPatient(patKey)
                 showToast('Patient ajouté', 'success')
@@ -3232,9 +3242,9 @@ Mobilité articulaire lombaire
             setBilanZoneBackStep('identity')
             // Consentement obligatoire pour nouveau patient — skip si déjà signé
             // (évite de redemander à chaque bilan d'un patient existant).
-            const pk = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+            const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
             const alreadySigned = dbPatientDocs.some(
-              d => d.patientKey === pk && d.source === 'consentement'
+              d => d.patientKey === patKey && d.source === 'consentement'
             )
             if (patientMode === 'new' && !alreadySigned) {
               setStep('consent')
@@ -3259,8 +3269,8 @@ Mobilité articulaire lombaire
             email: profile.email,
           }}
           onSigned={({ blob, fileName }) => {
-            const pk = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
-            attachPdfToPatient(blob, fileName, pk, 'consentement')
+            const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
+            attachPdfToPatient(blob, fileName, patKey, 'consentement')
             showToast('Consentement enregistré', 'success')
             setStep('bilan_zone')
           }}
@@ -3297,7 +3307,7 @@ Mobilité articulaire lombaire
             {(() => {
               // patientKey transmis aux composants Bilan pour scoper les recoveries
               // vocaux (sinon une dictée orpheline d'un patient ressort sur un autre).
-              const currentPatientKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+              const currentPatientKey = pk(formData.nom || 'Anonyme', formData.prenom)
               return <>
             {getBilanType(selectedBodyZone ?? '') === 'epaule'   && <BilanEpaule   key={currentBilanId ?? 'new'} ref={bilanEpauleRef}   initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
             {getBilanType(selectedBodyZone ?? '') === 'cheville' && <BilanCheville key={currentBilanId ?? 'new'} ref={bilanChevilleRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
@@ -3467,7 +3477,7 @@ Mobilité articulaire lombaire
 
       {/* ── Evolution IA step ─────────────────────────────────────────────────── */}
       {step === 'evolution_ia' && (() => {
-        const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+        const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
         const targetBt = evolutionZoneType
         const matchBt = (bt?: BilanType, zone?: string) => {
           if (!targetBt) return true
@@ -3510,7 +3520,7 @@ Mobilité articulaire lombaire
               closedAntecedents,
               therapistProfession: profile.profession,
             }}
-            patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
+            patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
             profession={profile.profession}
             onAudit={recordAIAudit}
             onBack={() => { setEvolutionZoneType(null); setStep('database') }}
@@ -3710,7 +3720,7 @@ Mobilité articulaire lombaire
           epaule: 'Épaule', cheville: 'Cheville', genou: 'Genou', hanche: 'Hanche',
           cervical: 'Rachis Cervical', lombaire: 'Rachis Lombaire', generique: 'Bilan Général', geriatrique: 'Bilan Gériatrique', 'drainage-lymphatique': 'Bilan Drainage Lymphatique',
         }
-        const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+        const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
         const numSeance = currentNoteSeanceId !== null
           ? (dbNotes.find(r => r.id === currentNoteSeanceId)?.numSeance ?? '?')
           : String(getPatientNotes(patKey).filter(r => (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType).length + 1)
@@ -3727,7 +3737,7 @@ Mobilité articulaire lombaire
             </header>
 
             <div className="scroll-area" style={{ paddingBottom: '9rem' }}>
-              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} zone={noteSeanceZone ?? undefined} patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()} onGenerateExercices={handleGenerateExercices} onExportExercicesPDF={handleExportExercicesPDF} />
+              <NoteSeance key={currentNoteSeanceId ?? `new-note-${noteSeanceZone}`} ref={noteSeanceRef} initialData={currentNoteSeanceData ?? undefined} zone={noteSeanceZone ?? undefined} patientKey={pk(formData.nom || 'Anonyme', formData.prenom)} onGenerateExercices={handleGenerateExercices} onExportExercicesPDF={handleExportExercicesPDF} />
             </div>
 
             <div className="fixed-bottom">
@@ -3768,9 +3778,9 @@ Mobilité articulaire lombaire
               <div style={{ marginBottom: 16 }}>
                 {bilanType === 'geriatrique' ? (() => {
                   // Récupérer le dernier bilan initial gériatrique du patient pour fournir la baseline
-                  const patKey = `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()
+                  const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
                   const geriatricBilans = db
-                    .filter(r => `${(r.nom || 'Anonyme').toUpperCase()} ${r.prenom}`.trim() === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === 'geriatrique' && r.status === 'complet')
+                    .filter(r => pk(r.nom || 'Anonyme', r.prenom || '') === patKey && (r.bilanType ?? getBilanType(r.zone ?? '')) === 'geriatrique' && r.status === 'complet')
                     .sort((a, b) => b.id - a.id)
                   const baseline = geriatricBilans[0]?.bilanData
                   return (
@@ -3903,9 +3913,9 @@ Mobilité articulaire lombaire
             notesLibres: bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
             therapistProfession: profile.profession,
-            closedAntecedents: getClosedAntecedents(`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim(), getBilanType(selectedBodyZone ?? '')),
+            closedAntecedents: getClosedAntecedents(pk(formData.nom || 'Anonyme', formData.prenom), getBilanType(selectedBodyZone ?? '')),
           }}
-          patientKey={`${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
+          patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
           profession={profile.profession}
           onAudit={recordAIAudit}
           onUnmaskedDocsConfirm={askUnmaskedDocsConfirm}
@@ -3955,7 +3965,7 @@ Mobilité articulaire lombaire
             bilanData: ficheExerciceContextOverride?.bilanData ?? currentBilanDataOverride ?? getBilanData() ?? {},
             notesLibres: ficheExerciceContextOverride?.notesLibres ?? bilanNotes,
             therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
-            closedAntecedents: getClosedAntecedents(selectedPatient ?? `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim(), getBilanType(ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? '')),
+            closedAntecedents: getClosedAntecedents(selectedPatient ?? pk(formData.nom || 'Anonyme', formData.prenom), getBilanType(ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? '')),
             patientHistory: (() => {
               const patKey = selectedPatient ?? `${formData.nom}_${formData.prenom}_${formData.dateNaissance}`
               const currentZone = ficheExerciceContextOverride?.zone ?? selectedBodyZone ?? ''
@@ -3977,7 +3987,7 @@ Mobilité articulaire lombaire
               return history
             })(),
           }}
-          patientKey={selectedPatient ?? `${(formData.nom || 'Anonyme').toUpperCase()} ${formData.prenom}`.trim()}
+          patientKey={selectedPatient ?? pk(formData.nom || 'Anonyme', formData.prenom)}
           onAudit={recordAIAudit}
           cached={
             ficheExerciceSource?.type === 'note' ? (dbNotes.find(n => n.id === ficheExerciceSource.id)?.ficheExercice ?? null)

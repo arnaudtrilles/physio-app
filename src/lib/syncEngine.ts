@@ -46,6 +46,14 @@ export interface LocalData {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
+/**
+ * Normalise nom/prenom dans les fingerprints — sinon un round-trip cloud
+ * (qui uppercase nom + titlecase prenom via `ensurePatient`) crée des doublons
+ * non détectés (« Mamo molalign » local vs « MAMO Molalign » cloud).
+ */
+const npFp = (nom?: string, prenom?: string) =>
+  `${(nom || '').trim().toUpperCase()}|${(prenom || '').trim().toUpperCase()}`
+
 /** Remove duplicate records by comparing content (ignoring id) */
 export function deduplicateLocalData(data: LocalData): LocalData {
   function dedup<T>(items: T[], keyFn: (item: T) => string): T[] {
@@ -58,18 +66,22 @@ export function deduplicateLocalData(data: LocalData): LocalData {
     })
   }
 
+  // Patient-key fingerprints normalisés (case-insensitive) — collapse les
+  // doublons hérités d'avant la normalisation à l'écriture.
+  const pkFp = (key?: string) => (key || '').trim().toUpperCase()
+
   return {
     ...data,
-    db: dedup(data.db, b => `${b.nom}|${b.prenom}|${b.dateBilan}|${b.bilanType}|${b.zone}`),
-    dbIntermediaires: dedup(data.dbIntermediaires, b => `${b.nom}|${b.prenom}|${b.dateBilan}|${b.bilanType}|${b.zone}`),
-    dbNotes: dedup(data.dbNotes, n => `${n.nom}|${n.prenom}|${n.dateSeance}|${n.numSeance}|${n.bilanType}`),
-    dbObjectifs: dedup(data.dbObjectifs, o => `${o.patientKey}|${o.titre}|${o.cible}`),
-    dbClosedTreatments: dedup(data.dbClosedTreatments, t => `${t.patientKey}|${t.bilanType}|${t.closedAt}`),
-    dbLetters: dedup(data.dbLetters, l => `${l.patientKey}|${l.type}|${l.contenu?.slice(0, 50)}`),
-    dbLetterAudit: dedup(data.dbLetterAudit, a => `${a.patientKey}|${a.type}|${a.timestamp}`),
-    dbAICallAudit: dedup(data.dbAICallAudit, a => `${a.category}|${a.patientKey}|${a.timestamp}`),
+    db: dedup(data.db, b => `${npFp(b.nom, b.prenom)}|${b.dateBilan}|${b.bilanType}|${b.zone}`),
+    dbIntermediaires: dedup(data.dbIntermediaires, b => `${npFp(b.nom, b.prenom)}|${b.dateBilan}|${b.bilanType}|${b.zone}`),
+    dbNotes: dedup(data.dbNotes, n => `${npFp(n.nom, n.prenom)}|${n.dateSeance}|${n.numSeance}|${n.bilanType}`),
+    dbObjectifs: dedup(data.dbObjectifs, o => `${pkFp(o.patientKey)}|${o.titre}|${o.cible}`),
+    dbClosedTreatments: dedup(data.dbClosedTreatments, t => `${pkFp(t.patientKey)}|${t.bilanType}|${t.closedAt}`),
+    dbLetters: dedup(data.dbLetters, l => `${pkFp(l.patientKey)}|${l.type}|${l.contenu?.slice(0, 50)}`),
+    dbLetterAudit: dedup(data.dbLetterAudit, a => `${pkFp(a.patientKey)}|${a.type}|${a.timestamp}`),
+    dbAICallAudit: dedup(data.dbAICallAudit, a => `${a.category}|${pkFp(a.patientKey)}|${a.timestamp}`),
     dbExerciceBank: dedup(data.dbExerciceBank, e => e.id),
-    dbPatientDocs: dedup(data.dbPatientDocs, d => `${d.patientKey}|${d.name}|${d.addedAt}`),
+    dbPatientDocs: dedup(data.dbPatientDocs, d => `${pkFp(d.patientKey)}|${d.name}|${d.addedAt}`),
     dbPrescriptions: data.dbPrescriptions, // already grouped by patient, no duplication risk
   }
 }
@@ -732,9 +744,14 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
  * donc on matche par contenu, identique à `deduplicateLocalData`).
  */
 export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalData {
+  // Fingerprints normalisés (case-insensitive sur nom/prenom/patientKey) — sinon
+  // le round-trip cloud (qui uppercase nom + titlecase prenom) fait diverger les
+  // fingerprints local vs cloud et l'UNION conserve les deux comme distincts.
+  const pkFp = (key?: string) => (key || '').trim().toUpperCase()
+
   // ── Bilans ───────────────────────────────────────────────────
   const bilanFp = (b: BilanRecord) =>
-    `${b.nom}|${b.prenom}|${b.dateBilan}|${b.bilanType}|${b.zone}`
+    `${npFp(b.nom, b.prenom)}|${b.dateBilan}|${b.bilanType}|${b.zone}`
   const cloudBilanFps = new Set(cloud.db.map(bilanFp))
   const dbCloudWithDocs = cloud.db.map(cb => {
     const match = local.db.find(lb => bilanFp(lb) === bilanFp(cb))
@@ -746,26 +763,26 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
 
   // ── Bilans intermédiaires ────────────────────────────────────
   const intFp = (b: BilanIntermediaireRecord) =>
-    `${b.nom}|${b.prenom}|${b.dateBilan}|${b.bilanType}|${b.zone}`
+    `${npFp(b.nom, b.prenom)}|${b.dateBilan}|${b.bilanType}|${b.zone}`
   const cloudIntFps = new Set(cloud.dbIntermediaires.map(intFp))
   const localOnlyInt = local.dbIntermediaires.filter(li => !cloudIntFps.has(intFp(li)))
   const dbIntermediaires = [...cloud.dbIntermediaires, ...localOnlyInt]
 
   // ── Notes de séance ─────────────────────────────────────────
   const noteFp = (n: NoteSeanceRecord) =>
-    `${n.nom}|${n.prenom}|${n.dateSeance}|${n.numSeance}|${n.bilanType}`
+    `${npFp(n.nom, n.prenom)}|${n.dateSeance}|${n.numSeance}|${n.bilanType}`
   const cloudNoteFps = new Set(cloud.dbNotes.map(noteFp))
   const localOnlyNotes = local.dbNotes.filter(ln => !cloudNoteFps.has(noteFp(ln)))
   const dbNotes = [...cloud.dbNotes, ...localOnlyNotes]
 
   // ── Objectifs SMART ─────────────────────────────────────────
-  const objFp = (o: SmartObjectif) => `${o.patientKey}|${o.titre}|${o.cible}`
+  const objFp = (o: SmartObjectif) => `${pkFp(o.patientKey)}|${o.titre}|${o.cible}`
   const cloudObjFps = new Set(cloud.dbObjectifs.map(objFp))
   const localOnlyObj = local.dbObjectifs.filter(lo => !cloudObjFps.has(objFp(lo)))
   const dbObjectifs = [...cloud.dbObjectifs, ...localOnlyObj]
 
   // ── Closed treatments ───────────────────────────────────────
-  const ctFp = (t: ClosedTreatment) => `${t.patientKey}|${t.bilanType}|${t.closedAt}`
+  const ctFp = (t: ClosedTreatment) => `${pkFp(t.patientKey)}|${t.bilanType}|${t.closedAt}`
   const cloudCtFps = new Set(cloud.dbClosedTreatments.map(ctFp))
   const localOnlyCt = local.dbClosedTreatments.filter(lt => !cloudCtFps.has(ctFp(lt)))
   const dbClosedTreatments = [...cloud.dbClosedTreatments, ...localOnlyCt]
@@ -777,13 +794,13 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
 
   // ── Courriers ───────────────────────────────────────────────
   const letterFp = (l: LetterRecord) =>
-    `${l.patientKey}|${l.type}|${(l.contenu || '').slice(0, 50)}`
+    `${pkFp(l.patientKey)}|${l.type}|${(l.contenu || '').slice(0, 50)}`
   const cloudLetterFps = new Set(cloud.dbLetters.map(letterFp))
   const localOnlyLetters = local.dbLetters.filter(ll => !cloudLetterFps.has(letterFp(ll)))
   const dbLetters = [...cloud.dbLetters, ...localOnlyLetters]
 
   // ── Documents patients (préserve base64 + union local-only) ─
-  const docFp = (d: PatientDocument) => `${d.patientKey}|${d.name}|${d.addedAt}`
+  const docFp = (d: PatientDocument) => `${pkFp(d.patientKey)}|${d.name}|${d.addedAt}`
   const cloudDocFps = new Set(cloud.dbPatientDocs.map(docFp))
   const dbPatientDocsBase = cloud.dbPatientDocs.map(cd => {
     const ld = local.dbPatientDocs.find(l => docFp(l) === docFp(cd))
@@ -793,9 +810,9 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
   const dbPatientDocs = [...dbPatientDocsBase, ...localOnlyDocs]
 
   // ── Prescriptions (1 par patient, préserve doc local) ───────
-  const cloudPrescKeys = new Set(cloud.dbPrescriptions.map(p => p.patientKey))
+  const cloudPrescKeys = new Set(cloud.dbPrescriptions.map(p => pkFp(p.patientKey)))
   const cloudPrescriptionsWithDocs = cloud.dbPrescriptions.map(cp => {
-    const lp = local.dbPrescriptions.find(l => l.patientKey === cp.patientKey)
+    const lp = local.dbPrescriptions.find(l => pkFp(l.patientKey) === pkFp(cp.patientKey))
     if (!lp) return cp
     return {
       ...cp,
@@ -805,16 +822,16 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
       }),
     }
   })
-  const localOnlyPresc = local.dbPrescriptions.filter(lp => !cloudPrescKeys.has(lp.patientKey))
+  const localOnlyPresc = local.dbPrescriptions.filter(lp => !cloudPrescKeys.has(pkFp(lp.patientKey)))
   const dbPrescriptions = [...cloudPrescriptionsWithDocs, ...localOnlyPresc]
 
   // ── Audit logs ──────────────────────────────────────────────
-  const laFp = (a: LetterAuditEntry) => `${a.patientKey}|${a.type}|${a.timestamp}`
+  const laFp = (a: LetterAuditEntry) => `${pkFp(a.patientKey)}|${a.type}|${a.timestamp}`
   const cloudLaFps = new Set(cloud.dbLetterAudit.map(laFp))
   const localOnlyLa = local.dbLetterAudit.filter(la => !cloudLaFps.has(laFp(la)))
   const dbLetterAudit = [...cloud.dbLetterAudit, ...localOnlyLa]
 
-  const aiFp = (a: AICallAuditEntry) => `${a.category}|${a.patientKey}|${a.timestamp}`
+  const aiFp = (a: AICallAuditEntry) => `${a.category}|${pkFp(a.patientKey)}|${a.timestamp}`
   const cloudAiFps = new Set(cloud.dbAICallAudit.map(aiFp))
   const localOnlyAi = local.dbAICallAudit.filter(a => !cloudAiFps.has(aiFp(a)))
   const dbAICallAudit = [...cloud.dbAICallAudit, ...localOnlyAi]
