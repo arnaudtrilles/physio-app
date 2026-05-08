@@ -14,7 +14,7 @@ const RATE_LIMIT_CONFIG = {
 }
 
 export const config = {
-  // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout Whisper sur audio long)
+  // Plan Vercel Pro : maxDuration jusqu'à 300s (timeout sur audio long de séance)
   maxDuration: 300,
   api: {
     bodyParser: false,
@@ -27,13 +27,21 @@ export const config = {
 // IMPORTANT : retirer ce fallback dès qu'Azure est déployé en prod (PHI leak sinon).
 const AZURE_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT // ex: https://canode-eu.openai.azure.com
 const AZURE_KEY = process.env.AZURE_OPENAI_KEY
-const AZURE_DEPLOYMENT = process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT // nom du déploiement Azure (ex: "whisper-prod")
+
+// Deux deployments Azure pour deux profils audio :
+//   - SOLO    = `gpt-4o-transcribe`         (kiné dicte seul, ~80% de l'usage)
+//   - SESSION = `gpt-4o-transcribe-diarize` (kiné + patient parlent, sortie segmentée)
+// `WHISPER_DEPLOYMENT` est gardé comme alias rétro-compat avec l'ancien nommage.
+const AZURE_DEPLOYMENT_SOLO = process.env.AZURE_OPENAI_SOLO_DEPLOYMENT
+  ?? process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT
+const AZURE_DEPLOYMENT_SESSION = process.env.AZURE_OPENAI_SESSION_DEPLOYMENT
+
 // Default ciblé `gpt-4o-transcribe` (requis ≥ 2025-03-01-preview).
 // Whisper-large-v3 marche aussi avec cette version → safe par défaut.
 const AZURE_API_VERSION = process.env.AZURE_OPENAI_API_VERSION ?? '2025-03-01-preview'
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
-const USE_AZURE = !!(AZURE_ENDPOINT && AZURE_KEY && AZURE_DEPLOYMENT)
+const USE_AZURE = !!(AZURE_ENDPOINT && AZURE_KEY && AZURE_DEPLOYMENT_SOLO)
 
 // Sur Azure, le modèle est porté par le nom du déploiement → pas de form.append('model').
 // Sur OpenAI standard, on garde gpt-4o-transcribe (qualité > whisper-1 sur français médical).
@@ -43,6 +51,8 @@ const OPENAI_MODEL = 'gpt-4o-transcribe'
 // reconnaissance sans fournir assez de contexte pour que le modèle hallucine un bilan.
 const MEDICAL_VOCAB_PROMPT =
   "EVA, EVN, PSFS, HAD, DN4, DASH, MRC, ROM, PEC, SMART, IRM."
+
+type TranscribeMode = 'solo' | 'session'
 
 function readBody(req: VercelRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -59,12 +69,37 @@ function readBody(req: VercelRequest): Promise<Buffer> {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-function buildTranscribeRequest(form: FormData): { url: string; headers: Record<string, string> } {
+// Le client peut spécifier le mode via header `x-transcribe-mode` ou query `?mode=`.
+// Default = 'solo' pour rétro-compat avec tous les call sites existants (VoiceMic,
+// VoiceDictation) — seul l'enregistrement de séance enverra explicitement 'session'.
+function readMode(req: VercelRequest): TranscribeMode {
+  const headerVal = req.headers['x-transcribe-mode']
+  const headerMode = Array.isArray(headerVal) ? headerVal[0] : headerVal
+  const queryVal = req.query?.mode
+  const queryMode = Array.isArray(queryVal) ? queryVal[0] : queryVal
+  const raw = (headerMode ?? queryMode ?? 'solo').toString().toLowerCase()
+  return raw === 'session' ? 'session' : 'solo'
+}
+
+function pickAzureDeployment(mode: TranscribeMode): string | undefined {
+  if (mode === 'session') {
+    // Si SESSION_DEPLOYMENT pas configuré, fallback sur SOLO (qualité dégradée
+    // mais l'app ne casse pas — utile en dev / pendant rollout progressif).
+    return AZURE_DEPLOYMENT_SESSION ?? AZURE_DEPLOYMENT_SOLO
+  }
+  return AZURE_DEPLOYMENT_SOLO
+}
+
+function buildTranscribeRequest(
+  mode: TranscribeMode,
+): { url: string; headers: Record<string, string>; deployment?: string } {
   if (USE_AZURE) {
     const base = AZURE_ENDPOINT!.replace(/\/+$/, '')
+    const deployment = pickAzureDeployment(mode)!
     return {
-      url: `${base}/openai/deployments/${encodeURIComponent(AZURE_DEPLOYMENT!)}/audio/transcriptions?api-version=${encodeURIComponent(AZURE_API_VERSION)}`,
+      url: `${base}/openai/deployments/${encodeURIComponent(deployment)}/audio/transcriptions?api-version=${encodeURIComponent(AZURE_API_VERSION)}`,
       headers: { 'api-key': AZURE_KEY! },
+      deployment,
     }
   }
   return {
@@ -75,8 +110,12 @@ function buildTranscribeRequest(form: FormData): { url: string; headers: Record<
 
 // Retry interne — protège des 429/5xx/network jitter.
 // La logique externe (Vercel cold start, OOM…) est gérée côté client.
-async function callTranscribe(form: FormData, attempt: number): Promise<{ ok: boolean; status: number; body: string }> {
-  const { url, headers } = buildTranscribeRequest(form)
+async function callTranscribe(
+  form: FormData,
+  mode: TranscribeMode,
+  attempt: number,
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const { url, headers } = buildTranscribeRequest(mode)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 90_000)
   try {
@@ -91,15 +130,61 @@ async function callTranscribe(form: FormData, attempt: number): Promise<{ ok: bo
   } catch (err) {
     const message = err instanceof Error ? err.message : 'fetch failed'
     const provider = USE_AZURE ? 'Azure' : 'OpenAI'
-    console.error(`[transcribe] ${provider} fetch attempt ${attempt} failed:`, message)
+    console.error(`[transcribe] ${provider} ${mode} fetch attempt ${attempt} failed:`, message)
     return { ok: false, status: 0, body: message }
   } finally {
     clearTimeout(timeoutId)
   }
 }
 
+// ── Parser : flat (mode solo) vs segmenté (mode session/diarize) ──
+// Le format diarize d'Azure renvoie un JSON enrichi avec `segments` (liste
+// d'objets {text, speaker, start, end}). On le restitue en texte structuré
+// que le LLM downstream (Claude/Gemini) parsera proprement :
+//
+//   [Patient] J'ai mal au dos depuis trois semaines.
+//   [Kiné]   D'accord, montrez-moi où exactement…
+//
+// Heuristique speaker labeling : Azure renvoie "speaker_0", "speaker_1"…
+// On les map sur "Locuteur 1", "Locuteur 2"… (le client peut renommer
+// "Kiné" / "Patient" en post-traitement après confirmation manuelle).
+
+interface DiarizeSegment {
+  text?: string
+  speaker?: string | number
+  start?: number
+  end?: number
+}
+
+interface TranscribeResponse {
+  text?: string
+  segments?: DiarizeSegment[]
+}
+
+function formatDiarizedText(data: TranscribeResponse): string {
+  if (!data.segments || data.segments.length === 0) {
+    return data.text?.trim() ?? ''
+  }
+  // Stabilise l'ordre des speaker labels (premier rencontré = Locuteur 1).
+  const labelMap = new Map<string, string>()
+  let nextLabel = 1
+  const lines: string[] = []
+  for (const seg of data.segments) {
+    const text = seg.text?.trim()
+    if (!text) continue
+    const rawSpeaker = String(seg.speaker ?? 'unknown')
+    let label = labelMap.get(rawSpeaker)
+    if (!label) {
+      label = `Locuteur ${nextLabel++}`
+      labelMap.set(rawSpeaker, label)
+    }
+    lines.push(`[${label}] ${text}`)
+  }
+  return lines.join('\n')
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (!applyCors(req, res, 'POST, OPTIONS')) return
+  if (!applyCors(req, res, 'POST, OPTIONS', 'Content-Type, x-transcribe-mode')) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req.headers as Record<string, string | string[] | undefined>)
@@ -121,13 +206,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.warn('[transcribe] AZURE_OPENAI_* not set — falling back to OpenAI standard (no HDS DPA, PHI leaving EU)')
   }
 
+  const mode = readMode(req)
+
+  // Si mode=session demandé mais le deployment dédié n'est pas configuré,
+  // on log un warning explicite — la diarisation ne fonctionnera pas mais
+  // le code retombe sur le solo deployment pour ne pas casser l'enregistrement.
+  if (USE_AZURE && mode === 'session' && !AZURE_DEPLOYMENT_SESSION) {
+    console.warn('[transcribe] mode=session demandé mais AZURE_OPENAI_SESSION_DEPLOYMENT non configuré — fallback sur deployment SOLO (pas de diarisation)')
+  }
+
   try {
     const audioBuffer = await readBody(req)
     if (audioBuffer.length === 0) {
       return res.status(400).json({ error: 'Empty audio body' })
     }
 
-    // Limite OpenAI Whisper : 25 Mo. Au-delà → erreur claire pour que le
+    // Limite OpenAI / Azure Whisper : 25 Mo. Au-delà → erreur claire pour que le
     // client splitte. Ce check garde-fou ne devrait jamais se déclencher si
     // le client utilise le rolling MediaRecorder (chunks de ~1-2 Mo).
     if (audioBuffer.length > 25 * 1024 * 1024) {
@@ -135,7 +229,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const incomingType = (req.headers['content-type'] as string) || 'audio/webm'
-    // Mappe le content-type vers un nom de fichier plausible (OpenAI lit l'extension).
+    // Mappe le content-type vers un nom de fichier plausible (l'API lit l'extension).
     const ext = incomingType.includes('mp4') ? 'mp4'
       : incomingType.includes('mpeg') ? 'mp3'
       : incomingType.includes('wav') ? 'wav'
@@ -148,7 +242,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!USE_AZURE) form.append('model', OPENAI_MODEL)
     form.append('language', 'fr')
     form.append('prompt', MEDICAL_VOCAB_PROMPT)
-    form.append('response_format', 'json')
+    // Mode session → on demande verbose_json pour récupérer les segments diarisés.
+    // Mode solo → json plat suffit (plus rapide, payload plus petit).
+    form.append('response_format', mode === 'session' ? 'verbose_json' : 'json')
     // Anti-hallucination : température 0 = décodage déterministe, le modèle
     // s'en tient au plus probable au lieu d'« inventer » des reformulations
     // (« travail de relevé de sol » → « initiation du relevé de sol »).
@@ -159,7 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const RETRY_DELAYS_MS = [800, 2000, 5000]
     let lastResult: { ok: boolean; status: number; body: string } | null = null
     for (let attempt = 0; attempt < 3; attempt++) {
-      lastResult = await callTranscribe(form, attempt + 1)
+      lastResult = await callTranscribe(form, mode, attempt + 1)
       if (lastResult.ok) break
       const transient = lastResult.status === 0 || lastResult.status === 429 || (lastResult.status >= 500 && lastResult.status < 600)
       if (!transient) break // erreur définitive (400, 401, 413…) → arrêter
@@ -183,21 +279,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(status).json({ error: `${provider} ${lastResult.status}: ${truncated}` })
     }
 
-    let data: { text?: string }
+    let data: TranscribeResponse
     try {
       data = JSON.parse(lastResult.body)
     } catch (e) {
       return res.status(502).json({ error: `Invalid JSON from ${provider}: ${(e as Error).message}` })
     }
 
-    if (!data.text) {
+    // En mode session avec Azure diarize, on assemble la sortie texte structurée
+    // à partir des segments. Si le deployment ne supporte pas la diarisation
+    // (fallback solo), `segments` peut être absent → on renvoie le `text` plat.
+    const text = mode === 'session' ? formatDiarizedText(data) : (data.text?.trim() ?? '')
+
+    if (!text) {
       return res.status(502).json({ error: `Empty transcription from ${provider}` })
     }
 
     // `model` retourné = identifiant logique pour le client (debug/telemetry).
     // Sur Azure, on expose le deployment-id (info utile sans révéler l'endpoint).
-    const modelLabel = USE_AZURE ? `azure:${AZURE_DEPLOYMENT}` : OPENAI_MODEL
-    return res.status(200).json({ text: data.text, model: modelLabel })
+    const usedDeployment = USE_AZURE ? pickAzureDeployment(mode) : null
+    const modelLabel = USE_AZURE ? `azure:${usedDeployment}` : OPENAI_MODEL
+    const diarized = mode === 'session' && Array.isArray(data.segments) && data.segments.length > 0
+    return res.status(200).json({ text, model: modelLabel, mode, diarized })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     const stack = err instanceof Error ? err.stack : ''
