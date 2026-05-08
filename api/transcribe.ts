@@ -28,7 +28,9 @@ export const config = {
 const AZURE_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT // ex: https://canode-eu.openai.azure.com
 const AZURE_KEY = process.env.AZURE_OPENAI_KEY
 const AZURE_DEPLOYMENT = process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT // nom du déploiement Azure (ex: "whisper-prod")
-const AZURE_API_VERSION = process.env.AZURE_OPENAI_API_VERSION ?? '2024-06-01'
+// Default ciblé `gpt-4o-transcribe` (requis ≥ 2025-03-01-preview).
+// Whisper-large-v3 marche aussi avec cette version → safe par défaut.
+const AZURE_API_VERSION = process.env.AZURE_OPENAI_API_VERSION ?? '2025-03-01-preview'
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 const USE_AZURE = !!(AZURE_ENDPOINT && AZURE_KEY && AZURE_DEPLOYMENT)
