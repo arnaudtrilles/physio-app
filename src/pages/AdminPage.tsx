@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 
 const ADMIN_EMAILS = new Set(['elkamelelyes@gmail.com', 'arnaud.trilles@gmail.com'])
 
@@ -165,11 +166,64 @@ function Spinner() {
   )
 }
 
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!supabase) return
+    setLoading(true)
+    setError('')
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+    if (err) { setError(err.message); setLoading(false); return }
+    onLogin()
+  }
+
+  const inp: React.CSSProperties = {
+    width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(148,163,184,0.15)',
+    background: 'rgba(15,23,42,0.8)', color: '#f1f5f9', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      <div style={{ width: '100%', maxWidth: 360, padding: '0 20px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <span style={S.logo}>⬡ PhysioScan</span>
+          <div style={{ ...S.badge, display: 'inline-block', marginLeft: 8 }}>Admin</div>
+          <div style={{ marginTop: 12, fontSize: '0.8rem', color: '#475569' }}>Authentification requise</div>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <input
+            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="Email" autoFocus style={inp}
+          />
+          <input
+            type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="Mot de passe" style={inp}
+          />
+          {error && <div style={{ fontSize: '0.78rem', color: '#ef4444', padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 6 }}>{error}</div>}
+          <button
+            type="submit" disabled={loading}
+            style={{ padding: '11px', borderRadius: 8, border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', opacity: loading ? 0.6 : 1 }}
+          >
+            {loading ? 'Connexion…' : 'Se connecter'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [fetching, setFetching] = useState(false)
+  const [loginKey, setLoginKey] = useState(0)
 
   const isAdmin = user?.email && ADMIN_EMAILS.has(user.email)
 
@@ -177,10 +231,8 @@ export default function AdminPage() {
     if (!isAdmin || !user) return
     setFetching(true)
 
-    // Get session token
-    import('../lib/supabase').then(({ supabase }) => {
-      if (!supabase) { setError('Supabase non configuré'); setFetching(false); return }
-      supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!supabase) { setError('Supabase non configuré'); setFetching(false); return }
+    supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session?.access_token) { setError('Session expirée'); setFetching(false); return }
         fetch('/api/admin-stats', {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -193,11 +245,11 @@ export default function AdminPage() {
           .catch(e => setError(e.message))
           .finally(() => setFetching(false))
       })
-    })
-  }, [isAdmin, user])
+  }, [isAdmin, user, loginKey])
 
   if (authLoading || fetching) return <Spinner />
-  if (!user || !isAdmin) return <Screen403 />
+  if (!user) return <LoginScreen onLogin={() => setLoginKey(k => k + 1)} />
+  if (!isAdmin) return <Screen403 />
   if (error) return (
     <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ textAlign: 'center', color: '#ef4444', fontSize: '0.85rem' }}>{error}</div>
