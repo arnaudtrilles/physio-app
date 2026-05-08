@@ -21,31 +21,19 @@ export const config = {
   },
 }
 
-// Backend par défaut : Azure OpenAI EU (HDS-able via DPA Microsoft, signé par Arnaud).
-// Si AZURE_OPENAI_* sont configurés → on utilise Azure (PHI reste en zone EU).
-// Sinon → fallback OpenAI standard (dev local / preview tant qu'Azure pas provisioné).
-// IMPORTANT : retirer ce fallback dès qu'Azure est déployé en prod (PHI leak sinon).
-const AZURE_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT // ex: https://canode-eu.openai.azure.com
+// Backend obligatoire : Azure OpenAI France Central (HDS-compliant via DPA Microsoft).
+// Pas de fallback OpenAI standard — le PHI ne doit jamais quitter la zone EU.
+const AZURE_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT // ex: https://physio-app-bilan.openai.azure.com
 const AZURE_KEY = process.env.AZURE_OPENAI_KEY
 
 // Deux deployments Azure pour deux profils audio :
 //   - SOLO    = `gpt-4o-transcribe`         (kiné dicte seul, ~80% de l'usage)
 //   - SESSION = `gpt-4o-transcribe-diarize` (kiné + patient parlent, sortie segmentée)
-// `WHISPER_DEPLOYMENT` est gardé comme alias rétro-compat avec l'ancien nommage.
 const AZURE_DEPLOYMENT_SOLO = process.env.AZURE_OPENAI_SOLO_DEPLOYMENT
-  ?? process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT
 const AZURE_DEPLOYMENT_SESSION = process.env.AZURE_OPENAI_SESSION_DEPLOYMENT
 
-// Default ciblé `gpt-4o-transcribe` (requis ≥ 2025-03-01-preview).
-// Whisper-large-v3 marche aussi avec cette version → safe par défaut.
+// `gpt-4o-transcribe` requiert ≥ 2025-03-01-preview.
 const AZURE_API_VERSION = process.env.AZURE_OPENAI_API_VERSION ?? '2025-03-01-preview'
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-
-const USE_AZURE = !!(AZURE_ENDPOINT && AZURE_KEY && AZURE_DEPLOYMENT_SOLO)
-
-// Sur Azure, le modèle est porté par le nom du déploiement → pas de form.append('model').
-// Sur OpenAI standard, on garde gpt-4o-transcribe (qualité > whisper-1 sur français médical).
-const OPENAI_MODEL = 'gpt-4o-transcribe'
 
 // Prompt court de vocabulaire — uniquement les abréviations/sigles pour orienter la
 // reconnaissance sans fournir assez de contexte pour que le modèle hallucine un bilan.
@@ -81,30 +69,22 @@ function readMode(req: VercelRequest): TranscribeMode {
   return raw === 'session' ? 'session' : 'solo'
 }
 
-function pickAzureDeployment(mode: TranscribeMode): string | undefined {
-  if (mode === 'session') {
-    // Si SESSION_DEPLOYMENT pas configuré, fallback sur SOLO (qualité dégradée
-    // mais l'app ne casse pas — utile en dev / pendant rollout progressif).
-    return AZURE_DEPLOYMENT_SESSION ?? AZURE_DEPLOYMENT_SOLO
-  }
-  return AZURE_DEPLOYMENT_SOLO
+function pickAzureDeployment(mode: TranscribeMode): string {
+  // Si SESSION_DEPLOYMENT manque, fallback sur SOLO (l'app fonctionne sans
+  // diarisation plutôt que crasher — log warning côté handler).
+  if (mode === 'session') return AZURE_DEPLOYMENT_SESSION ?? AZURE_DEPLOYMENT_SOLO!
+  return AZURE_DEPLOYMENT_SOLO!
 }
 
 function buildTranscribeRequest(
   mode: TranscribeMode,
-): { url: string; headers: Record<string, string>; deployment?: string } {
-  if (USE_AZURE) {
-    const base = AZURE_ENDPOINT!.replace(/\/+$/, '')
-    const deployment = pickAzureDeployment(mode)!
-    return {
-      url: `${base}/openai/deployments/${encodeURIComponent(deployment)}/audio/transcriptions?api-version=${encodeURIComponent(AZURE_API_VERSION)}`,
-      headers: { 'api-key': AZURE_KEY! },
-      deployment,
-    }
-  }
+): { url: string; headers: Record<string, string>; deployment: string } {
+  const base = AZURE_ENDPOINT!.replace(/\/+$/, '')
+  const deployment = pickAzureDeployment(mode)
   return {
-    url: 'https://api.openai.com/v1/audio/transcriptions',
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+    url: `${base}/openai/deployments/${encodeURIComponent(deployment)}/audio/transcriptions?api-version=${encodeURIComponent(AZURE_API_VERSION)}`,
+    headers: { 'api-key': AZURE_KEY! },
+    deployment,
   }
 }
 
@@ -129,8 +109,7 @@ async function callTranscribe(
     return { ok: apiRes.ok, status: apiRes.status, body }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'fetch failed'
-    const provider = USE_AZURE ? 'Azure' : 'OpenAI'
-    console.error(`[transcribe] ${provider} ${mode} fetch attempt ${attempt} failed:`, message)
+    console.error(`[transcribe] Azure ${mode} fetch attempt ${attempt} failed:`, message)
     return { ok: false, status: 0, body: message }
   } finally {
     clearTimeout(timeoutId)
@@ -196,14 +175,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: `Trop de requêtes. Réessaie dans ${retrySec}s.` })
   }
 
-  if (!USE_AZURE && !OPENAI_API_KEY) {
-    console.error('[transcribe] No transcription backend configured (set AZURE_OPENAI_* or OPENAI_API_KEY)')
+  if (!AZURE_ENDPOINT || !AZURE_KEY || !AZURE_DEPLOYMENT_SOLO) {
+    console.error('[transcribe] Azure config incomplete — set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_SOLO_DEPLOYMENT')
     return res.status(500).json({ error: 'Transcription backend not configured on server' })
-  }
-  if (!USE_AZURE) {
-    // PHI leak warning : tant qu'Azure pas configuré, l'audio (qui contient
-    // nom/symptômes patient) part chez OpenAI standard — pas de DPA HDS.
-    console.warn('[transcribe] AZURE_OPENAI_* not set — falling back to OpenAI standard (no HDS DPA, PHI leaving EU)')
   }
 
   const mode = readMode(req)
@@ -211,7 +185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Si mode=session demandé mais le deployment dédié n'est pas configuré,
   // on log un warning explicite — la diarisation ne fonctionnera pas mais
   // le code retombe sur le solo deployment pour ne pas casser l'enregistrement.
-  if (USE_AZURE && mode === 'session' && !AZURE_DEPLOYMENT_SESSION) {
+  if (mode === 'session' && !AZURE_DEPLOYMENT_SESSION) {
     console.warn('[transcribe] mode=session demandé mais AZURE_OPENAI_SESSION_DEPLOYMENT non configuré — fallback sur deployment SOLO (pas de diarisation)')
   }
 
@@ -239,7 +213,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const form = new FormData()
     form.append('file', new Blob([new Uint8Array(audioBuffer)], { type: incomingType }), `audio.${ext}`)
     // Sur Azure le modèle est porté par le deployment-id dans l'URL → pas de field model.
-    if (!USE_AZURE) form.append('model', OPENAI_MODEL)
     form.append('language', 'fr')
     form.append('prompt', MEDICAL_VOCAB_PROMPT)
     // Mode session → on demande verbose_json pour récupérer les segments diarisés.
@@ -262,10 +235,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (attempt < 2) await sleep(RETRY_DELAYS_MS[attempt])
     }
 
-    const provider = USE_AZURE ? 'Azure' : 'OpenAI'
-
     if (!lastResult) {
-      return res.status(500).json({ error: `No ${provider} response` })
+      return res.status(500).json({ error: 'No Azure response' })
     }
 
     if (!lastResult.ok) {
@@ -276,14 +247,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch { /* keep raw */ }
       const truncated = message.length > 500 ? message.slice(0, 500) + '…' : message
       const status = lastResult.status === 0 ? 502 : lastResult.status
-      return res.status(status).json({ error: `${provider} ${lastResult.status}: ${truncated}` })
+      return res.status(status).json({ error: `Azure ${lastResult.status}: ${truncated}` })
     }
 
     let data: TranscribeResponse
     try {
       data = JSON.parse(lastResult.body)
     } catch (e) {
-      return res.status(502).json({ error: `Invalid JSON from ${provider}: ${(e as Error).message}` })
+      return res.status(502).json({ error: `Invalid JSON from Azure: ${(e as Error).message}` })
     }
 
     // En mode session avec Azure diarize, on assemble la sortie texte structurée
@@ -292,13 +263,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const text = mode === 'session' ? formatDiarizedText(data) : (data.text?.trim() ?? '')
 
     if (!text) {
-      return res.status(502).json({ error: `Empty transcription from ${provider}` })
+      return res.status(502).json({ error: 'Empty transcription from Azure' })
     }
 
     // `model` retourné = identifiant logique pour le client (debug/telemetry).
-    // Sur Azure, on expose le deployment-id (info utile sans révéler l'endpoint).
-    const usedDeployment = USE_AZURE ? pickAzureDeployment(mode) : null
-    const modelLabel = USE_AZURE ? `azure:${usedDeployment}` : OPENAI_MODEL
+    // Le deployment-id est utile sans révéler l'endpoint complet.
+    const modelLabel = `azure:${pickAzureDeployment(mode)}`
     const diarized = mode === 'session' && Array.isArray(data.segments) && data.segments.length > 0
     return res.status(200).json({ text, model: modelLabel, mode, diarized })
   } catch (err: unknown) {
