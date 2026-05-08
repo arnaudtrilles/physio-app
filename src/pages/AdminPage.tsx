@@ -23,6 +23,7 @@ interface AdminStats {
     events: { name: string; count: number }[]
     planGating: { feature: string; count: number }[]
   } | null
+  sentryIssues: { id: string; title: string; culprit: string; count: number; lastSeen: string; level: string }[]
   generatedAt: string
 }
 
@@ -465,6 +466,43 @@ export default function AdminPage() {
             </div>
           </>
         )}
+
+        {/* Sentry — Erreurs récentes */}
+        <div style={S.sectionTitle}>Erreurs — 10 dernières non résolues (Sentry)</div>
+        <div style={{ ...S.card, marginBottom: 32 }}>
+          {(stats?.sentryIssues ?? []).length === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: '1.2rem', color: '#10b981' }}>✓</span>
+              <span style={{ fontSize: '0.82rem', color: '#10b981' }}>Aucune erreur non résolue</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {(stats?.sentryIssues ?? []).map((issue, i) => {
+                const levelColor = issue.level === 'fatal' ? '#ef4444' : issue.level === 'error' ? '#f97316' : '#f59e0b'
+                const ago = (() => {
+                  const diff = Date.now() - new Date(issue.lastSeen).getTime()
+                  const h = Math.floor(diff / 3600000)
+                  if (h < 1) return `il y a ${Math.floor(diff / 60000)} min`
+                  if (h < 24) return `il y a ${h}h`
+                  return `il y a ${Math.floor(h / 24)}j`
+                })()
+                return (
+                  <div key={issue.id} style={{ padding: '10px 0', borderBottom: i < (stats?.sentryIssues ?? []).length - 1 ? '1px solid rgba(148,163,184,0.06)' : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${levelColor}18`, color: levelColor, textTransform: 'uppercase', flexShrink: 0, marginTop: 1 }}>{issue.level}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.82rem', color: '#e2e8f0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.title}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#475569', marginTop: 2 }}>{issue.culprit}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#94a3b8' }}>{issue.count}×</div>
+                      <div style={{ fontSize: '0.68rem', color: '#334155', marginTop: 1 }}>{ago}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Conformité nLPD */}
         <div style={S.sectionTitle}>Conformité nLPD / RGPD</div>

@@ -150,6 +150,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Sentry — erreurs récentes (optionnel — nécessite SENTRY_AUTH_TOKEN + SENTRY_ORG + SENTRY_PROJECT)
+    let sentryIssues: { id: string; title: string; culprit: string; count: number; lastSeen: string; level: string }[] = []
+    const sentryToken = process.env.SENTRY_AUTH_TOKEN
+    const sentryOrg = process.env.SENTRY_ORG
+    const sentryProject = process.env.SENTRY_PROJECT
+
+    if (sentryToken && sentryOrg && sentryProject) {
+      try {
+        const r = await fetch(
+          `https://sentry.io/api/0/projects/${sentryOrg}/${sentryProject}/issues/?limit=10&query=is:unresolved&sort=date`,
+          { headers: { Authorization: `Bearer ${sentryToken}` } },
+        )
+        if (r.ok) {
+          const data = await r.json() as Array<{ id: string; title: string; culprit: string; count: string; lastSeen: string; level: string }>
+          sentryIssues = data.map(i => ({
+            id: i.id,
+            title: i.title,
+            culprit: i.culprit,
+            count: parseInt(i.count, 10),
+            lastSeen: i.lastSeen,
+            level: i.level,
+          }))
+        }
+      } catch (e) {
+        console.warn('[admin-stats] Sentry query failed:', e)
+      }
+    }
+
     return res.status(200).json({
       practitioners: practitionersCount ?? 0,
       patients: patientsCount ?? 0,
@@ -165,6 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       topExercices: (exercices ?? []).slice(0, 5).map(e => ({ nom: e.nom, zone: e.zone, count: e.occurrences })),
       aiCalls30j: { total: aiAudit?.length ?? 0, byModel: aiByModel },
       postHog,
+      sentryIssues,
       generatedAt: new Date().toISOString(),
     })
   } catch (err) {
