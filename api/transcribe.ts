@@ -35,10 +35,21 @@ const AZURE_DEPLOYMENT_SESSION = process.env.AZURE_OPENAI_SESSION_DEPLOYMENT
 // `gpt-4o-transcribe` requiert ≥ 2025-03-01-preview.
 const AZURE_API_VERSION = process.env.AZURE_OPENAI_API_VERSION ?? '2025-03-01-preview'
 
-// Prompt court de vocabulaire — uniquement les abréviations/sigles pour orienter la
-// reconnaissance sans fournir assez de contexte pour que le modèle hallucine un bilan.
+// Vocabulaire kiné/physio — biaise Whisper vers les noms propres + acronymes
+// les plus mal transcrits sans donner assez de contexte pour halluciner un bilan.
+// Budget Whisper ≈ 224 tokens — mesuré ~210. Source canonique :
+// src/utils/clinicalLexicon.ts (WHISPER_VOCAB_PROMPT).
 const MEDICAL_VOCAB_PROMPT =
-  "EVA, EVN, PSFS, HAD, DN4, DASH, MRC, ROM, PEC, SMART, IRM."
+  "Vocabulaire kinésithérapie : Lasègue, Lachman, Spurling, Hawkins, Neer, Jobe, " +
+  "McMurray, Thessaly, FABER, FADIR, Thomas, Ober, Trendelenburg, Slump, ULNT, " +
+  "Schober, Romberg, Phalen, Tinel, Finkelstein, Cozen, Mill, Babinski, Mézières, " +
+  "McKenzie, Maitland, Mulligan, Sohier, Bobath, Kabat, Cyriax. " +
+  "Coiffe des rotateurs, supra-épineux, infra-épineux, sub-scapulaire, " +
+  "sterno-cléido-mastoïdien, ischio-jambiers, ilio-psoas, gastrocnémiens, " +
+  "scaphoïde, épicondyle, épitrochlée, fémoro-tibiale, tibio-tarsienne, " +
+  "sacro-iliaque, capsulite, tendinopathie, sciatique. " +
+  "EVA, EVN, PSFS, HAD, DN4, DASH, KOOS, WOMAC, NDI, MRC, ROM, PEC, BDK, " +
+  "LCA, LCP, AVC, BPCO, VPPB, SDRC, NCB, TMS, PTH, PTG, TFL, IUE, TENS, IRM."
 
 type TranscribeMode = 'solo' | 'session'
 

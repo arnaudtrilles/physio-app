@@ -1,6 +1,11 @@
 import { callClaude } from './claudeClient'
 import { CLAUDE_MODELS } from './claudeModels'
 import { authHeaders } from './apiAuth'
+import {
+  PIEGES_PHONETIQUES,
+  METHODES_NOMS_PROPRES,
+  TESTS_PAR_ZONE,
+} from './clinicalLexicon'
 import type { BilanType, NarrativeSection } from '../types'
 
 // Erreurs transitoires côté infra (Vercel down, OpenAI down, réseau jitter…).
@@ -109,17 +114,47 @@ export async function reformulateTranscription(
   rawText: string,
   fieldHint: string,
 ): Promise<string> {
-  const systemPrompt = `Tu es un assistant de rédaction pour un kinésithérapeute.
+  const systemPrompt = `Tu es un assistant de rédaction pour un kinésithérapeute / physiothérapeute francophone.
 Tu reçois une transcription orale brute et le contexte du champ à remplir.
 Ta tâche : reformuler le texte pour qu'il soit clair, concis et professionnel.
 
-RÈGLES :
-- Garde TOUTES les informations cliniques (valeurs, mesures, noms de tests, observations)
-- Corrige la grammaire, les répétitions, les hésitations et les mots parasites
-- Utilise un style clinique professionnel (phrases courtes, précises)
+RÈGLES GÉNÉRALES :
+- Garde TOUTES les informations cliniques (valeurs chiffrées, mesures, latéralités D/G, noms de tests, observations)
+- Corrige la grammaire, les répétitions, les hésitations (« euh », « donc », « voilà ») et les mots parasites
+- Style clinique professionnel : phrases courtes, précises, à la 3ᵉ personne pour le patient
 - Ne rajoute AUCUNE information qui n'était pas dans la dictée
 - Si la dictée est déjà bien formulée, renvoie-la telle quelle
-- Renvoie UNIQUEMENT le texte reformulé, rien d'autre (pas de guillemets, pas de préfixe)`
+- Renvoie UNIQUEMENT le texte reformulé, rien d'autre (pas de guillemets, pas de préfixe)
+
+STANDARDISATION DES VALEURS :
+- Échelles de douleur : « EVA 6/10 », « EVN 4/10 » — pas « EVA 6 sur 10 » en toutes lettres
+- Degrés : « 90° » et non « 90 degrés » sauf si dicté ainsi
+- Force MRC : « MRC 4/5 » ou « 4/5 » selon contexte
+- Répétitions/séries : « 3 séries de 10 répétitions », « 3×/semaine »
+- Latéralité explicite obligatoire (droite/gauche, ipsi/contro-latéral) — ne jamais omettre
+- Sigles en majuscules sans points : BDK, LCA, AVC, MRC, EVA, ROM, PEC, TENS
+
+AUTOCORRECTIONS — règle critique : si le kiné se reprend (« non en fait », « pardon », « plutôt », « je rectifie », « je voulais dire »), ne garde QUE la version corrigée. Aucune mention de l'ancienne version.
+
+CORRECTIONS PHONÉTIQUES (Whisper transcrit mal certains termes médicaux — corrige-les si tu reconnais le terme correct au contexte) :
+${PIEGES_PHONETIQUES}
+
+NOMS DE MÉTHODES (orthographe officielle imposée) : ${METHODES_NOMS_PROPRES}.
+
+NOMS DE TESTS — conserver verbatim avec leur orthographe officielle. Catalogue de référence :
+- Lombaire/SI : ${TESTS_PAR_ZONE.lombaireSI}
+- Cervical : ${TESTS_PAR_ZONE.cervical}
+- Hanche : ${TESTS_PAR_ZONE.hanche}
+- Genou : ${TESTS_PAR_ZONE.genou}
+- Cheville/pied : ${TESTS_PAR_ZONE.chevillePied}
+- Épaule : ${TESTS_PAR_ZONE.epaule}
+- Coude/poignet/main : ${TESTS_PAR_ZONE.coudePoignetMain}
+
+PRÉCISION SÉMANTIQUE :
+- Si le patient ne rapporte pas un symptôme : « pas de X retrouvé », « absence de X », « X non rapporté » — JAMAIS « le patient nie X » (le verbe nier présuppose un désaveu actif).
+- Un test « négatif » est un résultat clinique à conserver en clair, pas une donnée manquante.
+
+DOUTE — si un mot est inintelligible, marque \`[inaudible]\` plutôt que d'inventer. Si un terme reste ambigu entre deux options phonétiquement proches, marque \`[à préciser : X ou Y ?]\`.`
 
   const userPrompt = `Champ : "${fieldHint}"
 
@@ -355,6 +390,7 @@ RÈGLES STRICTES :
 14. Contrat kiné — frequenceDuree : si le kiné mentionne un nombre de séances par semaine, une fréquence ou une durée de traitement (ex: "2 fois par semaine pendant 6 semaines", "3 séances/semaine sur 8 semaines", "rythme bihebdomadaire"), mets-le dans contratKine.frequenceDuree. Cherche aussi des formulations comme "je le vois X fois par semaine" ou "séances prévues sur X semaines".
 15. Pour la neurologie ULNT/mécanosensibilité : si le kiné dit "positif" ou "négatif" pour un nerf (médian, radial, ulnaire), utilise exactement cette valeur avec les détails s'il y en a (ex: "Positif côté droit — reproduction des symptômes").
 16. AUTOCORRECTIONS — règle critique : la transcription est chronologique. Si le kiné revient sur une information précédemment dite et la modifie ou la corrige (formulations typiques : "non en fait", "je me reprends", "plutôt", "finalement", "pardon", "je rectifie", "non c'est plutôt", "je voulais dire", "je me suis trompé"), c'est TOUJOURS la version la plus récente qui prime. N'extrais QUE la version corrigée. Cela s'applique à tous les champs : EVN, amplitudes, MRC, tests positifs/négatifs, localisation, antécédents, etc.
+17. CORRECTIONS PHONÉTIQUES — Whisper transcrit parfois mal les termes médicaux. Avant de mapper aux champs, applique les corrections évidentes au contexte clinique : « cyatique » → sciatique ; « épidoyle » → épicondyle ; « scaroïde » → scaphoïde ; « koïffe » / « colite des rotateurs » → coiffe des rotateurs ; « lashmane » → Lachman ; « romber » → Romberg ; « hawkings » → Hawkins ; « bobas » → Bobath ; « kabbat » → Kabat ; « mézière » → Mézières ; « moulighan » → Mulligan ; « malaitlande » → Maitland ; « tibialiste postérieur » → tibial postérieur ; « gastronomiens » → gastrocnémiens ; « illio-psoas » → ilio-psoas ; « ischio » (jamais « hischio »).
 
 SCHÉMA CIBLE (type de bilan : ${bilanType}) :
 ${schema}
@@ -437,14 +473,16 @@ RÈGLES :
    - id: "tests", titre: "Tests spécifiques"
      → tous les tests cliniques nommés réalisés, avec leur résultat (positif / négatif / litigieux + détail) et le côté testé. Le PDF attend ce contenu en bloc dédié.
        Catalogue de référence (à reconnaître quels que soient leurs synonymes oraux) :
-       • Lombaire / sacro-iliaque : Lasègue (SLR), Slump test, Prone Knee Bend (PKB / test de Léri), Cluster de Laslett, Cluster de Sultive, Extension-Rotation, Prone Instability Test, FABER, Gaenslen, compression sacro-iliaque, distraction sacro-iliaque, push-pull, Adam (Test TA).
-       • Cervical : Spurling, Distraction cervicale, ULTT 1/2/3/4, Adson, Roos (EAST), Sharp-Purser, test de l'alar.
-       • Hanche : FADIR, FABER, Thomas, Ober, Trendelenburg, log-roll, scour test.
-       • Genou : Lachman, Tiroir antérieur/postérieur, Pivot shift, Thessaly, McMurray, Apley, LCL stress varus, LCM stress valgus, Renne, Noble, Vague rotulien, Hoffa, Zohlen.
-       • Cheville/pied : Talar tilt varus, Talar tilt valgus, Kleiger, Squeeze test, Translation fibulaire, Impaction, LFH, Molloy, Foot Lift, BESS, Y-Balance, ALTD, RALTD, HEER, ABD-HEER.
-       • Épaule : Hawkins, Neer, Jobe (empty can), Belly press, Bear hug, Bell press, External rotation lag sign, Internal rotation lag sign, O'Brien, palpation AC, cross-arm, abduction horizontale résistée, apprehension/relocation, jerk test, signe du sulcus.
-       • Drainage lymphatique / vasculaire : Stemmer, signe du godet.
-       Tout autre test nommé → conserve le nom exact du test verbatim.
+       • Lombaire / sacro-iliaque : ${TESTS_PAR_ZONE.lombaireSI}.
+       • Cervical : ${TESTS_PAR_ZONE.cervical}.
+       • Hanche : ${TESTS_PAR_ZONE.hanche}.
+       • Genou : ${TESTS_PAR_ZONE.genou}.
+       • Cheville/pied : ${TESTS_PAR_ZONE.chevillePied} ; ainsi que LFH, Molloy, Foot Lift, BESS, Y-Balance, ALTD, RALTD, HEER, ABD-HEER (tests fonctionnels chevilles instables).
+       • Épaule : ${TESTS_PAR_ZONE.epaule}.
+       • Coude / poignet / main : ${TESTS_PAR_ZONE.coudePoignetMain}.
+       • Drainage lymphatique / vasculaire : ${TESTS_PAR_ZONE.drainageVasculaire}.
+       • Vestibulaire : ${TESTS_PAR_ZONE.vestibulaire}.
+       Tout autre test nommé → conserve le nom exact du test verbatim avec son orthographe officielle (Lasègue avec accent grave, Mézières avec accent, McKenzie, Maitland, Mulligan, Bobath, Kabat).
      ⚠ Format suggéré : « Lasègue droit positif à 60° avec irradiation S1. Lasègue gauche négatif. Slump test positif à droite. FABER bilatéral négatif. »
 
    - id: "diagnostic", titre: "Synthèse diagnostique"
