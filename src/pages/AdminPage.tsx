@@ -392,28 +392,29 @@ export default function AdminPage() {
           </div>
         ) : (
           <>
-            <div style={{ ...S.grid4, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-              <KpiCard
-                value={stats.postHog.uniqueUsers30j}
-                label="Utilisateurs actifs"
-                sub="30 derniers jours"
-              />
-              <KpiCard
-                value={stats.postHog.events.reduce((a, e) => a + e.count, 0)}
-                label="Événements totaux"
-                sub="30 derniers jours"
-              />
-              <KpiCard
-                value={stats.postHog.events.find(e => e.name === 'bilan_created')?.count ?? 0}
-                label="Bilans créés"
-                sub="via PostHog"
-              />
-              <KpiCard
-                value={stats.postHog.events.find(e => e.name === 'pdf_exported')?.count ?? 0}
-                label="PDFs exportés"
-                sub="via PostHog"
-              />
-            </div>
+            {(() => {
+              const upgradeClicks = stats.postHog.events.find(e => e.name === 'plan_upgrade_clicked')?.count ?? 0
+              const totalGating = stats.postHog.planGating.reduce((a, g) => a + g.count, 0)
+              const convRate = totalGating > 0 ? Math.round(upgradeClicks / totalGating * 100) : 0
+              return (
+                <div style={{ ...S.grid4, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                  <KpiCard value={stats.postHog.uniqueUsers30j} label="Utilisateurs actifs" sub="30 derniers jours" />
+                  <KpiCard value={stats.postHog.events.reduce((a, e) => a + e.count, 0)} label="Événements totaux" sub="30 derniers jours" />
+                  <KpiCard value={stats.postHog.events.find(e => e.name === 'bilan_created')?.count ?? 0} label="Bilans créés" sub="via PostHog" />
+                  <KpiCard value={stats.postHog.events.find(e => e.name === 'pdf_exported')?.count ?? 0} label="PDFs exportés" sub="via PostHog" />
+                  <KpiCard
+                    value={stats.postHog.events.find(e => e.name === 'ai_analysis_completed')?.count ?? 0}
+                    label="Analyses IA"
+                    sub="bilans + évolution + fiches"
+                  />
+                  <KpiCard
+                    value={totalGating > 0 ? `${convRate}%` : '—'}
+                    label="Conversion paywall"
+                    sub={totalGating > 0 ? `${upgradeClicks} clics / ${totalGating} blocages` : 'Aucun blocage'}
+                  />
+                </div>
+              )
+            })()}
 
             <div style={S.grid2}>
               {/* Événements par type */}
