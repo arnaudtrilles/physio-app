@@ -799,15 +799,59 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
   const localOnlyLetters = local.dbLetters.filter(ll => !cloudLetterFps.has(letterFp(ll)))
   const dbLetters = [...cloud.dbLetters, ...localOnlyLetters]
 
-  // ── Documents patients (préserve base64 + union local-only) ─
-  const docFp = (d: PatientDocument) => `${pkFp(d.patientKey)}|${d.name}|${d.addedAt}`
-  const cloudDocFps = new Set(cloud.dbPatientDocs.map(docFp))
-  const dbPatientDocsBase = cloud.dbPatientDocs.map(cd => {
-    const ld = local.dbPatientDocs.find(l => docFp(l) === docFp(cd))
-    return ld?.data ? { ...cd, data: ld.data, originalData: ld.originalData } : cd
-  })
-  const localOnlyDocs = local.dbPatientDocs.filter(ld => !cloudDocFps.has(docFp(ld)))
-  const dbPatientDocs = [...dbPatientDocsBase, ...localOnlyDocs]
+  // ── Documents patients (préserve base64 + dédupe par patientKey+name) ─
+  // Fingerprint sans addedAt : Supabase reformate les timestamps au round-trip
+  // (drift de précision micro/milli, format Z vs +00:00), ce qui faisait que
+  // chaque cycle de sync ajoutait un duplicata orphelin (data vide). Avec
+  // patientKey+name comme clé, un même document n'est gardé qu'une fois et
+  // le binaire local est réattaché quel que soit le format de date côté cloud.
+  const docFp = (d: PatientDocument) => `${pkFp(d.patientKey)}|${d.name}`
+
+  // Index des docs locaux par fp, en privilégiant ceux qui ont un binaire.
+  const localByFp = new Map<string, PatientDocument>()
+  for (const ld of local.dbPatientDocs) {
+    const key = docFp(ld)
+    const prev = localByFp.get(key)
+    if (!prev || (ld.data && !prev.data)) localByFp.set(key, ld)
+  }
+
+  // Pour chaque doc cloud : réattacher le binaire local + les flags qui ne
+  // sont pas persistés en cloud (`generated`, `source`, `originalData`).
+  // Si plusieurs cloud-entries partagent la même clé, on garde celle avec data
+  // (réattachée) ; à égalité, la plus récente.
+  const cloudByFp = new Map<string, PatientDocument>()
+  for (const cd of cloud.dbPatientDocs) {
+    const key = docFp(cd)
+    const ld = localByFp.get(key)
+    const merged: PatientDocument = ld?.data
+      ? { ...cd, data: ld.data, originalData: ld.originalData, generated: ld.generated, source: ld.source }
+      : (ld ? { ...cd, generated: ld.generated, source: ld.source } : cd)
+    const prev = cloudByFp.get(key)
+    if (!prev) {
+      cloudByFp.set(key, merged)
+    } else {
+      const prevHasData = !!prev.data
+      const currHasData = !!merged.data
+      if (currHasData && !prevHasData) cloudByFp.set(key, merged)
+      else if (currHasData === prevHasData) {
+        const prevTime = Date.parse(prev.addedAt) || 0
+        const currTime = Date.parse(merged.addedAt) || 0
+        if (currTime > prevTime) cloudByFp.set(key, merged)
+      }
+    }
+  }
+
+  // Local-only : docs dont la clé n'existe pas du tout côté cloud (créés
+  // avant qu'un sync n'ait pu les uploader).
+  const localOnlyByFp = new Map<string, PatientDocument>()
+  for (const ld of local.dbPatientDocs) {
+    const key = docFp(ld)
+    if (cloudByFp.has(key)) continue
+    const prev = localOnlyByFp.get(key)
+    if (!prev || (ld.data && !prev.data)) localOnlyByFp.set(key, ld)
+  }
+
+  const dbPatientDocs = [...cloudByFp.values(), ...localOnlyByFp.values()]
 
   // ── Prescriptions (1 par patient, préserve doc local) ───────
   const cloudPrescKeys = new Set(cloud.dbPrescriptions.map(p => pkFp(p.patientKey)))
@@ -871,7 +915,9 @@ export function detectUnionedStores(merged: LocalData, cloud: LocalData): {
     dbClosedTreatments: merged.dbClosedTreatments.length > cloud.dbClosedTreatments.length,
     dbExerciceBank: merged.dbExerciceBank.length > cloud.dbExerciceBank.length,
     dbLetters: merged.dbLetters.length > cloud.dbLetters.length,
-    dbPatientDocs: merged.dbPatientDocs.length > cloud.dbPatientDocs.length,
+    // Patient docs : reconcile aussi quand le merge a *réduit* le nombre
+    // d'entrées (dédupe des orphelins cloud créés par les anciens round-trips).
+    dbPatientDocs: merged.dbPatientDocs.length !== cloud.dbPatientDocs.length,
     dbPrescriptions: merged.dbPrescriptions.length > cloud.dbPrescriptions.length,
     dbLetterAudit: merged.dbLetterAudit.length > cloud.dbLetterAudit.length,
     dbAICallAudit: merged.dbAICallAudit.length > cloud.dbAICallAudit.length,
