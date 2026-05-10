@@ -8,8 +8,10 @@ import { sanitize } from './pdfGenerator'
 //   - finalité du traitement
 //   - durée de conservation explicite (audio jamais conservé)
 //   - droits du patient (accès, rectification, effacement)
-//   - identification du responsable (le kiné via le profil)
+//   - identification du responsable (kinésithérapeute / physiothérapeute via le profil)
 //   - consentement explicite (signature manuscrite)
+
+type Profession = 'Kinésithérapeute' | 'Physiothérapeute'
 
 interface ConsentPatient {
   nom: string
@@ -22,6 +24,7 @@ interface ConsentTherapist {
   prenom?: string
   cabinet?: string
   email?: string
+  profession?: Profession
 }
 
 interface ConsentPdfOptions {
@@ -71,6 +74,11 @@ export function generateConsentPdf(opts: ConsentPdfOptions): ConsentPdfResult {
   const signedAt = opts.signedAt ?? new Date().toISOString()
   const signedDateStr = formatDateFr(signedAt)
 
+  // Terminologie dynamique selon profession (FR : kiné, CH/BE : physio)
+  const isPhysio = opts.therapist?.profession === 'Physiothérapeute'
+  const therapeuteWord = isPhysio ? 'physiotherapeute' : 'kinesitherapeute'
+  const therapieWord = isPhysio ? 'physiotherapie' : 'kinesitherapie'
+
   // ── En-tête ──
   doc.setFillColor(...C.primary)
   doc.rect(0, 0, W, 28, 'F')
@@ -83,7 +91,7 @@ export function generateConsentPdf(opts: ConsentPdfOptions): ConsentPdfResult {
   doc.text(sanitize('Information & autorisation'), ML, 13)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text(sanitize('Utilisation d’un assistant numerique pour votre suivi en physiotherapie'), ML, 21)
+  doc.text(sanitize(`Utilisation d’un assistant numerique pour votre suivi en ${therapieWord}`), ML, 21)
 
   y = 38
   doc.setTextColor(...C.text)
@@ -112,7 +120,7 @@ export function generateConsentPdf(opts: ConsentPdfOptions): ConsentPdfResult {
   // ── Intro chaleureuse ──
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  const intro = `Bonjour ${opts.patient.prenom},\n\nPour preparer et suivre votre prise en charge, votre kinesitherapeute peut utiliser un assistant numerique. Ce document vous explique comment et vous demande votre accord.`
+  const intro = `Bonjour ${opts.patient.prenom},\n\nPour preparer et suivre votre prise en charge, votre ${therapeuteWord} peut utiliser un assistant numerique. Ce document vous explique comment et vous demande votre accord.`
   const introLines = doc.splitTextToSize(sanitize(intro), MW)
   doc.text(introLines, ML, y)
   y += introLines.length * 5 + 4
@@ -141,21 +149,22 @@ export function generateConsentPdf(opts: ConsentPdfOptions): ConsentPdfResult {
   }
 
   section('Ce que fait l’assistant')
-  bulletGood('Il transcrit ce qui est dit pendant la seance pour aider votre kinesitherapeute a rediger votre dossier plus rapidement.')
-  bulletGood('Il aide a organiser les informations cliniques (douleur, mobilite, exercices) pour proposer un plan de soin adapte.')
+  bulletGood(`Il transcrit ce qui est dit pendant la seance pour aider votre ${therapeuteWord} a rediger votre dossier plus rapidement.`)
+  bulletGood(`Il aide a organiser les informations cliniques recueillies (douleur, mobilite, antecedents) afin que votre ${therapeuteWord} gagne du temps administratif et puisse consacrer davantage de minutes a votre bilan et a votre prise en charge.`)
+  bulletGood('Il ne pose aucun diagnostic et ne propose aucun traitement : toutes les decisions cliniques restent celles de votre therapeute.')
   y += 1
 
   section('Ce que vous devez savoir')
   bulletGood('Vos enregistrements vocaux ne sont jamais conserves. Ils sont transformes en texte sur le moment, puis effaces immediatement.')
   bulletGood('Aucune image ni video n’est enregistree. Seule la voix sert ponctuellement a la transcription.')
   bulletGood('Vos donnees sont traitees en France, sur des serveurs Microsoft Azure agrees Hebergeur de Donnees de Sante (HDS).')
-  bulletGood('Seul votre kinesitherapeute a acces a votre dossier. Aucune donnee n’est utilisee a des fins commerciales ou publicitaires.')
+  bulletGood(`Seul votre ${therapeuteWord} a acces a votre dossier. Aucune donnee n’est utilisee a des fins commerciales ou publicitaires.`)
   y += 1
 
   section('Vos droits')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
-  const droits = 'A tout moment, vous pouvez demander a consulter, modifier ou supprimer vos donnees. Vous pouvez aussi retirer cet accord. Il vous suffit d’en parler a votre kinesitherapeute, qui s’en chargera. Conformement au RGPD (UE) et a la nLPD (Suisse), votre consentement est libre et revocable.'
+  const droits = `A tout moment, vous pouvez demander a consulter, modifier ou supprimer vos donnees. Vous pouvez aussi retirer cet accord. Il vous suffit d’en parler a votre ${therapeuteWord}, qui s’en chargera. Conformement au RGPD (UE) et a la nLPD (Suisse), votre consentement est libre et revocable.`
   const droitsLines = doc.splitTextToSize(sanitize(droits), MW)
   doc.text(droitsLines, ML, y)
   y += droitsLines.length * 4.5 + 4
@@ -173,7 +182,7 @@ export function generateConsentPdf(opts: ConsentPdfOptions): ConsentPdfResult {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
   doc.setTextColor(...C.text)
-  const consentText = 'J’autorise mon kinesitherapeute a utiliser cet assistant numerique pour ma prise en charge, dans les conditions decrites ci-dessus.'
+  const consentText = `J’autorise mon ${therapeuteWord} a utiliser cet assistant numerique pour ma prise en charge, dans les conditions decrites ci-dessus.`
   const consentLines = doc.splitTextToSize(sanitize(consentText), MW - 8)
   doc.text(consentLines, ML + 4, y + 12)
   y += consentBoxH + 6

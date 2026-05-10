@@ -13,6 +13,7 @@ interface ConsentFormProps {
     prenom?: string
     cabinet?: string
     email?: string
+    profession?: 'Kinésithérapeute' | 'Physiothérapeute'
   }
   /**
    * Appelé après signature & génération du PDF. Le parent persiste le blob
@@ -32,6 +33,9 @@ interface ConsentFormProps {
 export function ConsentForm({ patient, therapist, onSigned, onCancel }: ConsentFormProps) {
   const [showPad, setShowPad] = useState(false)
   const [generating, setGenerating] = useState(false)
+
+  const isPhysio = therapist?.profession === 'Physiothérapeute'
+  const therapeute = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
 
   const dateNaissanceFr = useMemo(() => {
     if (!patient.dateNaissance) return ''
@@ -92,7 +96,7 @@ export function ConsentForm({ patient, therapist, onSigned, onCancel }: ConsentF
         <p style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--text)', margin: '0 0 1.5rem' }}>
           Bonjour <strong>{patient.prenom}</strong>,
           <br /><br />
-          Pour préparer et suivre votre prise en charge, votre kinésithérapeute peut utiliser
+          Pour préparer et suivre votre prise en charge, votre {therapeute} peut utiliser
           un assistant numérique. Voici ce qu'il fait — et ce que vous devez savoir.
         </p>
 
@@ -100,11 +104,16 @@ export function ConsentForm({ patient, therapist, onSigned, onCancel }: ConsentF
         <Section title="Ce que fait l'assistant">
           <Bullet>
             Il <strong>transcrit ce qui est dit pendant la séance</strong> pour aider votre
-            kinésithérapeute à rédiger votre dossier plus rapidement.
+            {' '}{therapeute} à rédiger votre dossier plus rapidement.
           </Bullet>
           <Bullet>
-            Il aide à organiser les informations cliniques (douleur, mobilité, exercices)
-            pour proposer un plan de soin adapté.
+            Il aide à <strong>organiser les informations cliniques recueillies</strong> (douleur,
+            mobilité, antécédents) afin que votre {therapeute} <strong>gagne du temps administratif</strong>
+            {' '}et puisse consacrer davantage de minutes à votre bilan et à votre prise en charge.
+          </Bullet>
+          <Bullet>
+            Il <strong>ne pose aucun diagnostic</strong> et <strong>ne propose aucun traitement</strong> :
+            toutes les décisions cliniques restent celles de votre thérapeute.
           </Bullet>
         </Section>
 
@@ -123,7 +132,7 @@ export function ConsentForm({ patient, therapist, onSigned, onCancel }: ConsentF
             agréés Hébergeur de Données de Santé (HDS)</strong>.
           </Bullet>
           <Bullet>
-            <strong>Seul votre kinésithérapeute</strong> a accès à votre dossier. Aucune
+            <strong>Seul votre {therapeute}</strong> a accès à votre dossier. Aucune
             donnée n'est utilisée à des fins commerciales ou publicitaires.
           </Bullet>
         </Section>
@@ -133,7 +142,7 @@ export function ConsentForm({ patient, therapist, onSigned, onCancel }: ConsentF
           <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text)', margin: 0 }}>
             À tout moment, vous pouvez demander à <strong>consulter, modifier ou supprimer</strong> vos
             données. Vous pouvez aussi <strong>retirer cet accord</strong>. Il vous suffit
-            d'en parler à votre kinésithérapeute. Conformément au <strong>RGPD</strong> (UE)
+            d'en parler à votre {therapeute}. Conformément au <strong>RGPD</strong> (UE)
             et à la <strong>nLPD</strong> (Suisse), votre consentement est libre et révocable.
           </p>
         </Section>
@@ -150,7 +159,7 @@ export function ConsentForm({ patient, therapist, onSigned, onCancel }: ConsentF
             En signant ci-dessous :
           </div>
           <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text)', margin: 0 }}>
-            J'autorise mon kinésithérapeute à utiliser cet assistant numérique pour ma
+            J'autorise mon {therapeute} à utiliser cet assistant numérique pour ma
             prise en charge, dans les conditions décrites ci-dessus.
           </p>
         </div>

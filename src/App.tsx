@@ -3267,6 +3267,7 @@ Mobilité articulaire lombaire
             nom: profile.nom,
             prenom: profile.prenom,
             email: profile.email,
+            profession: profile.profession === 'Physiothérapeute' ? 'Physiothérapeute' : 'Kinésithérapeute',
           }}
           onSigned={({ blob, fileName }) => {
             const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
