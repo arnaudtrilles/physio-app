@@ -158,7 +158,7 @@ function extractPatients(data: LocalData) {
   return Array.from(seen.values())
 }
 
-/** Strip base64 from bilan documents (keep metadata only) */
+/** Strip base64 from bilan documents (keep metadata + storagePath only) */
 function stripDocs(docs?: Array<Record<string, unknown>>): unknown[] {
   if (!docs) return []
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -508,7 +508,8 @@ export async function uploadAll(userId: string, data: LocalData): Promise<Patien
         practitioner_id: userId,
         patient_id: pm.get(d.patientKey)!,
         name: d.name, mime_type: d.mimeType,
-        storage_path: null, masked: d.masked || false,
+        storage_path: d.storagePath || null,
+        masked: d.masked || false,
         added_at: d.addedAt || new Date().toISOString(),
       }))
     if (docRows.length > 0) await batchInsert('patient_documents', docRows)
@@ -708,13 +709,15 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
     occurrences: (e.occurrences as number) || 1,
   }))
 
-  // 13. Documents patient (metadata — no base64)
+  // 13. Documents patient (metadata — no base64, mais storage_path pour
+  // permettre la récupération lazy du blob via Supabase Storage)
   const docRows = await fetchAll('patient_documents', userId)
   const dbPatientDocs: PatientDocument[] = docRows.map(d => ({
     id: d.id as string, patientKey: pkey(d.patient_id as string),
     name: d.name as string, mimeType: d.mime_type as string,
     data: '', addedAt: (d.added_at as string) || new Date().toISOString(),
     masked: (d.masked as boolean) || false,
+    storagePath: (d.storage_path as string) || undefined,
   }))
 
   return {
@@ -755,8 +758,33 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
   const cloudBilanFps = new Set(cloud.db.map(bilanFp))
   const dbCloudWithDocs = cloud.db.map(cb => {
     const match = local.db.find(lb => bilanFp(lb) === bilanFp(cb))
-    if (match?.documents?.some(d => d.data)) return { ...cb, documents: match.documents }
-    return cb
+    // Champs client-only non persistés en cloud — toujours réattacher depuis local
+    // pour éviter qu'un sync ne vide le cache (compteRendu) ou le diagnostic.
+    const clientOnly = match
+      ? {
+          compteRendu: match.compteRendu,
+          compteRenduError: match.compteRenduError,
+          diagnosticPhysio: match.diagnosticPhysio ?? cb.diagnosticPhysio,
+        }
+      : {}
+    if (!match?.documents?.length && !cb.documents?.length) return { ...cb, ...clientOnly }
+    // Per-doc merge par nom : on garde le binaire local (data + originalData)
+    // ET le storagePath cloud (autorité). Si cloud n'a pas encore le path mais
+    // local oui (upload local pas encore re-down depuis cloud), garder local.
+    const cloudDocs = cb.documents ?? []
+    const localDocs = match?.documents ?? []
+    const byName = new Map<string, typeof localDocs[number]>()
+    for (const ld of localDocs) byName.set(ld.name, ld)
+    const mergedDocs = cloudDocs.map(cd => {
+      const ld = byName.get(cd.name)
+      const storagePath = cd.storagePath || ld?.storagePath
+      if (ld?.data) return { ...cd, data: ld.data, originalData: ld.originalData, storagePath }
+      return { ...cd, storagePath }
+    })
+    // Ajouter les docs purement locaux (pas encore syncés cloud)
+    const cloudNames = new Set(cloudDocs.map(d => d.name))
+    const localOnlyDocs = localDocs.filter(d => !cloudNames.has(d.name))
+    return { ...cb, ...clientOnly, documents: [...mergedDocs, ...localOnlyDocs] }
   })
   const localOnlyBilans = local.db.filter(lb => !cloudBilanFps.has(bilanFp(lb)))
   const db = [...dbCloudWithDocs, ...localOnlyBilans]
@@ -823,9 +851,13 @@ export function mergeWithLocalDocs(cloud: LocalData, local: LocalData): LocalDat
   for (const cd of cloud.dbPatientDocs) {
     const key = docFp(cd)
     const ld = localByFp.get(key)
+    // storagePath : on garde celui du cloud en priorité (autorité), mais on
+    // tombe sur le local si le cloud n'a pas encore récupéré la valeur (cas :
+    // upload local fait, sync metadata pas encore round-tripé).
+    const storagePath = cd.storagePath || ld?.storagePath
     const merged: PatientDocument = ld?.data
-      ? { ...cd, data: ld.data, originalData: ld.originalData, generated: ld.generated, source: ld.source }
-      : (ld ? { ...cd, generated: ld.generated, source: ld.source } : cd)
+      ? { ...cd, data: ld.data, originalData: ld.originalData, generated: ld.generated, source: ld.source, storagePath }
+      : (ld ? { ...cd, generated: ld.generated, source: ld.source, storagePath } : { ...cd, storagePath })
     const prev = cloudByFp.get(key)
     if (!prev) {
       cloudByFp.set(key, merged)

@@ -6,6 +6,7 @@ import {
   METHODES_NOMS_PROPRES,
   TESTS_PAR_ZONE,
 } from './clinicalLexicon'
+import { scrubTranscription, type ScrubPatientHint } from './transcriptionScrub'
 import type { BilanType, NarrativeSection } from '../types'
 
 // Erreurs transitoires côté infra (Vercel down, OpenAI down, réseau jitter…).
@@ -109,11 +110,16 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string> {
 /**
  * Reformule une transcription brute pour qu'elle soit bien rédigée
  * en fonction du contexte du champ (son placeholder / label).
+ *
+ * Le `patient` optionnel permet d'anonymiser nom/prénom avant l'envoi
+ * à Claude (minimisation des données — RGPD art. 5.1.c).
  */
 export async function reformulateTranscription(
   rawText: string,
   fieldHint: string,
+  patient?: ScrubPatientHint,
 ): Promise<string> {
+  const { text: scrubbedText } = scrubTranscription(rawText, patient)
   const systemPrompt = `Tu es un assistant de rédaction pour un kinésithérapeute / physiothérapeute francophone.
 Tu reçois une transcription orale brute et le contexte du champ à remplir.
 Ta tâche : reformuler le texte pour qu'il soit clair, concis et professionnel.
@@ -160,7 +166,7 @@ DOUTE — si un mot est inintelligible, marque \`[inaudible]\` plutôt que d'inv
 
 Transcription brute :
 """
-${rawText}
+${scrubbedText}
 """`
 
   const result = await callClaude('', systemPrompt, userPrompt, 4096, false, CLAUDE_MODELS.VOICE_REFORMULATION)
@@ -400,13 +406,18 @@ ${schema}
 /**
  * Appelle Claude pour extraire un objet BilanData partiel depuis une transcription.
  * Le JSON retourné est directement utilisable avec bilanRef.setData(...).
+ *
+ * Le `patient` optionnel anonymise nom/prénom dans la transcription avant
+ * l'envoi (minimisation des données — RGPD art. 5.1.c).
  */
 export async function extractBilanFromTranscription(
   transcription: string,
-  bilanType: BilanType
+  bilanType: BilanType,
+  patient?: ScrubPatientHint,
 ): Promise<Record<string, unknown>> {
   const systemPrompt = buildExtractionPrompt(bilanType)
-  const userPrompt = `Transcription de la dictée du kiné (à analyser) :\n\n"""\n${transcription}\n"""`
+  const { text: scrubbedTranscription } = scrubTranscription(transcription, patient)
+  const userPrompt = `Transcription de la dictée du kiné (à analyser) :\n\n"""\n${scrubbedTranscription}\n"""`
 
   const raw = await callClaude(
     '',                // apiKey ignoré (auth côté serveur)
@@ -430,12 +441,17 @@ export async function extractBilanFromTranscription(
 /**
  * Génère un compte-rendu narratif structuré en 7 sections à partir d'une
  * transcription de consultation, en utilisant Claude.
+ *
+ * Le `patient` optionnel anonymise nom/prénom dans la transcription avant
+ * l'envoi (minimisation des données — RGPD art. 5.1.c).
  */
 export async function generateNarrativeReport(
   transcription: string,
   zone: string,
   context: 'dictee' | 'seance' = 'dictee',
+  patient?: ScrubPatientHint,
 ): Promise<NarrativeSection[]> {
+  const { text: scrubbedTranscription } = scrubTranscription(transcription, patient)
   const contextInstructions = context === 'seance'
     ? `Tu reçois la transcription d'une séance complète de physiothérapie avec le thérapeute et le patient.
 La transcription capture les deux voix sans distinction de locuteur — identifie le contexte clinique à partir du contenu.
@@ -509,7 +525,7 @@ Mode : ${context === 'seance' ? 'Enregistrement séance complète (thérapeute +
 
 Transcription :
 """
-${transcription}
+${scrubbedTranscription}
 """`
 
   const raw = await callClaude('', systemPrompt, userPrompt, 8192, false, CLAUDE_MODELS.DEFAULT)

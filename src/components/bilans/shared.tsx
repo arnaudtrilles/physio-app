@@ -153,7 +153,7 @@ export function BilanModeToggle({ mode, onChange }: { mode: BilanMode; onChange:
   const hints: Record<BilanMode, string> = {
     noyau: 'Noyau minimum aligné EBP — les sections d\'approfondissement sont masquées.',
     complet: 'Bilan détaillé complet — toutes les sections sont visibles.',
-    vocal: 'Mode consultation — enregistrez, Whisper transcrit, Claude rédige.',
+    vocal: 'Mode consultation.',
   }
   return (
     <div style={{ marginBottom: 12 }}>

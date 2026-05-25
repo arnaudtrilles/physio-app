@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { BilanRecord, PatientDocument, PatientDocumentSource } from '../types'
 import { sourceBadgeLabel } from '../utils/pdfPersistence'
+import { downloadDocBlob } from '../lib/documentStorage'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +34,8 @@ interface UnifiedDoc {
   patientDocSource?: PatientDocumentSource
   /** true = PDF auto-généré par l'app (badge dédié). */
   generated?: boolean
+  /** Chemin Supabase Storage pour récupération lazy si `data` est vide. */
+  storagePath?: string
 }
 
 interface DossierDocumentsProps {
@@ -44,6 +47,15 @@ interface DossierDocumentsProps {
   onAddRaw: (dataUrl: string, name: string, mimeType: string) => void
   /** Relancer le caviardage sur un document standalone existant */
   onRemask?: (docId: string) => void
+  /**
+   * Persiste localement le binaire récupéré depuis Supabase Storage
+   * (cas : ouverture cross-device d'un doc sans `data`). Si absent,
+   * le doc est juste affiché sans cacher localement.
+   */
+  onHydrateBinary?: (
+    target: { kind: 'bilan'; bilanId: number; docIndex: number } | { kind: 'standalone'; docId: string },
+    base64: string,
+  ) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -113,20 +125,61 @@ function triggerDownload(doc: UnifiedDoc) {
   setTimeout(() => URL.revokeObjectURL(url), 4000)
 }
 
-function DocViewer({ doc, onClose }: { doc: UnifiedDoc; onClose: () => void }) {
+function DocViewer({ doc, onClose, onHydrated }: {
+  doc: UnifiedDoc
+  onClose: () => void
+  onHydrated?: (base64: string) => void
+}) {
   const isImg = doc.mimeType.startsWith('image/')
   const isPdf = doc.mimeType === 'application/pdf'
 
+  // Data récupérée depuis Storage si manquante localement.
+  const [hydratedData, setHydratedData] = useState<string | null>(null)
+  const [hydrating, setHydrating] = useState(false)
+  const [hydrateError, setHydrateError] = useState<string | null>(null)
+
+  const localData = getDisplayData(doc)
+  const effectiveData = localData || hydratedData || undefined
+
+  // Lazy fetch : si pas de data locale mais un storagePath, on télécharge.
+  useEffect(() => {
+    if (localData) return
+    if (!doc.storagePath) return
+    if (hydratedData || hydrating) return
+    let cancelled = false
+    setHydrating(true)
+    setHydrateError(null)
+    downloadDocBlob(doc.storagePath)
+      .then(b64 => {
+        if (cancelled) return
+        if (!b64) {
+          setHydrateError('Fichier introuvable dans le cloud (blob orphelin).')
+          return
+        }
+        setHydratedData(b64)
+        onHydrated?.(b64)
+      })
+      .catch(err => {
+        if (cancelled) return
+        const msg = err instanceof Error ? err.message : 'Erreur réseau'
+        setHydrateError(msg)
+      })
+      .finally(() => { if (!cancelled) setHydrating(false) })
+    return () => { cancelled = true }
+  }, [doc.storagePath, localData, hydratedData, hydrating, onHydrated])
+
   // Pour les PDF : on convertit en blob URL (iframe data: URL n'affiche que la 1ʳᵉ page sur iOS Safari).
   // Pour les images : data URL marche bien et reste plus simple.
-  const blob = useMemo(() => isPdf ? dataToBlob(getDisplayData(doc), doc.mimeType) : null, [doc, isPdf])
+  const blob = useMemo(() => isPdf ? dataToBlob(effectiveData, doc.mimeType) : null, [effectiveData, doc.mimeType, isPdf])
   const blobUrl = useMemo(() => blob ? URL.createObjectURL(blob) : null, [blob])
   useEffect(() => {
     return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
   }, [blobUrl])
 
-  const url = isPdf ? blobUrl : ensureDataUrl(getDisplayData(doc), doc.mimeType)
+  const url = isPdf ? blobUrl : ensureDataUrl(effectiveData, doc.mimeType)
   if (!url) {
+    const showHydrating = hydrating
+    const isOrphan = !hydrating && (!doc.storagePath || hydrateError)
     return (
       <div
         onClick={onClose}
@@ -145,10 +198,14 @@ function DocViewer({ doc, onClose }: { doc: UnifiedDoc; onClose: () => void }) {
           }}
         >
           <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-            Document indisponible
+            {showHydrating ? 'Téléchargement…' : 'Document indisponible'}
           </div>
           <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
-            Le contenu de « {doc.name} » est manquant. Le document a été sauvegardé sans ses données binaires (ancien format ou exportation PDF). Tu peux le supprimer pour nettoyer le dossier.
+            {showHydrating
+              ? `Récupération de « ${doc.name} » depuis le cloud.`
+              : isOrphan
+              ? `Le contenu de « ${doc.name} » est introuvable${hydrateError ? ` (${hydrateError})` : ''}. Tu peux le supprimer pour nettoyer le dossier.`
+              : `Le contenu de « ${doc.name} » est manquant.`}
           </div>
           <button
             type="button"
@@ -299,7 +356,7 @@ function IconBtn({ onClick, title, children, danger }: { onClick: () => void; ti
 // Main component
 // ---------------------------------------------------------------------------
 
-export const DossierDocuments = memo(function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename, onDelete, onAddRaw, onRemask }: DossierDocumentsProps) {
+export const DossierDocuments = memo(function DossierDocuments({ patientKey, bilans, standaloneDocs, onRename, onDelete, onAddRaw, onRemask, onHydrateBinary }: DossierDocumentsProps) {
   void patientKey
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -328,6 +385,7 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
         bilanZone: b.zone,
         bilanDate: b.dateBilan,
         docIndex: i,
+        storagePath: d.storagePath,
       })
     })
   }
@@ -344,6 +402,7 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
       docId: d.id,
       patientDocSource: d.source,
       generated: d.generated,
+      storagePath: d.storagePath,
     })
   }
   unified.sort((a, b) => (a.addedAt < b.addedAt ? 1 : -1))
@@ -493,7 +552,7 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
                         display: 'inline-block', padding: '0 6px', borderRadius: 4,
                         fontSize: 10, fontWeight: 600, background: '#fef3c7', color: '#92400e', lineHeight: '16px',
                       }}>
-                        {sourceBadgeLabel(doc.patientDocSource) ?? 'Auto-généré'}
+                        {sourceBadgeLabel(doc.patientDocSource, doc.mimeType) ?? 'Auto-généré'}
                       </span>
                     ) : (
                       <span style={{
@@ -585,7 +644,20 @@ export const DossierDocuments = memo(function DossierDocuments({ patientKey, bil
         </div>
       )}
 
-      {viewingDoc && <DocViewer doc={viewingDoc} onClose={() => setViewingDoc(null)} />}
+      {viewingDoc && (
+        <DocViewer
+          doc={viewingDoc}
+          onClose={() => setViewingDoc(null)}
+          onHydrated={base64 => {
+            if (!onHydrateBinary) return
+            if (viewingDoc.kind === 'bilan' && viewingDoc.bilanId != null && viewingDoc.docIndex != null) {
+              onHydrateBinary({ kind: 'bilan', bilanId: viewingDoc.bilanId, docIndex: viewingDoc.docIndex }, base64)
+            } else if (viewingDoc.kind === 'standalone' && viewingDoc.docId) {
+              onHydrateBinary({ kind: 'standalone', docId: viewingDoc.docId }, base64)
+            }
+          }}
+        />
+      )}
     </div>
   )
 })

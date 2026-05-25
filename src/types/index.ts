@@ -43,6 +43,12 @@ export interface BilanDocument {
    * à l'IA tel quel. Le wrapper callClaudeSecure vérifie ce flag.
    */
   masked?: boolean
+  /**
+   * Chemin Supabase Storage du blob binaire (bucket `patient-docs`).
+   * Présent dès que le binaire a été uploadé. Permet de re-télécharger
+   * la version cross-device si `data` est absent localement.
+   */
+  storagePath?: string
 }
 
 /**
@@ -65,6 +71,12 @@ export interface PatientDocument {
   source?: PatientDocumentSource
   /** true = PDF généré par l'app (pas un upload manuel). */
   generated?: boolean
+  /**
+   * Chemin Supabase Storage du blob binaire (bucket `patient-docs`).
+   * Présent dès que le binaire a été uploadé. Permet de re-télécharger
+   * la version cross-device si `data` est absent localement.
+   */
+  storagePath?: string
 }
 
 export type Sexe = 'masculin' | 'feminin'
@@ -90,6 +102,129 @@ export interface BilanRecord {
   documents?: BilanDocument[]
   analyseIA?: AnalyseIA
   ficheExercice?: FicheExercice
+  /** Diagnostic en physiothérapie/kinésithérapie saisi par le thérapeute (champ libre, optionnel). */
+  diagnosticPhysio?: string
+  /** Compte rendu rédactionnel auto-généré au save du bilan — reformulation des données saisies, sans inférence clinique. */
+  compteRendu?: CompteRendu
+  /** Erreur dernière tentative de génération du compte rendu (pour retry à la demande). */
+  compteRenduError?: string | null
+}
+
+export type CompteRenduSectionId =
+  | 'anamnese'
+  | 'symptomatologie'
+  | 'drapeaux'
+  | 'examen'
+  | 'tests'
+  | 'projet'
+  | 'conseils'
+
+/** Statut d'un groupe de drapeaux. */
+export type DrapeauStatut = 'tous_negatifs' | 'positifs' | 'mixte' | 'non_renseigne'
+
+export interface DrapeauGroupe {
+  statut: DrapeauStatut
+  elementsVerifies?: string[]
+  elementsPositifs?: string[]
+}
+
+/** Cotation d'un test spécifique. */
+export type TestResultat = 'positif' | 'negatif' | 'non_realise'
+
+/** Statut d'un mouvement de mobilité. */
+export type MobiliteStatut =
+  | 'algique_limitant'
+  | 'algique'
+  | 'tolere'
+  | 'peu_algiques'
+  | 'limite'
+  | 'NR'
+
+/** Antécédent typé. */
+export type AntecedentType =
+  | 'chirurgical'
+  | 'medical'
+  | 'physiotherapie'
+  | 'imagerie'
+  | 'medicamenteux'
+  | 'familial'
+  | 'autre'
+
+export interface CompteRenduData {
+  enTete: {
+    nomPatient: string
+    age: number | null
+    sexe: Sexe | null
+    zone: string | null
+    date: string | null
+  }
+  anamnese: {
+    plaintePrincipale: string | null
+    facteurDeclenchantPousseeActuelle: string | null
+    contextePro: { actuel?: string | null; anterieur?: string | null } | null
+    contexteSportif: string | null
+    antecedents: Array<{
+      type: AntecedentType
+      libelle: string
+      detail?: string | null
+      lienAvecPlainte?: string | null
+    }>
+    traitementsEnCours: Array<{ libelle: string; detail?: string | null }>
+  }
+  symptomatologie: {
+    evn: { moyen: string | null; actuel: string | null; pire: string | null; meilleur: string | null }
+    retentissement: string | null
+    topographie: { principale: string | null; predominance: string | null; irradiation: string | null }
+    caractere: string | null
+    facteursAggravants: string[]
+    facteursSoulageants: string[]
+    facteursToleres: string[]
+    douleurNocturne: { present: boolean; detail?: string | null } | null
+    evolutionTemporelle: string | null
+  }
+  drapeaux: {
+    rouges: DrapeauGroupe
+    jaunes: DrapeauGroupe
+    bleus: DrapeauGroupe
+    noirs: DrapeauGroupe
+  }
+  examenClinique: {
+    morphostatique: string | null
+    palpation: {
+      positifs: Array<{ localisation: string; detail?: string | null }>
+      negatifs: string[]
+    }
+    mobilite: {
+      zone: string | null
+      items: Array<{ mouvement: string; statut: MobiliteStatut; detail?: string | null }>
+      amplitudesEnDegres: string | null
+    }
+    neurologique: { realise: boolean; detail?: string | null }
+    force: { realise: boolean; detail?: string | null }
+  }
+  testsSpecifiques: Array<{
+    nom: string
+    resultat: TestResultat
+    cote: 'D' | 'G' | null
+    detail: string | null
+  }>
+  projetTherapeutique: {
+    hypothesesPraticien: string | null
+    techniquesRealisees: string[]
+  }
+  conseilsPatient: {
+    exercicesEnseignes: Array<{ nom: string; detail?: string | null }>
+    educationTherapeutique: string[]
+    suivi: { frequence: string | null; prochainsRDV: string[] }
+  }
+}
+
+export interface CompteRendu {
+  generatedAt: string
+  /** Hash du contenu source au moment de la génération — sert à détecter si le bilan a été modifié depuis. */
+  sourceHash: string
+  /** Schéma V10 : objet structuré consommé par BilanCompteRendu (chips/badges/accordéons). */
+  data: CompteRenduData
 }
 
 export interface AnalyseIA {
@@ -352,6 +487,8 @@ export type AICallCategory =
   | 'pdf_analyse'             // Export PDF depuis la page Analyse
   | 'note_seance_mini'        // Mini-analyse de note de séance
   | 'api_key_test'            // Ping de test de clé API
+  | 'compte_rendu'            // BilanCompteRendu — auto-généré au save (scribe rédactionnel)
+  | 'bilan_chat'              // BilanChatBubble — Q&A thérapeute ↔ IA avec contexte bilan
 
 export interface AICallAuditEntry {
   id: number

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { transcribeAudio, generateNarrativeReport, TranscriptionTransientError } from '../../utils/voiceBilanClient'
+import { patientKeyToScrubHint, type ScrubPatientHint } from '../../utils/transcriptionScrub'
 import {
   saveRecovery,
   deleteRecovery,
@@ -23,7 +24,6 @@ type VocalState =
   | 'done'
   | 'error'
 
-const BAR_COUNT = 32
 // Durée max d'un chunk avant rotation du MediaRecorder. Avec un bitrate Opus 24 kbps
 // mono, 5 min ≈ 900 Ko → payload léger, transcription rapide, faible risque OOM côté
 // Vercel et fenêtre de crash réduite si une lambda meurt en cours de route.
@@ -43,10 +43,13 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
   const [context, setContext] = useState<VocalContext>('dictee')
   const [report, setReport] = useState<NarrativeReport | null>(initialReport)
   const [error, setError] = useState('')
-  const [bars, setBars] = useState<number[]>(Array(BAR_COUNT).fill(4))
+  // Amplitude lissée 0..1 — pilote la pulsation du blob vocal (échelle + opacité).
+  const [amplitude, setAmplitude] = useState(0)
   const [elapsed, setElapsed] = useState(0)
-  const [chunkCount, setChunkCount] = useState(0)
-  const [transcribedCount, setTranscribedCount] = useState(0)
+  // Compteurs internes — encore mis à jour pour le suivi recovery, mais plus
+  // affichés dans l'UI épurée (le bouton « Créer le compte rendu » suffit).
+  const [, setChunkCount] = useState(0)
+  const [, setTranscribedCount] = useState(0)
   const [warned, setWarned] = useState(false)
 
   // Progress detail pour les phases longues (transcription / génération)
@@ -76,6 +79,20 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
 
   // Flag pour différencier rotation de chunk vs arrêt définitif
   const stoppingFinalRef = useRef<boolean>(false)
+
+  // ── Pause / Resume ─────────────────────────────────────────────────────
+  // `paused` (state) pilote l'UI ; `pausedFlagRef` la même valeur lue depuis
+  // les callbacks (setInterval / animateBars) sans capturer une closure stale.
+  const [paused, setPaused] = useState(false)
+  const pausedFlagRef = useRef(false)
+  // ms timestamp du dernier passage en pause + accumulateur de pauses → on
+  // soustrait pour que le timer `elapsed` ne compte que le temps réellement
+  // enregistré (utile aussi pour la décision « rotation imminente »).
+  const pausedAtRef = useRef<number>(0)
+  const pausedAccumMsRef = useRef<number>(0)
+  // Tracking de la rotation chunk pour pouvoir la suspendre / reprendre.
+  const rotationScheduledAtRef = useRef<number>(0)
+  const rotationRemainingMsRef = useRef<number>(0)
 
   // ── Persistence helper ──────────────────────────────────────────────────
   const persistRecovery = useCallback(async (rec: VocalRecovery) => {
@@ -155,21 +172,36 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
     return () => { cancelled = true }
   }, [initialReport, zone, patientKey])
 
-  // ── Animation barres ───────────────────────────────────────────────────
+  // ── Animation blob vocal ───────────────────────────────────────────────
+  // On échantillonne les bins basse-fréquence (voix ≈ 80-1000 Hz, soit ~ les
+  // 32 premiers bins avec fftSize=256 sur un sampleRate de 48 kHz), on applique
+  // une courbe `pow(x, 0.5)` pour rendre les murmures visibles, puis on lisse
+  // pour un rendu organique. Le résultat 0..1 pilote scale + opacité du nuage.
   const animateBars = useCallback(() => {
     const analyser = analyserRef.current
     if (!analyser) return
     const data = new Uint8Array(analyser.frequencyBinCount)
+    const VOICE_BINS = Math.min(32, data.length)
+    let smoothed = 0
     const tick = () => {
       const a = analyserRef.current
-      if (!a) return
+      if (!a || pausedFlagRef.current) {
+        // En pause : on laisse le blob retomber doucement vers le repos.
+        smoothed *= 0.85
+        setAmplitude(smoothed)
+        if (!pausedFlagRef.current) return
+        animFrameRef.current = requestAnimationFrame(tick)
+        return
+      }
       a.getByteFrequencyData(data)
-      const slice = Math.floor(data.length / BAR_COUNT)
-      const newBars = Array.from({ length: BAR_COUNT }, (_, i) => {
-        const avg = data.slice(i * slice, (i + 1) * slice).reduce((s, v) => s + v, 0) / slice
-        return Math.max(3, Math.min(28, (avg / 255) * 28))
-      })
-      setBars(newBars)
+      let sum = 0
+      for (let i = 0; i < VOICE_BINS; i++) sum += data[i]
+      const rawAvg = sum / VOICE_BINS / 255 // 0..1
+      // Courbe `sqrt` : x=0.04 → 0.2, x=0.16 → 0.4 → la voix faible devient visible.
+      const boosted = Math.min(1, Math.pow(rawAvg, 0.5) * 1.4)
+      // Lissage doux 60/40 → réactif mais pas saccadé.
+      smoothed = smoothed * 0.6 + boosted * 0.4
+      setAmplitude(smoothed)
       animFrameRef.current = requestAnimationFrame(tick)
     }
     animFrameRef.current = requestAnimationFrame(tick)
@@ -238,6 +270,8 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
         // Rotation auto → on relance immédiatement un nouveau chunk
         startNewChunkRecorder()
         // Reprogramme la prochaine rotation
+        rotationScheduledAtRef.current = Date.now()
+        rotationRemainingMsRef.current = CHUNK_MAX_SECONDS * 1000
         rotationTimerRef.current = setTimeout(() => finalizeCurrentChunk(false), CHUNK_MAX_SECONDS * 1000)
         // Lance la transcription du chunk fraîchement finalisé en arrière-plan
         // (le user ne voit que le compteur, l'UI reste réactive)
@@ -295,9 +329,13 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
       setState('generating')
       setPhaseDetail('Claude rédige les 7 sections cliniques…')
 
-      const sections = await generateReportWithRetry(fullTranscription, zone, context, (attempt) => {
-        setPhaseDetail(`Claude rédige (tentative ${attempt + 1})…`)
-      })
+      const sections = await generateReportWithRetry(
+        fullTranscription,
+        zone,
+        context,
+        (attempt) => { setPhaseDetail(`Claude rédige (tentative ${attempt + 1})…`) },
+        patientKeyToScrubHint(patientKey),
+      )
 
       const newReport: NarrativeReport = {
         sections,
@@ -377,13 +415,20 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
 
       // Démarre le premier chunk + programme la rotation
       startNewChunkRecorder()
+      rotationScheduledAtRef.current = Date.now()
+      rotationRemainingMsRef.current = CHUNK_MAX_SECONDS * 1000
       rotationTimerRef.current = setTimeout(() => finalizeCurrentChunk(false), CHUNK_MAX_SECONDS * 1000)
 
       startedAtRef.current = Date.now()
+      pausedAccumMsRef.current = 0
+      pausedAtRef.current = 0
+      pausedFlagRef.current = false
+      setPaused(false)
       setElapsed(0)
 
       timerRef.current = setInterval(() => {
-        const secs = Math.floor((Date.now() - startedAtRef.current) / 1000)
+        if (pausedFlagRef.current) return // pause → on fige l'affichage
+        const secs = Math.floor((Date.now() - startedAtRef.current - pausedAccumMsRef.current) / 1000)
         setElapsed(secs)
         if (secs >= WARN_SECONDS && !warned) setWarned(true)
       }, 1000)
@@ -416,6 +461,44 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
       analyserRef.current = null
     }, 100)
   }, [finalizeCurrentChunk])
+
+  // ── Pause / Reprise de l'enregistrement ────────────────────────────────
+  // Toggle propre : on suspend MediaRecorder + le timer de rotation chunk
+  // (en gardant le temps restant), et on fige l'animation du blob. À la
+  // reprise on additionne la durée de pause à l'accumulateur pour que
+  // `elapsed` ne compte que le temps réellement enregistré.
+  const togglePause = useCallback(() => {
+    const mr = currentRecorderRef.current
+    if (!mr) return
+    if (pausedFlagRef.current) {
+      // ── RESUME ─────────────────────────────────────────────────────
+      try { mr.resume() } catch { /* déjà actif */ }
+      const pauseDuration = Date.now() - pausedAtRef.current
+      pausedAccumMsRef.current += pauseDuration
+      // Reprogramme la rotation avec le temps qu'il restait au moment de la pause.
+      rotationScheduledAtRef.current = Date.now()
+      rotationTimerRef.current = setTimeout(
+        () => finalizeCurrentChunk(false),
+        rotationRemainingMsRef.current,
+      )
+      pausedFlagRef.current = false
+      setPaused(false)
+      animateBars()
+    } else {
+      // ── PAUSE ──────────────────────────────────────────────────────
+      try { mr.pause() } catch { /* déjà en pause */ }
+      pausedAtRef.current = Date.now()
+      // Sauvegarde du temps restant avant rotation pour le re-programmer à la reprise.
+      const elapsedSinceSchedule = Date.now() - rotationScheduledAtRef.current
+      rotationRemainingMsRef.current = Math.max(0, rotationRemainingMsRef.current - elapsedSinceSchedule)
+      if (rotationTimerRef.current) {
+        clearTimeout(rotationTimerRef.current)
+        rotationTimerRef.current = null
+      }
+      pausedFlagRef.current = true
+      setPaused(true)
+    }
+  }, [finalizeCurrentChunk, animateBars])
 
   // ── Reprise d'un recovery existant ─────────────────────────────────────
   const resumeRecovery = useCallback(async (rec: VocalRecovery) => {
@@ -566,7 +649,7 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
       </div>
       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
         {context === 'dictee'
-          ? 'Dictez ce que vous avez observé et fait — Claude rédige le compte rendu.'
+          ? 'Dictez ce que vous avez observé et fait.'
           : 'Enregistrez toute la séance. Claude extrait les informations cliniques des deux voix.'}
       </div>
       <button
@@ -589,45 +672,105 @@ export function BilanVocalMode({ zone, patientKey, initialReport, onChange }: Pr
     </div>
   )
 
-  // ── RECORDING ─────────────────────────────────────────────────────────────
+  // ── RECORDING — UI épurée (timer + blob vert respirant + bouton app) ───
   if (state === 'recording') {
-    const currentChunkSec = elapsed - chunkCount * CHUNK_MAX_SECONDS
-    const nextRotationIn = Math.max(0, CHUNK_MAX_SECONDS - currentChunkSec)
+    // Scale amplifié : 0.85 (silence) → 1.45 (voix forte). En pause on tombe
+    // doucement à 0.8 via la chute progressive de l'amplitude (animateBars).
+    const blobScale = 0.75 + amplitude * 0.55
+    const blobOpacity = paused ? 0.35 : 0.5 + amplitude * 0.5
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '1rem 0 0.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 32, padding: '2rem 1rem 1.25rem', minHeight: 460 }}>
         {warned && (
-          <div style={{ background: '#dbeafe', border: '1px solid #60a5fa', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.72rem', color: '#1e40af', textAlign: 'center' }}>
-            ℹ Enregistrement de plus de 45 min en cours — pas de limite, sauvegarde toutes les 10 min.
+          <div style={{ alignSelf: 'stretch', background: '#dbeafe', border: '1px solid #60a5fa', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.72rem', color: '#1e40af', textAlign: 'center' }}>
+            ℹ Enregistrement de plus de 45 min en cours — sauvegarde toutes les 10 min.
           </div>
         )}
-        <div style={{ background: 'var(--input-bg)', border: '1.5px solid var(--primary)', borderRadius: 14, padding: '1rem 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'vocal-pulse 1s ease-in-out infinite' }} />
-            Enregistrement
-            <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(elapsed)}</span>
+
+        {/* Timer + label */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: '3rem', fontWeight: 600, color: 'var(--text-main)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            {fmtTime(elapsed)}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, height: 36, width: '100%' }}>
-            {bars.map((h, i) => (
-              <div key={i} style={{ width: 2.5, height: h, borderRadius: 2, background: 'var(--primary)', transition: 'height 0.08s ease', flexShrink: 0 }} />
-            ))}
+          <div style={{ fontSize: '0.92rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+            {paused ? 'En pause' : 'En écoute…'}
           </div>
-          {(chunkCount > 0 || nextRotationIn < 60) && (
-            <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-              {chunkCount > 0 && (
-                <>💾 {chunkCount} sauvegardé{chunkCount > 1 ? 's' : ''} · ✨ {transcribedCount}/{chunkCount} transcrit{transcribedCount > 1 ? 's' : ''} · </>
-              )}
-              Prochaine sauvegarde dans {fmtTime(nextRotationIn)}
-            </div>
-          )}
-          <button
-            onClick={stopRecording}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0.6rem 1.4rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}
+        </div>
+
+        {/* Wrapper respiration lente (toujours active) + blob amplifié par la voix */}
+        <div style={{ position: 'relative', width: 220, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              animation: 'vocal-idle 3.8s ease-in-out infinite',
+              willChange: 'transform',
+            }}
           >
-            <span style={{ width: 12, height: 12, borderRadius: 2, background: 'white', display: 'inline-block', flexShrink: 0 }} />
-            Arrêter et analyser
+            <div
+              style={{
+                width: '100%', height: '100%', borderRadius: '50%',
+                background: 'radial-gradient(circle at 50% 50%, var(--blob-core) 0%, var(--blob-mid) 35%, var(--blob-edge) 65%, transparent 80%)',
+                filter: 'blur(26px)',
+                transform: `scale(${blobScale})`,
+                opacity: blobOpacity,
+                transition: 'transform 0.1s ease-out, opacity 0.15s ease-out',
+                willChange: 'transform, opacity',
+              }}
+            />
+          </div>
+          {/* Bouton pause/reprise — discret, semi-transparent, sans ombre */}
+          <button
+            onClick={togglePause}
+            aria-label={paused ? 'Reprendre' : 'Mettre en pause'}
+            style={{
+              position: 'relative',
+              width: 44, height: 44, borderRadius: '50%',
+              background: 'rgba(55, 65, 81, 0.55)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              border: 'none', padding: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'background 0.15s ease, transform 0.1s ease',
+            }}
+            onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.94)')}
+            onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            {paused ? (
+              // Play triangle
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="rgba(255,255,255,0.95)">
+                <polygon points="4,2.5 4,13.5 13,8" />
+              </svg>
+            ) : (
+              // Pause bars
+              <span style={{ display: 'flex', gap: 4 }}>
+                <span style={{ display: 'inline-block', width: 3.5, height: 14, background: 'rgba(255,255,255,0.95)', borderRadius: 1 }} />
+                <span style={{ display: 'inline-block', width: 3.5, height: 14, background: 'rgba(255,255,255,0.95)', borderRadius: 1 }} />
+              </span>
+            )}
           </button>
         </div>
-        <style>{`@keyframes vocal-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+
+        {/* Bouton DA app (primary) — finalise l'enregistrement */}
+        <button
+          onClick={stopRecording}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '0.75rem 1.4rem',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 10,
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: 700,
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'white', display: 'inline-block', flexShrink: 0 }} />
+          Enregistrer
+        </button>
+
+        <style>{`@keyframes vocal-idle { 0%,100%{ transform: scale(1) } 50%{ transform: scale(1.04) } }`}</style>
       </div>
     )
   }
@@ -785,13 +928,14 @@ async function generateReportWithRetry(
   zone: string,
   context: VocalContext,
   onAttempt: (attempt: number) => void,
+  patientHint?: ScrubPatientHint,
 ): Promise<NarrativeSection[]> {
   const MAX_ATTEMPTS = 3
   let lastErr: Error | null = null
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     onAttempt(attempt)
     try {
-      return await generateNarrativeReport(transcription, zone, context)
+      return await generateNarrativeReport(transcription, zone, context, patientHint)
     } catch (e) {
       lastErr = e as Error
       const msg = lastErr.message

@@ -1,6 +1,19 @@
 import type { PatientDocument, PatientDocumentSource } from '../types'
 
 /**
+ * Marqueur JSON v1 pour un consentement recueilli oralement par le praticien.
+ * Stocké comme PatientDocument (mimeType=application/json, source=consentement),
+ * il sert de preuve horodatée sans embarquer de signature manuscrite ni PDF.
+ */
+export interface VerbalConsentMarker {
+  kind: 'verbal_v1'
+  consentedAt: string
+  scriptVersion: string
+  practitionerName?: string
+  practitionerProfession?: 'Kinésithérapeute' | 'Physiothérapeute'
+}
+
+/**
  * Convertit un Blob en base64 pur (sans le préfixe `data:...;base64,`).
  * Utilisé pour stocker les PDF auto-générés dans IndexedDB au format
  * compatible avec PatientDocument.data.
@@ -46,14 +59,44 @@ export async function buildGeneratedPatientDoc(
 }
 
 /**
- * Libellé court d'un PatientDocumentSource pour affichage badge.
+ * Construit un PatientDocument pour matérialiser un consentement verbal :
+ * payload JSON `VerbalConsentMarker` encodé en base64, mimeType
+ * `application/json`, source `consentement`. Conserve la même clé de détection
+ * (`source==='consentement'`) que l'ancien PDF signé — backward compatible.
  */
-export function sourceBadgeLabel(source?: PatientDocumentSource): string | null {
+export function buildVerbalConsentDoc(
+  patientKey: string,
+  marker: VerbalConsentMarker,
+): PatientDocument {
+  const json = JSON.stringify(marker)
+  const data = btoa(unescape(encodeURIComponent(json)))
+  const id = `verbal-consent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const fileName = `Consentement_verbal_${marker.consentedAt.slice(0, 10)}.json`
+  return {
+    id,
+    patientKey,
+    name: fileName,
+    mimeType: 'application/json',
+    data,
+    addedAt: marker.consentedAt,
+    masked: true,
+    source: 'consentement',
+    generated: true,
+  }
+}
+
+/**
+ * Libellé court d'un PatientDocumentSource pour affichage badge.
+ * Le libellé "Consentement verbal" est appliqué quand le mimeType est JSON
+ * (nouveau format), sinon "Consentement signé" pour les PDF historiques.
+ */
+export function sourceBadgeLabel(source?: PatientDocumentSource, mimeType?: string): string | null {
   switch (source) {
     case 'bilan': return 'Bilan PDF'
     case 'analyse-ia': return 'Analyse IA'
     case 'evolution': return 'Évolution'
-    case 'consentement': return 'Consentement signé'
+    case 'consentement':
+      return mimeType === 'application/json' ? 'Consentement verbal' : 'Consentement signé'
     default: return null
   }
 }

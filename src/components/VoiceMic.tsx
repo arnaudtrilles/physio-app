@@ -323,13 +323,29 @@ function MicButton({ onClick, style }: { onClick: () => void; style?: React.CSSP
 
 // ─── AUTO-RESIZE HELPER ─────────────────────────────────────────────────────
 
-function useAutoResize(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, minHeight = 38) {
+function useAutoResize(
+  ref: React.RefObject<HTMLTextAreaElement | null>,
+  value: string,
+  minHeight = 38,
+  placeholder?: string,
+) {
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     el.style.height = '0'
-    el.style.height = `${Math.max(el.scrollHeight, minHeight)}px`
-  }, [ref, value, minHeight])
+    let target = el.scrollHeight
+    // Quand le textarea est vide, scrollHeight ne mesure pas le placeholder —
+    // on l'injecte temporairement pour que la zone grandisse aux dimensions
+    // réelles du texte d'exemple (sinon les placeholders longs débordent).
+    if (!value && placeholder) {
+      const originalValue = el.value
+      el.value = placeholder
+      el.style.height = '0'
+      target = Math.max(target, el.scrollHeight)
+      el.value = originalValue
+    }
+    el.style.height = `${Math.max(target, minHeight)}px`
+  }, [ref, value, minHeight, placeholder])
 }
 
 // ─── DICTABLE INPUT ──────────────────────────────────────────────────────────
@@ -344,7 +360,7 @@ export function DictableInput({ inputStyle: is, value, onChange, placeholder, ..
   const valueRef = useRef(value)
   valueRef.current = value
   const taRef = useRef<HTMLTextAreaElement>(null)
-  useAutoResize(taRef, value)
+  useAutoResize(taRef, value, 38, placeholder)
 
   const appendText = useCallback((text: string) => {
     const cur = valueRef.current
@@ -408,7 +424,7 @@ export function DictableTextarea({ textareaStyle: ts, value, onChange, placehold
   const valueRef = useRef(value)
   valueRef.current = value
   const taRef = useRef<HTMLTextAreaElement>(null)
-  useAutoResize(taRef, value, minHeight)
+  useAutoResize(taRef, value, minHeight, placeholder)
 
   const appendText = useCallback((text: string) => {
     const cur = valueRef.current
@@ -441,7 +457,7 @@ export function DictableTextarea({ textareaStyle: ts, value, onChange, placehold
     )
   }
 
-  const micTop = minHeight !== undefined && minHeight < 40 ? Math.max(0, Math.round((minHeight - 28) / 2)) : 10
+  const micTop = minHeight !== undefined && minHeight < 40 ? Math.max(0, Math.round((minHeight - 28) / 2)) : 7
   return (
     <div style={{ position: 'relative' }}>
       <textarea {...rest} ref={taRef} value={value} onChange={onChange} placeholder={placeholder} style={{ ...ts, paddingRight: 36, resize: 'none', overflow: 'hidden', boxSizing: 'border-box' }} />

@@ -109,6 +109,7 @@ export interface DatabaseContextValue {
   setBilanDocuments: Dispatch<SetStateAction<BilanDocument[]>>
   setBilanIntermediaireZone: Dispatch<SetStateAction<string | null>>
   setBilanNotes: Dispatch<SetStateAction<string>>
+  setDiagnosticPhysio: Dispatch<SetStateAction<string>>
   setBilanZoneBackStep: Dispatch<SetStateAction<'identity' | 'database'>>
   setConsultationChooserOpen: Dispatch<SetStateAction<boolean>>
   setCurrentAnalyseIA: Dispatch<SetStateAction<AnalyseIA | null>>

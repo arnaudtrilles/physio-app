@@ -35,6 +35,9 @@
   --info-soft: #edf4f1;
   --primary-shadow: 0 4px 14px 0 rgba(45, 90, 75, 0.22);
   --primary-shadow-strong: 0 12px 24px -10px rgba(45, 90, 75, 0.25);
+  --blob-core: rgba(74, 140, 115, 1);
+  --blob-mid: rgba(135, 178, 156, 0.78);
+  --blob-edge: rgba(200, 224, 216, 0.4);
 }
 
 /* ── Thème "Médical" — Bleu profond + Blanc clinique ───────────── */
@@ -57,6 +60,9 @@
   --info-soft: #eff6ff;
   --primary-shadow: 0 4px 14px 0 rgba(30, 58, 138, 0.22);
   --primary-shadow-strong: 0 12px 24px -10px rgba(30, 58, 138, 0.25);
+  --blob-core: rgba(59, 130, 246, 1);
+  --blob-mid: rgba(147, 197, 253, 0.78);
+  --blob-edge: rgba(191, 219, 254, 0.4);
 }
 
 /* ── Screen transitions ──────────────────────────────────────── */
@@ -83,9 +89,18 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes chat-typing {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30%           { opacity: 1;   transform: translateY(-2px); }
+}
 
 .slide-in-left  { animation: slideInLeft  0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 .slide-in-right { animation: slideInRight 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.slide-in-up    { animation: slideInUp    0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 .fade-in-up     { animation: fadeInUp     0.2s ease-out forwards; }
 
 /* iOS-style full-width slide entries */
@@ -163,4 +178,22 @@ input, textarea, select {
   .app-container {
     box-shadow: 0 0 60px rgba(0,0,0,0.4);
   }
+}
+
+/* ── Compte rendu V10 : accordions premium ─────────────────── */
+.cr-acc-caret {
+  transform: rotate(0deg);
+  transition: transform 200ms ease-out;
+}
+details[open] > summary .cr-acc-caret {
+  transform: rotate(-180deg);
+}
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::marker {
+  display: none;
 }

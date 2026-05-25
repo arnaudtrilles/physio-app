@@ -28,6 +28,9 @@ import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermed
 import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
 import type { BilanIntermediaireGeriatriqueHandle } from './components/bilans/BilanIntermediaireGeriatrique'
 const BilanAnalyseIA = lazy(() => import('./components/BilanAnalyseIA').then(m => ({ default: m.BilanAnalyseIA })))
+const BilanCompteRendu = lazy(() => import('./components/BilanCompteRendu').then(m => ({ default: m.BilanCompteRendu })))
+const BilanChatBubble = lazy(() => import('./components/BilanChatBubble').then(m => ({ default: m.BilanChatBubble })))
+import { generateCompteRendu, isCompteRenduStale } from './utils/compteRendu'
 const BilanNoteIntermediaire = lazy(() => import('./components/BilanNoteIntermediaire').then(m => ({ default: m.BilanNoteIntermediaire })))
 const BilanEvolutionIA = lazy(() => import('./components/BilanEvolutionIA').then(m => ({ default: m.BilanEvolutionIA })))
 const LetterGenerator = lazy(() => import('./components/letters/LetterGenerator').then(m => ({ default: m.LetterGenerator })))
@@ -36,7 +39,7 @@ import type { ImprovementEntry } from './utils/pdfGenerator'
 import { getBilanType, BODY_ZONES, BILAN_ZONE_LABELS, DEFAULT_ZONE_FOR_BILAN } from './utils/bilanRouter'
 import { buildPDFReportPrompt, buildSortiePDFPrompt, computeAge } from './utils/clinicalPrompt'
 import { hashInputs, documentFingerprint, getCachedBilanPDF, setCachedBilanPDF, getCachedAnalysePDF, setCachedAnalysePDF } from './utils/pdfCache'
-import { buildGeneratedPatientDoc } from './utils/pdfPersistence'
+import { buildGeneratedPatientDoc, buildVerbalConsentDoc } from './utils/pdfPersistence'
 import type { PatientDocumentSource } from './types'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
 import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
@@ -58,6 +61,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { pk, renamePatientInCloud } from './lib/syncEngine'
+import { uploadDocBlob, buildStoragePath } from './lib/documentStorage'
 import { PatientEditModal } from './components/database/PatientEditModal'
 import { usePlanSync } from './hooks/usePlanSync'
 import { canAccess } from './utils/planGating'
@@ -75,7 +79,7 @@ import { DatabaseProvider } from './components/database/DatabaseContext'
 import { DatabasePage } from './components/database/DatabasePage'
 import { ZonePickerSheet } from './components/shared/ZonePicker'
 import { IdentityStep } from './components/wizard/IdentityStep'
-import { ConsentForm } from './components/consent/ConsentForm'
+import { VerbalConsentStep } from './components/consent/VerbalConsentStep'
 import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
 import './App.css'
 import { phCapture, phIdentify, phReset, phOptIn, phOptOut, phIsOptedIn } from './lib/posthog'
@@ -289,6 +293,58 @@ function App() {
     dbClosedTreatments, setDbClosedTreatments, profile, setProfile,
   })
 
+  // ── Backfill Storage : upload des blobs locaux sans storagePath ───────────
+  // Au démarrage et à chaque ajout de doc, on scanne dbPatientDocs et db[].documents
+  // pour repérer les binaires (`data` présent) jamais uploadés (`storagePath` absent).
+  // Chaque upload réussi est patché dans le state — la sync remontera ensuite le path
+  // dans Supabase pour cross-device access.
+  useEffect(() => {
+    if (!user?.id || !allDataLoaded) return
+    const inFlight = uploadInFlightRef.current
+
+    // 1. Patient docs (standalone)
+    for (const d of dbPatientDocs) {
+      if (!d.data || d.storagePath) continue
+      const key = `patient:${d.id}`
+      if (inFlight.has(key)) continue
+      inFlight.add(key)
+      const path = buildStoragePath(user.id, 'patient-doc', d.name, d.mimeType)
+      void uploadDocBlob(path, d.data, d.mimeType)
+        .then(uploadedPath => {
+          setDbPatientDocs(prev => prev.map(x => x.id === d.id ? { ...x, storagePath: uploadedPath } : x))
+        })
+        .catch(err => { console.warn('[Storage] backfill patient-doc failed:', err) })
+        .finally(() => { inFlight.delete(key) })
+    }
+
+    // 2. Bilan documents
+    for (const b of db) {
+      const docs = b.documents
+      if (!docs?.length) continue
+      docs.forEach((d, idx) => {
+        if (!d.data || d.storagePath) return
+        const key = `bilan:${b.id}:${idx}:${d.name}`
+        if (inFlight.has(key)) return
+        inFlight.add(key)
+        const path = buildStoragePath(user.id, `bilan-${b.id}`, d.name, d.mimeType)
+        void uploadDocBlob(path, d.data, d.mimeType)
+          .then(uploadedPath => {
+            setDb(prev => prev.map(r => {
+              if (r.id !== b.id) return r
+              const next = r.documents?.map((doc, i) =>
+                i === idx && doc.name === d.name && !doc.storagePath
+                  ? { ...doc, storagePath: uploadedPath }
+                  : doc
+              )
+              return { ...r, documents: next }
+            }))
+          })
+          .catch(err => { console.warn('[Storage] backfill bilan-doc failed:', err) })
+          .finally(() => { inFlight.delete(key) })
+      })
+    }
+  }, [user?.id, allDataLoaded, dbPatientDocs, db, setDbPatientDocs, setDb])
+
   /**
    * Attache un PDF auto-généré (bilan, analyse IA, évolution) au dossier patient.
    * Stocke le blob en base64 dans IndexedDB via setDbPatientDocs.
@@ -319,9 +375,12 @@ function App() {
     }
   }, [onboarded, syncStatus, profile.nom, setOnboarded])
 
-  // Vérifie l'accès à une feature Pro — affiche un toast cliquable si non autorisé
+  // Vérifie l'accès à une feature Pro — affiche un toast cliquable si non autorisé.
+  // L'email pour le bypass admin vient de l'auth Supabase (`user.email`), pas du
+  // profil (qui est un champ manuel pour en-tête de courriers, souvent vide).
+  const authEmail = user?.email ?? profile.email
   const requirePlan = (feature: string): boolean => {
-    if (canAccess(feature, profile.plan)) return true
+    if (canAccess(feature, profile.plan, authEmail)) return true
     showToast(
       'Fonctionnalité disponible avec le plan Pro',
       'info',
@@ -340,7 +399,7 @@ function App() {
   }
   const guardedSetStep = (next: Step) => {
     const feature = GATED_STEPS[next]
-    if (feature && !canAccess(feature, profile.plan)) {
+    if (feature && !canAccess(feature, profile.plan, authEmail)) {
       phCapture('plan_gating_shown', { feature, plan: profile.plan ?? 'basique', step: next })
       showToast(
         'Fonctionnalité disponible avec le plan Pro',
@@ -593,8 +652,15 @@ function App() {
     profession: '', sport: '', famille: '', chirurgie: '', notes: ''
   })
   const [bilanNotes, setBilanNotes] = useState('')
+  const [diagnosticPhysio, setDiagnosticPhysio] = useState('')
+
+  // Pivot hors-DM : le compte rendu est l'écran par défaut quand un record existe.
+  // BilanAnalyseIA reste en fallback (cas: pas encore de record sauvegardé).
 
   // ── Refs ──────────────────────────────────────────────────────────────────────
+  // Documents en cours d'upload Storage — évite les uploads concurrents du même blob.
+  // Clé : `bilan:${bilanId}:${docIndex}` ou `patient:${docId}`.
+  const uploadInFlightRef = useRef<Set<string>>(new Set())
   const bilanEpauleRef   = useRef<BilanEpauleHandle>(null)
   const bilanChevilleRef = useRef<BilanChevilleHandle>(null)
   const bilanGenouRef    = useRef<BilanGenouHandle>(null)
@@ -640,6 +706,7 @@ function App() {
     setPatientMode('new')
     setCurrentAnalyseIA(null)
     setBilanNotes('')
+    setDiagnosticPhysio('')
     setCurrentBilanId(null)
     setCurrentBilanDataOverride(null)
     setBilanZoneBackStep('identity')
@@ -1293,6 +1360,40 @@ Règles :
     }
   }
 
+  // ── Auto-génération du compte rendu (hors-DM) ─────────────────────────
+  // Tableau d'ids en cours de génération. Permet à BilanCompteRendu d'afficher
+  // le skeleton si l'utilisateur ouvre l'écran avant la fin de la génération.
+  const [generatingCompteRenduIds, setGeneratingCompteRenduIds] = useState<number[]>([])
+
+  // Fire-and-forget : après save d'un bilan complet, on génère le compte rendu
+  // en arrière-plan. Une fois prêt, on le merge dans le record. Le clic sur
+  // « Compte rendu » est alors instantané (cache hit).
+  const kickOffCompteRendu = useCallback(async (snapshot: BilanRecord) => {
+    if (!apiKey) return
+    if (!isCompteRenduStale(snapshot)) return
+    setGeneratingCompteRenduIds(prev => prev.includes(snapshot.id) ? prev : [...prev, snapshot.id])
+    try {
+      const cr = await generateCompteRendu({
+        apiKey,
+        record: snapshot,
+        patientKey: pk(snapshot.nom, snapshot.prenom),
+        profession: profile.profession,
+        documents: snapshot.documents,
+        onAudit: recordAIAudit,
+        onUnmaskedDocsConfirm: askUnmaskedDocsConfirm,
+      })
+      setDb(prev => prev.map(r => r.id === snapshot.id ? { ...r, compteRendu: cr, compteRenduError: null } : r))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+      if (msg !== 'UNMASKED_DOCS_CANCELLED') {
+        console.warn('[compteRendu] generation failed:', err)
+        setDb(prev => prev.map(r => r.id === snapshot.id ? { ...r, compteRenduError: msg } : r))
+      }
+    } finally {
+      setGeneratingCompteRenduIds(prev => prev.filter(id => id !== snapshot.id))
+    }
+  }, [apiKey, profile.profession])
+
   const saveBilan = (status: 'complet' | 'incomplet') => {
     const bilanData = getBilanData()
     const bilanType = getBilanType(selectedBodyZone ?? '')
@@ -1316,10 +1417,27 @@ Règles :
       }
     }
 
+    let postSaveSnapshot: BilanRecord | null = null
+
     if (currentBilanId !== null) {
+      const prevRecord = db.find(r => r.id === currentBilanId) ?? null
       setDb(prev => prev.map(r => r.id === currentBilanId
-        ? { ...r, status, bilanData: bilanData ?? undefined, bilanType, evn: evnValue ?? r.evn, notes: bilanNotes || r.notes, silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : r.silhouetteData, documents: bilanDocuments.length > 0 ? bilanDocuments : r.documents, sexe: sexeValue ?? r.sexe }
+        ? { ...r, status, bilanData: bilanData ?? undefined, bilanType, evn: evnValue ?? r.evn, notes: bilanNotes || r.notes, diagnosticPhysio: diagnosticPhysio || r.diagnosticPhysio, silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : r.silhouetteData, documents: bilanDocuments.length > 0 ? bilanDocuments : r.documents, sexe: sexeValue ?? r.sexe }
         : r))
+      if (prevRecord) {
+        postSaveSnapshot = {
+          ...prevRecord,
+          status,
+          bilanData: bilanData ?? undefined,
+          bilanType,
+          evn: evnValue ?? prevRecord.evn,
+          notes: bilanNotes || prevRecord.notes,
+          diagnosticPhysio: diagnosticPhysio || prevRecord.diagnosticPhysio,
+          silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : prevRecord.silhouetteData,
+          documents: bilanDocuments.length > 0 ? bilanDocuments : prevRecord.documents,
+          sexe: sexeValue ?? prevRecord.sexe,
+        }
+      }
       showToast(status === 'complet' ? 'Bilan complété' : 'Brouillon enregistré', 'success')
     } else {
       const newId = Math.max(0, ...db.map(r => r.id)) + 1
@@ -1339,14 +1457,25 @@ Règles :
         bilanData: bilanData ?? undefined,
         evn: evnValue,
         notes: bilanNotes || undefined,
+        diagnosticPhysio: diagnosticPhysio || undefined,
         silhouetteData: Object.keys(silhouetteData).length > 0 ? silhouetteData : undefined,
         documents: bilanDocuments.length > 0 ? bilanDocuments : undefined,
       }
       setDb(prev => [...prev, record])
       setCurrentBilanId(newId)
+      postSaveSnapshot = record
       showToast(status === 'complet' ? 'Bilan enregistré' : 'Brouillon sauvegardé', 'success')
       phCapture('bilan_created', { status, bilanType, zone: selectedBodyZone ?? null, evn: evnValue ?? null })
-      if (status === 'complet') return newId
+      if (status === 'complet') {
+        // Fire-and-forget : compte rendu auto-généré après save complet (hors-DM)
+        kickOffCompteRendu(record)
+        return newId
+      }
+    }
+
+    // Fire-and-forget pour le cas update (currentBilanId !== null)
+    if (status === 'complet' && postSaveSnapshot) {
+      kickOffCompteRendu(postSaveSnapshot)
     }
 
     // Auto-créer des objectifs SMART depuis le contrat kiné du bilan
@@ -2496,6 +2625,7 @@ Mobilité articulaire lombaire
           setBilanDocuments,
           setBilanIntermediaireZone,
           setBilanNotes,
+          setDiagnosticPhysio,
           setBilanZoneBackStep,
           setConsultationChooserOpen,
           setCurrentAnalyseIA,
@@ -3255,9 +3385,9 @@ Mobilité articulaire lombaire
         />
       )}
 
-      {/* ── Consent step — entre Identity et Bilan, nouveau patient uniquement ── */}
+      {/* ── Consent step — recueil verbal bloquant, nouveau patient uniquement ── */}
       {step === 'consent' && (
-        <ConsentForm
+        <VerbalConsentStep
           patient={{
             nom: formData.nom,
             prenom: formData.prenom,
@@ -3266,13 +3396,19 @@ Mobilité articulaire lombaire
           therapist={{
             nom: profile.nom,
             prenom: profile.prenom,
-            email: profile.email,
             profession: profile.profession === 'Physiothérapeute' ? 'Physiothérapeute' : 'Kinésithérapeute',
           }}
-          onSigned={({ blob, fileName }) => {
+          onConfirm={({ consentedAt, scriptVersion }) => {
             const patKey = pk(formData.nom || 'Anonyme', formData.prenom)
-            attachPdfToPatient(blob, fileName, patKey, 'consentement')
-            showToast('Consentement enregistré', 'success')
+            const doc = buildVerbalConsentDoc(patKey, {
+              kind: 'verbal_v1',
+              consentedAt,
+              scriptVersion,
+              practitionerName: [profile.prenom, profile.nom].filter(Boolean).join(' ').trim() || undefined,
+              practitionerProfession: profile.profession === 'Physiothérapeute' ? 'Physiothérapeute' : 'Kinésithérapeute',
+            })
+            setDbPatientDocs(prev => [...prev, doc])
+            showToast('Consentement verbal enregistré', 'success')
             setStep('bilan_zone')
           }}
           onCancel={() => setStep('identity')}
@@ -3335,6 +3471,23 @@ Mobilité articulaire lombaire
                 onChange={e => setBilanNotes(e.target.value)}
                 rows={4}
                 placeholder="Ex : Patient stressé, travail physique intensifié ce mois-ci, essai de 3 séances de kiné il y a 6 mois sans succès…"
+                textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {/* ── Diagnostic en ${profession} (optionnel — saisie thérapeute) ── */}
+            <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+              <label style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 6 }}>
+                Diagnostic en {profile.profession === 'Physiothérapeute' ? 'physiothérapie' : 'kinésithérapie'} <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>(optionnel)</span>
+              </label>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                Votre diagnostic clinique en quelques mots. Repris quasi textuellement dans le compte rendu.
+              </p>
+              <DictableTextarea
+                value={diagnosticPhysio}
+                onChange={e => setDiagnosticPhysio(e.target.value)}
+                rows={3}
+                placeholder="Ex : Tendinopathie de la coiffe des rotateurs avec impingement sous-acromial, sans signe d'atteinte capsulaire."
                 textareaStyle={{ width: '100%', padding: '0.65rem 0.9rem', fontSize: '0.88rem', color: 'var(--text-main)', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
@@ -3444,11 +3597,14 @@ Mobilité articulaire lombaire
             <button className="btn-primary-luxe" style={{ marginBottom: 0, background: 'linear-gradient(135deg, var(--primary), var(--primary-light))' }}
               onClick={handleSaveAndAnalyse}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
-                  <circle cx="9" cy="20" r="1" fill="white" stroke="none"/><circle cx="15" cy="20" r="1" fill="white" stroke="none"/>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
                 </svg>
-                Analyser + Enregistrer
+                Compte rendu
               </div>
             </button>
             <button className="btn-primary-luxe"
@@ -3901,57 +4057,104 @@ Mobilité articulaire lombaire
         />
       )}
 
-      {/* ── Analyse IA step ────────────────────────────────────────────────────── */}
-      {step === 'analyse_ia' && (
-        <Suspense fallback={<LazyFallback />}>
-        <BilanAnalyseIA
-          apiKey={apiKey}
-          context={{
-            patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
-            zone: selectedBodyZone ?? '',
-            bilanType: getBilanType(selectedBodyZone ?? ''),
-            bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
-            notesLibres: bilanNotes,
-            therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
-            therapistProfession: profile.profession,
-            closedAntecedents: getClosedAntecedents(pk(formData.nom || 'Anonyme', formData.prenom), getBilanType(selectedBodyZone ?? '')),
-          }}
-          patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
-          profession={profile.profession}
-          onAudit={recordAIAudit}
-          onUnmaskedDocsConfirm={askUnmaskedDocsConfirm}
-          documents={bilanDocuments.length > 0 ? bilanDocuments : undefined}
-          cached={currentAnalyseIA}
-          onResult={(analyse) => {
-            setCurrentAnalyseIA(analyse)
-            if (currentBilanId !== null) {
-              setDb(prev => prev.map(r => r.id === currentBilanId ? { ...r, analyseIA: analyse } : r))
-            }
-            showToast('Analyse générée', 'success')
-          }}
-          onBack={() => {
-            if (bilanZoneBackStep === 'database') {
-              setCurrentBilanId(null)
-              setCurrentBilanDataOverride(null)
-              setBilanZoneBackStep('identity')
-              setStep('database')
-            } else {
-              setStep('bilan_zone')
-            }
-          }}
-          onClose={() => {
+      {/* ── Analyse IA / Compte rendu step ───────────────────────────────────── */}
+      {step === 'analyse_ia' && (() => {
+        const currentRecord = currentBilanId !== null ? db.find(r => r.id === currentBilanId) ?? null : null
+        const handleBack = () => {
+          if (bilanZoneBackStep === 'database') {
             setCurrentBilanId(null)
             setCurrentBilanDataOverride(null)
             setBilanZoneBackStep('identity')
-            goToPatientRecord()
-          }}
-          onExport={handleExportPDF}
-          exporting={exportingPDF}
-          onGoToProfile={() => setStep('profile')}
-          onFicheExercice={() => { if (!requirePlan('fiche_exercices')) return; setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }}
-        />
-        </Suspense>
-      )}
+            setStep('database')
+          } else {
+            setStep('bilan_zone')
+          }
+        }
+        const handleClose = () => {
+          setCurrentBilanId(null)
+          setCurrentBilanDataOverride(null)
+          setBilanZoneBackStep('identity')
+          goToPatientRecord()
+        }
+        const handleFiche = () => { if (!requirePlan('fiche_exercices')) return; setFicheBackStep('analyse_ia'); setStep('fiche_exercice') }
+        const isGeneratingCR = currentRecord ? generatingCompteRenduIds.includes(currentRecord.id) : false
+        return (
+          <Suspense fallback={<LazyFallback />}>
+            {currentRecord ? (
+              <>
+                <BilanCompteRendu
+                  patient={{
+                    prenom: formData.prenom,
+                    nom: formData.nom,
+                    dateNaissance: currentRecord.dateNaissance,
+                    sexe: currentRecord.sexe,
+                  }}
+                  zone={selectedBodyZone ?? undefined}
+                  bilanType={getBilanType(selectedBodyZone ?? '')}
+                  bilanData={currentRecord.bilanData ?? currentBilanDataOverride ?? undefined}
+                  diagnosticPhysio={currentRecord.diagnosticPhysio ?? undefined}
+                  notes={currentRecord.notes ?? undefined}
+                  profession={profile.profession as 'Kinésithérapeute' | 'Physiothérapeute'}
+                  compteRendu={currentRecord.compteRendu ?? null}
+                  compteRenduError={currentRecord.compteRenduError ?? null}
+                  generating={isGeneratingCR}
+                  apiKey={apiKey}
+                  dateBilan={currentRecord.dateBilan}
+                  onBack={handleBack}
+                  onClose={handleClose}
+                  onExport={handleExportPDF}
+                  exporting={exportingPDF}
+                  onGoToProfile={() => setStep('profile')}
+                  onRegenerate={() => kickOffCompteRendu(currentRecord)}
+                  onFicheExercice={handleFiche}
+                />
+                <BilanChatBubble
+                  apiKey={apiKey}
+                  record={currentRecord}
+                  patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
+                  profession={profile.profession}
+                  documents={bilanDocuments.length > 0 ? bilanDocuments : undefined}
+                  onAudit={recordAIAudit}
+                  onUnmaskedDocsConfirm={askUnmaskedDocsConfirm}
+                />
+              </>
+            ) : (
+              <BilanAnalyseIA
+                apiKey={apiKey}
+                context={{
+                  patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
+                  zone: selectedBodyZone ?? '',
+                  bilanType: getBilanType(selectedBodyZone ?? ''),
+                  bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
+                  notesLibres: bilanNotes,
+                  therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
+                  therapistProfession: profile.profession,
+                  closedAntecedents: getClosedAntecedents(pk(formData.nom || 'Anonyme', formData.prenom), getBilanType(selectedBodyZone ?? '')),
+                }}
+                patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
+                profession={profile.profession}
+                onAudit={recordAIAudit}
+                onUnmaskedDocsConfirm={askUnmaskedDocsConfirm}
+                documents={bilanDocuments.length > 0 ? bilanDocuments : undefined}
+                cached={currentAnalyseIA}
+                onResult={(analyse) => {
+                  setCurrentAnalyseIA(analyse)
+                  if (currentBilanId !== null) {
+                    setDb(prev => prev.map(r => r.id === currentBilanId ? { ...r, analyseIA: analyse } : r))
+                  }
+                  showToast('Analyse générée', 'success')
+                }}
+                onBack={handleBack}
+                onClose={handleClose}
+                onExport={handleExportPDF}
+                exporting={exportingPDF}
+                onGoToProfile={() => setStep('profile')}
+                onFicheExercice={handleFiche}
+              />
+            )}
+          </Suspense>
+        )
+      })()}
 
       {/* ── Fiche Exercice IA step ────────────────────────────────────────────── */}
       {step === 'fiche_exercice' && (

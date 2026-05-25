@@ -6,6 +6,7 @@ import { pdfToImages } from '../../utils/pdfToImages'
 import { analyseSeanceMiniSchema } from '../../utils/validation'
 import { colors as c } from '../../design/tokens'
 import { pk } from '../../lib/syncEngine'
+import { deleteDocBlob } from '../../lib/documentStorage'
 import { PatientHeader } from '../patient/PatientHeader'
 import { PatientHeroCard } from '../patient/PatientHeroCard'
 import { ConsultationChooser } from '../patient/ConsultationChooser'
@@ -49,6 +50,7 @@ export function DatabasePage() {
     setBilanDocuments,
     setBilanIntermediaireZone,
     setBilanNotes,
+    setDiagnosticPhysio,
     setBilanZoneBackStep,
     setConsultationChooserOpen,
     setCurrentAnalyseIA,
@@ -1170,6 +1172,7 @@ export function DatabasePage() {
                                       setCurrentBilanId(record.id)
                                       setCurrentBilanDataOverride(record.bilanData ?? null)
                                       setBilanNotes(record.notes ?? '')
+                                      setDiagnosticPhysio(record.diagnosticPhysio ?? '')
                                       setSilhouetteData(record.silhouetteData ?? {})
                                       setBilanDocuments(record.documents ?? [])
                                       setBilanZoneBackStep('database')
@@ -1219,10 +1222,14 @@ export function DatabasePage() {
                                         setBilanDocuments(record.documents ?? [])
                                         setStep('analyse_ia')
                                       }}>
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M9.5 2a2.5 2.5 0 0 1 5 0v1.5"/><path d="M14.5 3.5C17 4 19 6.5 19 9.5c0 1-.2 2-.6 2.8"/><path d="M9.5 3.5C7 4 5 6.5 5 9.5c0 1 .2 2 .6 2.8"/><path d="M5.6 12.3C4 13 3 14.4 3 16a4 4 0 0 0 4 4h2"/><path d="M18.4 12.3C20 13 21 14.4 21 16a4 4 0 0 1-4 4h-2"/><path d="M9 20v-6"/><path d="M15 20v-6"/><path d="M9 14h6"/>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="16" y1="13" x2="8" y2="13"/>
+                                        <line x1="16" y1="17" x2="8" y2="17"/>
+                                        <polyline points="10 9 9 9 8 9"/>
                                       </svg>
-                                      Analyser
+                                      Compte rendu
                                     </button>
                                   </div>
                                   {/* Rangée 2 : Fiche d'exercices */}
@@ -1257,6 +1264,7 @@ export function DatabasePage() {
                                         setCurrentBilanId(record.id)
                                         setCurrentBilanDataOverride(record.bilanData ?? null)
                                         setBilanNotes(record.notes ?? '')
+                                        setDiagnosticPhysio(record.diagnosticPhysio ?? '')
                                         setSilhouetteData(record.silhouetteData ?? {})
                                         setBilanDocuments(record.documents ?? [])
                                         setBilanZoneBackStep('database')
@@ -1747,11 +1755,31 @@ export function DatabasePage() {
                           }}
                           onDelete={(target) => {
                             if (target.kind === 'standalone') {
+                              const doc = dbPatientDocs.find(d => d.id === target.docId)
+                              if (doc?.storagePath) void deleteDocBlob(doc.storagePath)
                               setDbPatientDocs(prev => prev.filter(d => d.id !== target.docId))
                             } else {
+                              const bilan = db.find(r => r.id === target.bilanId)
+                              const removed = bilan?.documents?.[target.docIndex]
+                              if (removed?.storagePath) void deleteDocBlob(removed.storagePath)
                               setDb(prev => prev.map(r => {
                                 if (r.id !== target.bilanId || !r.documents) return r
                                 const docs = r.documents.filter((_, i) => i !== target.docIndex)
+                                return { ...r, documents: docs }
+                              }))
+                            }
+                          }}
+                          onHydrateBinary={(target, base64) => {
+                            if (target.kind === 'standalone') {
+                              setDbPatientDocs(prev => prev.map(d =>
+                                d.id === target.docId ? { ...d, data: base64 } : d
+                              ))
+                            } else {
+                              setDb(prev => prev.map(r => {
+                                if (r.id !== target.bilanId || !r.documents) return r
+                                const docs = r.documents.map((d, i) =>
+                                  i === target.docIndex ? { ...d, data: base64 } : d
+                                )
                                 return { ...r, documents: docs }
                               }))
                             }

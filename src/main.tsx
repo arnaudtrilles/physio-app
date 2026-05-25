@@ -34,6 +34,7 @@ if ('serviceWorker' in navigator) {
 }
 
 const isAdminRoute = window.location.pathname === '/admin'
+const isPatientInfoRoute = window.location.pathname === '/patients' || window.location.pathname === '/patients/'
 const hashParams = new URLSearchParams(window.location.hash.slice(1))
 const isPasswordRecovery = hashParams.get('type') === 'recovery'
 
@@ -41,6 +42,12 @@ if (isAdminRoute) {
   import('./pages/AdminPage').then(({ default: AdminPage }) => {
     createRoot(document.getElementById('root')!).render(
       <StrictMode><AdminPage /></StrictMode>,
+    )
+  })
+} else if (isPatientInfoRoute) {
+  import('./pages/PatientInfoPage').then(({ default: PatientInfoPage }) => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode><PatientInfoPage /></StrictMode>,
     )
   })
 } else if (isPasswordRecovery) {
