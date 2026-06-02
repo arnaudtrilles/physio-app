@@ -556,7 +556,7 @@ Tu réponds UNIQUEMENT en JSON valide, sans aucun texte avant ou après, sans
 markdown, sans backticks. Le JSON doit être directement parsable.`
 }
 
-function buildUserPrompt(src: CompteRenduSource): string {
+function buildUserPrompt(src: CompteRenduSource, instructions?: string): string {
   const sexeNorm = src.sexeLine.includes('feminin')
     ? 'feminin'
     : src.sexeLine.includes('masculin')
@@ -612,6 +612,15 @@ function buildUserPrompt(src: CompteRenduSource): string {
       '',
       `── DIAGNOSTIC SAISI PAR LE THÉRAPEUTE ──`,
       `À reprendre quasi textuellement dans \`projetTherapeutique.hypothesesPraticien\` : ${src.diagnosticPhysio}`,
+    )
+  }
+  const trimmedInstructions = instructions?.trim()
+  if (trimmedInstructions) {
+    lines.push(
+      '',
+      `── MODIFICATIONS DEMANDÉES PAR LE THÉRAPEUTE ──`,
+      `Le thérapeute a relu le compte rendu et demande les ajustements ci-dessous. Applique-les FIDÈLEMENT : reformulation, mise en avant d'un élément, correction, ou ajout d'une précision qu'il fournit explicitement. Ces directives émanent du thérapeute lui-même et font autorité au même titre que ses notes — elles priment en cas de tension avec le reste. La règle de non-invention reste valable : n'ajoute rien d'autre que ce qu'il demande, ne fabrique aucune donnée clinique non fournie.`,
+      trimmedInstructions,
     )
   }
   return lines.join('\n')
@@ -841,6 +850,16 @@ export interface GenerateCompteRenduOptions {
   patientKey: string
   profession?: string
   documents?: BilanDocument[]
+  /**
+   * Ajustements ponctuels demandés par le thérapeute lors d'une régénération
+   * manuelle (« mets en avant la douleur nocturne », « précise que Neer est
+   * positif à droite »…). Injectés dans le prompt comme directive faisant
+   * autorité, MAIS volontairement EXCLUS du sourceHash : ce sont des retouches
+   * one-off, pas une modification de la source clinique — garder le sourceHash
+   * canonique évite que la version retouchée soit considérée « stale » et
+   * écrasée au prochain passage automatique.
+   */
+  instructions?: string
   onAudit?: (entry: AICallAuditEntry) => void
   onUnmaskedDocsConfirm?: (docs: BilanDocument[]) => Promise<boolean>
 }
@@ -857,14 +876,14 @@ function buildEnTete(record: BilanRecord): CompteRenduData['enTete'] {
 }
 
 export async function generateCompteRendu(opts: GenerateCompteRenduOptions): Promise<CompteRendu> {
-  const { apiKey, record, patientKey, profession, documents, onAudit, onUnmaskedDocsConfirm } = opts
+  const { apiKey, record, patientKey, profession, documents, instructions, onAudit, onUnmaskedDocsConfirm } = opts
   const sourceHash = computeCompteRenduSourceHash(record)
   const src = extractSource(record)
 
   const callOpts = {
     apiKey,
     systemPrompt: buildSystemPrompt(profession),
-    userPrompt: buildUserPrompt(src),
+    userPrompt: buildUserPrompt(src, instructions),
     // V10 JSON structuré ~ 1500-3000 tokens en sortie selon richesse. 4500 = marge
     // confortable pour ne jamais tronquer avant fermeture du JSON.
     maxOutputTokens: 4500,

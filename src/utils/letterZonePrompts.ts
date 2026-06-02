@@ -170,7 +170,8 @@ RÈGLES ABSOLUES :
 7. TON CONFRATERNEL — concis, factuel, sans pathos, sans phrase de comblement (« comme convenu »).
 8. PLACEHOLDERS DE PSEUDONYMISATION — \`__PATIENT_PRENOM__\`, \`__PATIENT_NOM__\`, \`__DESTINATAIRE_NOM__\`, \`__PRO_RECOMMANDE_NOM__\` se reproduisent EXACTEMENT, sans modification.
 9. SORTIE PROPRE — uniquement le paragraphe brut demandé, sans préambule (« Voici… »), sans guillemets enveloppants, sans note hors-texte.
-10. VOCABULAIRE PROFESSION — Tu es ${titre}, donc tu emploies EXCLUSIVEMENT « ${titre} », « ${metier} », « ${adjMetier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que les abréviations « kiné » et « physio ». Aucune exception, aucune occurrence, même dans une citation ou un exemple.`
+10. VOCABULAIRE PROFESSION — Tu es ${titre}, donc tu emploies EXCLUSIVEMENT « ${titre} », « ${metier} », « ${adjMetier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que les abréviations « kiné » et « physio ». Aucune exception, aucune occurrence, même dans une citation ou un exemple.
+11. REGISTRE DE LA SUGGESTION — Les CONSTATS s'affirment fermement (« j'ai évalué », « j'observe », « je constate », « je retrouve »). Mais toute SUITE proposée au médecin (traitement, imagerie, renouvellement, orientation, avis) s'exprime sur le registre de la PROPOSITION respectueuse, décision laissée au prescripteur : « je me permets de suggérer », « je vous propose », « il me semblerait pertinent de », « je vous laisse juge de l'opportunité de ». INTERDIT : « je recommande », « je préconise », « il faut », « il convient de », « il est nécessaire de », « le patient doit » et toute injonction. On constate, puis on propose — jamais on n'impose.`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

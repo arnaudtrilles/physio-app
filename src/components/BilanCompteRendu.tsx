@@ -10,6 +10,7 @@ import {
   TestCard,
   FlagBadge,
 } from './compteRendu/atoms'
+import { DictableTextarea } from './VoiceMic'
 
 interface BilanCompteRenduProps {
   patient: { prenom: string; nom: string; dateNaissance?: string; sexe?: string }
@@ -29,7 +30,9 @@ interface BilanCompteRenduProps {
   onExport: () => void
   exporting?: boolean
   onGoToProfile: () => void
-  onRegenerate?: () => void
+  /** Régénère le compte rendu. `instructions` = ajustements optionnels saisis
+   *  (dictés ou écrits) par le thérapeute via la bulle « Modifier ». */
+  onRegenerate?: (instructions?: string) => void
   onFicheExercice?: () => void
 }
 
@@ -166,7 +169,7 @@ export function BilanCompteRendu({
             <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Rédaction indisponible</div>
             <p style={{ fontSize: '0.8rem', color: '#7f1d1d', margin: 0 }}>{compteRenduError}</p>
             {onRegenerate && (
-              <button onClick={onRegenerate} style={{ marginTop: 8, fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <button onClick={() => onRegenerate()} style={{ marginTop: 8, fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                 Réessayer
               </button>
             )}
@@ -264,16 +267,130 @@ export function BilanCompteRendu({
             </button>
           )}
           {hasContent && !generating && onRegenerate && (
-            <button
-              onClick={onRegenerate}
-              style={{ width: '100%', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border-color)', background: 'white', color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
-            >
-              Regénérer
-            </button>
+            <RegenerateControl onRegenerate={onRegenerate} />
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Régénération avec modifications (bulle dictée/écrite) ─────────────
+
+/**
+ * Bouton « Regénérer » qui ouvre une bulle de retouche au clic.
+ *
+ * Le thérapeute peut y indiquer des ajustements précis — soit à la voix
+ * (DictableTextarea, même flux dictaphone que le reste de l'app), soit au
+ * clavier — puis relancer la génération en les passant au prompt. Champ vide =
+ * simple régénération à l'identique.
+ */
+function RegenerateControl({ onRegenerate }: { onRegenerate: (instructions?: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [instructions, setInstructions] = useState('')
+
+  const close = () => { setOpen(false); setInstructions('') }
+  const handleConfirm = () => {
+    onRegenerate(instructions.trim() || undefined)
+    close()
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{ width: '100%', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border-color)', background: 'white', color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+      >
+        <RefreshIcon size={15} color="var(--text-muted)" />
+        Regénérer
+      </button>
+    )
+  }
+
+  return (
+    <div
+      className="fade-in-up"
+      style={{
+        borderRadius: 'var(--radius-lg)',
+        border: '1.5px solid var(--border-color)',
+        background: 'white',
+        padding: '0.9rem',
+        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.10)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--primary)' }}>
+          <WandIcon size={15} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)' }}>
+          Modifier le compte rendu
+        </div>
+        <button onClick={close} aria-label="Fermer" style={{ ...iconBtnStyle, width: 26, height: 26 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <p style={{ margin: '0 0 10px', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+        Indiquez les ajustements souhaités — vous pouvez les <strong style={{ fontWeight: 600, color: '#475569' }}>dicter</strong> ou les écrire. Le compte rendu sera regénéré en tenant compte de vos remarques.
+      </p>
+
+      <DictableTextarea
+        value={instructions}
+        onChange={e => setInstructions(e.target.value)}
+        placeholder="Ex. « insiste sur la douleur nocturne », « précise que le test de Neer est positif à droite », « raccourcis la partie anamnèse »…"
+        minHeight={72}
+        textareaStyle={{
+          width: '100%',
+          padding: '0.6rem 0.7rem',
+          borderRadius: 10,
+          border: '1.5px solid var(--border-color)',
+          fontSize: '0.85rem',
+          lineHeight: 1.5,
+          color: 'var(--text-main)',
+          background: '#f8fafc',
+          fontFamily: 'inherit',
+        }}
+      />
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button
+          onClick={close}
+          style={{ flex: '0 0 auto', padding: '0.65rem 1rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border-color)', background: 'white', color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
+        >
+          Annuler
+        </button>
+        <button
+          onClick={handleConfirm}
+          className="btn-primary-luxe"
+          style={{ flex: 1, marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+        >
+          <RefreshIcon size={15} color="white" />
+          {instructions.trim() ? 'Regénérer avec mes modifications' : 'Regénérer'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RefreshIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+  )
+}
+
+function WandIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/>
+      <path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/>
+      <path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/>
+    </svg>
   )
 }
 
