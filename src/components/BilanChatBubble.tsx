@@ -240,7 +240,7 @@ ${buildBilanContextBlock()}`
     || (!isRecording && !input.trim())
   const micDisabled = !apiKey || loading || isProcessingVoice
   const hasFeed = open && (messages.length > 0 || loading || error || micError || !apiKey)
-  const showSuggestions = open && messages.length === 0 && !loading && !error && !micError && apiKey && !isRecording && !isProcessingVoice
+  const showGreeting = open && messages.length === 0 && !loading && !error && !micError && apiKey && !isRecording && !isProcessingVoice
 
   const handleSendClick = () => {
     if (isRecording) {
@@ -341,55 +341,41 @@ ${buildBilanContextBlock()}`
         )}
       </AnimatePresence>
 
-      {/* Suggestions */}
+      {/* Message d'accueil */}
       <AnimatePresence>
-        {showSuggestions && (
+        {showGreeting && (
           <motion.div
-            key="suggestions"
+            key="greeting"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
             style={{
-              pointerEvents: 'auto',
+              pointerEvents: 'none',
               width: FEED_WIDTH,
               display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
               padding: '4px 2px',
             }}
           >
-            {SUGGESTIONS.map((s, i) => (
-              <motion.div
-                key={s}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 + i * 0.06, type: 'spring', stiffness: 380, damping: 28 }}
-                style={{ alignSelf: 'flex-end', maxWidth: '92%' }}
-              >
-                <button
-                  onClick={() => { setInput(s); inputRef.current?.focus() }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 14,
-                    background: 'rgba(255, 255, 255, 0.7)',
-                    backdropFilter: 'blur(20px) saturate(180%)',
-                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                    border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                    color: 'var(--primary-dark)',
-                    textAlign: 'right',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontWeight: 500,
-                  }}
-                >
-                  {s}
-                </button>
-              </motion.div>
-            ))}
+            <div
+              style={{
+                alignSelf: 'flex-start',
+                maxWidth: '92%',
+                padding: '8px 12px',
+                borderRadius: 14,
+                background: 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(20px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
+                fontSize: 12.5,
+                lineHeight: 1.4,
+                color: 'var(--primary-dark)',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+              }}
+            >
+              Qu'est-ce que je peux faire pour t'aider ?
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -697,30 +683,24 @@ function FloatNote({ tone, children }: { tone: 'warn' | 'error'; children: React
 function PractitionerAvatar() {
   return (
     <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {/* Mèche de cheveux — petit arc au-dessus du front */}
-      <path d="M11.6 7.2 C13 5.4, 19 5.4, 20.4 7.2" strokeWidth="1.6" />
       {/* Tête */}
-      <circle cx="16" cy="9.6" r="4.2" strokeWidth="1.7" />
-      {/* Blouse — épaules + tronc */}
-      <path d="M4.8 28 C4.8 21.5, 9 17.5, 16 17.5 C23 17.5, 27.2 21.5, 27.2 28" strokeWidth="1.7" />
-      {/* Col en V de la blouse */}
-      <path d="M12.4 19.2 L16 23.4 L19.6 19.2" strokeWidth="1.5" />
-      {/* Stéthoscope — embouts auriculaires (deux petits cercles) */}
-      <circle cx="12.4" cy="17.2" r="0.7" strokeWidth="1.1" fill="currentColor" />
-      <circle cx="19.6" cy="17.2" r="0.7" strokeWidth="1.1" fill="currentColor" />
-      {/* Tube — U autour du cou puis branche qui descend à droite */}
-      <path d="M12.4 17.9 C12.4 20.6, 14 22 16 22 C18 22, 19.6 20.6, 19.6 17.9 M19.6 22.2 C19.6 23.4, 20.2 24.5, 21.4 25.2" strokeWidth="1.2" />
-      {/* Pavillon (chest piece) */}
-      <circle cx="22" cy="26" r="1.6" strokeWidth="1.2" />
+      <circle cx="16" cy="15.5" r="9.4" strokeWidth="1.7" />
+      {/* Petite mèche de cheveux au-dessus du front */}
+      <path d="M10.6 8.9 C13 5.9, 19 5.9, 21.4 8.9" strokeWidth="1.5" />
+      {/* Lunettes — verre gauche */}
+      <circle cx="12" cy="15" r="2.6" strokeWidth="1.5" />
+      {/* Lunettes — verre droit */}
+      <circle cx="20" cy="15" r="2.6" strokeWidth="1.5" />
+      {/* Pont des lunettes */}
+      <path d="M14.6 14.7 C15.3 14.1, 16.7 14.1, 17.4 14.7" strokeWidth="1.4" />
+      {/* Branches vers les tempes */}
+      <path d="M9.4 14.6 L7.5 13.9" strokeWidth="1.4" />
+      <path d="M22.6 14.6 L24.5 13.9" strokeWidth="1.4" />
+      {/* Sourire */}
+      <path d="M12.7 20 C14 21.6, 18 21.6, 19.3 20" strokeWidth="1.5" />
     </svg>
   )
 }
-
-const SUGGESTIONS = [
-  'Quels diagnostics différentiels envisager ?',
-  'Quels tests cliniques manquent ?',
-  'Quels drapeaux rouges écarter ?',
-]
 
 function TypingDot({ delay }: { delay: number }) {
   return (
