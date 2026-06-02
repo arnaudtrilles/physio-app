@@ -129,7 +129,9 @@ RÈGLES ABSOLUES — applicables à tous les types de courrier
 13. REGISTRE DE LA SUGGESTION — PROPOSITION, JAMAIS PRESCRIPTION (RÈGLE DE TON ESSENTIELLE). Distingue nettement deux registres :
    • Les CONSTATS et l'EXAMEN s'énoncent fermement, à la 1ʳᵉ personne, sans détour : « j'ai examiné », « j'ai évalué », « j'observe », « je constate », « je retrouve », « le bilan met en évidence », « j'ai pris en charge ». Ce que tu as vu et fait s'affirme posément, sans atténuation.
    • Toute SUITE adressée au médecin — traitement complémentaire, imagerie, renouvellement d'ordonnance, orientation, avis spécialisé — s'exprime sur un registre de PROPOSITION douce et respectueuse, qui laisse l'ENTIÈRE décision au prescripteur. Tu emploies : « je me permets de vous suggérer », « je vous propose », « il me semblerait pertinent de », « peut-être pourrait-on envisager », « je soumets à votre appréciation », « je vous laisse juge de l'opportunité de », « si vous le jugez opportun ».
-   INTERDICTION FERME des tournures sèches, directives, injonctives ou prescriptives : « je recommande », « je préconise », « il faut », « il convient de », « il est nécessaire de », « il est impératif de », « le patient doit », « je demande que », « je vous demande de ». Aucune de ces formules n'apparaît dans le courrier. Le ${titre} n'impose ni ne prescrit : il constate, puis propose, en confraternité, au médecin qui décide. Dès qu'il s'agit d'une suite à donner, la douceur de la formulation prime — privilégie toujours « je suggère / je propose » à toute forme plus affirmée.`
+   INTERDICTION FERME des tournures sèches, directives, injonctives ou prescriptives : « je recommande », « je préconise », « il faut », « il convient de », « il est nécessaire de », « il est impératif de », « le patient doit », « je demande que », « je vous demande de ». Aucune de ces formules n'apparaît dans le courrier. Le ${titre} n'impose ni ne prescrit : il constate, puis propose, en confraternité, au médecin qui décide. Dès qu'il s'agit d'une suite à donner, la douceur de la formulation prime — privilégie toujours « je suggère / je propose » à toute forme plus affirmée.
+
+14. DESCRIPTION GLOBALE DU TRAITEMENT — Les interventions de ${metier} consignées dans les notes de séance sont des relevés de séance détaillés ; pour le courrier tu les SYNTHÉTISES en axes GLOBAUX et tu NE les recopies JAMAIS technique par technique. Tu indiques la MODALITÉ (thérapie manuelle, exercices fonctionnels, renforcement, mobilisations, rééducation proprioceptive, éducation…) suivie de la RÉGION ANATOMIQUE ou de la FONCTION ciblée. Attendu : « thérapie manuelle axée sur la hanche et le genou », « exercices fonctionnels de mobilité de hanche », « renforcement du membre inférieur ». INTERDIT d'énumérer les muscles, manœuvres ou exercices nommés présents dans les données (« détente du psoas », « étirements du quadriceps », « pompage articulaire », « gainage en planche »…) : tu les REGROUPES en catégories. Tu remontes de la structure citée à sa région (psoas → hanche, quadriceps → cuisse/genou) sans inventer de région non couverte par les données. SEULE EXCEPTION : une précision que le thérapeute a explicitement formulée comme consigne de rédaction est reprise telle quelle. Cette synthèse ne concerne QUE la description du traitement — les tests, scores et chiffres restent reproduits verbatim (règle 5).`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,7 +206,7 @@ STRUCTURE NARRATIVE ATTENDUE (4 paragraphes courts, ~250 mots dans le corps) :
 
 §1 — ANNONCE & CADRAGE (1 à 2 phrases). Annonce la fin de prise en charge, rappelle qui est le patient (désignation imposée), l'indication initiale et la période de PEC (de la date de début à la date de fin, format JJ/MM/AAAA, en toutes phrases articulées).
 
-§2 — SYNTHÈSE CLINIQUE & DÉROULÉ (3 à 4 phrases). Décris brièvement le tableau initial (motif, retentissement principal). Enchaîne sur les axes thérapeutiques mis en place pendant la PEC, en citant verbatim les techniques et le nombre de séances quand l'information est disponible.
+§2 — SYNTHÈSE CLINIQUE & DÉROULÉ (3 à 4 phrases). Décris brièvement le tableau initial (motif, retentissement principal). Enchaîne sur les axes thérapeutiques mis en place pendant la PEC, décrits de façon GLOBALE (modalité + région/fonction ciblée, cf. règle 14 — jamais le détail des techniques ou muscles), et le nombre de séances quand l'information est disponible.
 
 §3 — RÉSULTATS & ÉTAT FINAL (2 à 3 phrases). Restitue les résultats objectifs et fonctionnels obtenus en utilisant les données chiffrées telles que transmises (EVN initiale → EVN finale uniquement si les deux valeurs sont fournies, gain fonctionnel, autonomie). Ton factuel, sans emphase.
 
@@ -311,7 +313,7 @@ STRUCTURE NARRATIVE ATTENDUE (3 ou 4 paragraphes courts, ~270 mots dans le corps
 
 §1 — PRÉSENTATION & CONTEXTE (2 phrases). Désigne le patient (désignation imposée), rappelle l'indication initiale et la période de PEC en cours.
 
-§2 — DÉROULÉ & RÉSULTATS ACTUELS (3 à 4 phrases). Synthèse du parcours en cours : techniques utilisées, nombre de séances déjà effectuées, état clinique actuel chiffré quand les données sont fournies (EVN, scores, gain fonctionnel). Aucune valeur inventée.
+§2 — DÉROULÉ & RÉSULTATS ACTUELS (3 à 4 phrases). Synthèse du parcours en cours : axes thérapeutiques décrits de façon GLOBALE (modalité + région/fonction ciblée, cf. règle 14 — jamais le détail des techniques ou muscles), nombre de séances déjà effectuées, état clinique actuel chiffré quand les données sont fournies (EVN, scores, gain fonctionnel). Aucune valeur inventée.
 
 §3 — JUSTIFICATION DU RENOUVELLEMENT (2 à 3 phrases). Explique pourquoi une nouvelle ordonnance est nécessaire : objectifs encore à atteindre, plan thérapeutique restant, jalons cliniques attendus. Reste précis et étayé par les données transmises.${doubleParag}
 
@@ -373,7 +375,7 @@ STRUCTURE NARRATIVE ATTENDUE (4 paragraphes courts, ~310 mots dans le corps) :
 
 §1 — ANNONCE FACTUELLE (2 phrases). Désigne le patient et indique l'arrêt de la PEC de ${metier} à la date transmise après le nombre de séances effectuées. Pose le contexte sans dramatisation.
 
-§2 — RAPPEL DU TABLEAU & APPROCHES ESSAYÉES (3 à 4 phrases). Synthétise le bilan initial, puis détaille en prose les modalités thérapeutiques essayées (techniques, exercices, dosage). Pas de jugement de valeur.
+§2 — RAPPEL DU TABLEAU & APPROCHES ESSAYÉES (3 à 4 phrases). Synthétise le bilan initial, puis décris en prose les axes thérapeutiques essayés de façon GLOBALE (modalité + région/fonction ciblée et dosage/nombre de séances, cf. règle 14 — jamais le détail des techniques ou muscles). Pas de jugement de valeur.
 
 §3 — CONSTAT CLINIQUE ACTUEL (2 à 3 phrases). Restitue le constat factuel : évolution stationnaire ou défavorable étayée par les chiffres transmis verbatim (EVN/EVA, scores fonctionnels, gain fonctionnel limité). Aucune valeur inventée.
 

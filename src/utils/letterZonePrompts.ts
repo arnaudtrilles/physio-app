@@ -171,7 +171,8 @@ RÈGLES ABSOLUES :
 8. PLACEHOLDERS DE PSEUDONYMISATION — \`__PATIENT_PRENOM__\`, \`__PATIENT_NOM__\`, \`__DESTINATAIRE_NOM__\`, \`__PRO_RECOMMANDE_NOM__\` se reproduisent EXACTEMENT, sans modification.
 9. SORTIE PROPRE — uniquement le paragraphe brut demandé, sans préambule (« Voici… »), sans guillemets enveloppants, sans note hors-texte.
 10. VOCABULAIRE PROFESSION — Tu es ${titre}, donc tu emploies EXCLUSIVEMENT « ${titre} », « ${metier} », « ${adjMetier} ». INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que les abréviations « kiné » et « physio ». Aucune exception, aucune occurrence, même dans une citation ou un exemple.
-11. REGISTRE DE LA SUGGESTION — Les CONSTATS s'affirment fermement (« j'ai évalué », « j'observe », « je constate », « je retrouve »). Mais toute SUITE proposée au médecin (traitement, imagerie, renouvellement, orientation, avis) s'exprime sur le registre de la PROPOSITION respectueuse, décision laissée au prescripteur : « je me permets de suggérer », « je vous propose », « il me semblerait pertinent de », « je vous laisse juge de l'opportunité de ». INTERDIT : « je recommande », « je préconise », « il faut », « il convient de », « il est nécessaire de », « le patient doit » et toute injonction. On constate, puis on propose — jamais on n'impose.`
+11. REGISTRE DE LA SUGGESTION — Les CONSTATS s'affirment fermement (« j'ai évalué », « j'observe », « je constate », « je retrouve »). Mais toute SUITE proposée au médecin (traitement, imagerie, renouvellement, orientation, avis) s'exprime sur le registre de la PROPOSITION respectueuse, décision laissée au prescripteur : « je me permets de suggérer », « je vous propose », « il me semblerait pertinent de », « je vous laisse juge de l'opportunité de ». INTERDIT : « je recommande », « je préconise », « il faut », « il convient de », « il est nécessaire de », « le patient doit » et toute injonction. On constate, puis on propose — jamais on n'impose.
+12. DESCRIPTION GLOBALE DU TRAITEMENT — Les interventions consignées dans les notes de séance sont SYNTHÉTISÉES en axes globaux, jamais recopiées technique par technique : MODALITÉ (thérapie manuelle, exercices fonctionnels, renforcement, mobilisations, éducation…) + RÉGION ou FONCTION ciblée (« thérapie manuelle de la hanche et du genou », « exercices fonctionnels de mobilité de hanche »). INTERDIT d'énumérer les muscles, manœuvres ou exercices nommés (« détente du psoas », « étirements du quadriceps », « pompage articulaire »…). Remonte de la structure citée à sa région (psoas → hanche, quadriceps → cuisse/genou) sans inventer de région non couverte. Exception : une précision explicitement saisie par le thérapeute est reprise telle quelle.`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,12 +226,12 @@ const ZONE_SPECS: Record<ConfectableField, ZoneSpec> = {
   traitement: {
     label: 'Traitement effectué',
     range: '3 à 5 phrases (~70 mots)',
-    instruction: `Décris les axes thérapeutiques mis en place — techniques, exercices, modalités — en citant verbatim ce qui figure dans les notes de séance. Mentionne le nombre de séances si disponible. Pas d'énumération exhaustive : regrouper par axe (manuel / actif / éducation).`,
+    instruction: `Décris les axes thérapeutiques mis en place de façon GLOBALE : modalité (thérapie manuelle, exercices fonctionnels, renforcement, éducation…) + région ou fonction ciblée (ex. « thérapie manuelle de la hanche et du genou », « exercices fonctionnels de mobilité de hanche »). Mentionne le nombre de séances si disponible. NE recopie PAS les techniques, muscles ni exercices nommés des notes de séance : regroupe-les en axes (cf. règle 12).`,
   },
   traitementsEssayes: {
     label: 'Modalités de traitement essayées',
     range: '3 à 4 phrases (~60 mots)',
-    instruction: `Liste articulée des techniques et modalités essayées sans succès suffisant — formulation neutre, factuelle. Regroupe par catégorie (manuel, actif, éducatif). Pas de jugement sur l'inefficacité, simple constat.`,
+    instruction: `Décris de façon GLOBALE les axes thérapeutiques essayés sans succès suffisant — modalité + région/fonction ciblée, regroupés par catégorie (manuel, actif, éducatif), sans énumérer les techniques, muscles ni exercices nommés (cf. règle 12). Formulation neutre, factuelle, sans jugement sur l'inefficacité — simple constat.`,
   },
   resultats: {
     label: 'Résultats / état actuel',

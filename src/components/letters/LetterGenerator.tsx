@@ -819,6 +819,45 @@ function ZoneLabel({
   )
 }
 
+// Formate une saisie de date en jj/mm/aaaa : ne conserve que les chiffres
+// (max 8 — JJMMAAAA) et insère les « / » automatiquement au fil de la frappe.
+// Robuste à la suppression : la valeur est toujours redérivée des chiffres.
+function formatDateInput(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 8)
+  if (d.length <= 2) return d
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`
+}
+
+// Champ date : clavier numérique (inputMode) sur mobile + « / » auto-insérés.
+// La valeur stockée reste une chaîne « jj/mm/aaaa », compatible avec le pipeline.
+function DateField({ value, onValueChange }: { value: string; onValueChange: (v: string) => void }) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="jj/mm/aaaa"
+      maxLength={10}
+      value={value}
+      onChange={e => onValueChange(formatDateInput(e.target.value))}
+      style={inputStyle}
+    />
+  )
+}
+
+// Options de fréquence de PEC (menu déroulant). Valeur compacte stockée /
+// transmise à l'IA, libellé lisible affiché à l'utilisateur.
+const FREQUENCE_OPTIONS: { value: string; label: string }[] = [
+  { value: '1x/semaine', label: 'Une fois par semaine' },
+  { value: '2x/semaine', label: 'Deux fois par semaine' },
+  { value: '3x/semaine', label: 'Trois fois par semaine' },
+  { value: '4x/semaine', label: 'Quatre fois par semaine' },
+  { value: '5x/semaine', label: 'Cinq fois par semaine' },
+  { value: '6x/semaine', label: 'Six fois par semaine' },
+  { value: 'tous les jours', label: 'Tous les jours' },
+]
+
 function LetterForm({ type, form, update, confectField, confectingField, generating, profession }: LetterFormProps) {
   const titreConfrere = /physio/i.test(profession || '') ? 'physiothérapeute' : 'kinésithérapeute'
   const field = (key: keyof LetterFormData) => ({
@@ -895,11 +934,16 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <div>
           <label style={labelStyle}>Début PEC</label>
-          <input {...field('dateDebutPec')} placeholder="jj/mm/aaaa" style={inputStyle} />
+          <DateField value={form.dateDebutPec ?? ''} onValueChange={v => update('dateDebutPec', v)} />
         </div>
         <div>
           <label style={labelStyle}>Fréquence</label>
-          <input {...field('frequence')} placeholder="2x/semaine" style={inputStyle} />
+          <select {...field('frequence')} style={inputStyle}>
+            <option value="">—</option>
+            {FREQUENCE_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -911,7 +955,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
               <label style={labelStyle}>Date de fin PEC</label>
-              <input {...field('dateFinPec')} placeholder="jj/mm/aaaa" style={inputStyle} />
+              <DateField value={form.dateFinPec ?? ''} onValueChange={v => update('dateFinPec', v)} />
             </div>
             <div>
               <label style={labelStyle}>Nombre de séances</label>
@@ -1029,7 +1073,7 @@ function LetterForm({ type, form, update, confectField, confectingField, generat
             <option value="confrère">Confrère {titreConfrere}</option>
           </select>
           <label style={labelStyle}>Date du bilan intermédiaire</label>
-          <input {...field('dateBilanInterm')} placeholder="jj/mm/aaaa" style={inputStyle} />
+          <DateField value={form.dateBilanInterm ?? ''} onValueChange={v => update('dateBilanInterm', v)} />
           {zone('Évolution constatée', 'evolution')}
           <DictableTextarea {...field('evolution')} textareaStyle={textareaStyle} />
           {zone('Points positifs', 'pointsPositifs')}
