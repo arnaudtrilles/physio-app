@@ -75,7 +75,7 @@ export function BilanEvolutionIA({ apiKey, context, patientKey, profession, onAu
 
 Ton rapport est factuellement ancré sur les données transmises : aucune invention, aucune extrapolation, aucun mécanisme lésionnel non explicité. Quand une donnée manque, tu LAISSES LE CHAMP VIDE (chaîne vide "" ou tableau vide []) sans jamais imprimer de phrase indiquant l'absence de la donnée. INTERDICTION ABSOLUE d'écrire "Non documenté dans le suivi", "Non documenté", "Non renseigné", "Aucune donnée", "Absence de données" ou toute formulation équivalente — ces mentions disqualifient le rapport.
 
-Tu n'écris JAMAIS de phrase qui souligne une lacune méthodologique du clinicien : aucune mention d'absence de tests objectifs, d'absence de scores fonctionnels, d'absence de mesures d'amplitude, d'absence d'information sur l'observance, ou de manque de documentation. Si l'information n'est pas dans les données, le champ correspondant reste vide — le médecin destinataire le constatera lui-même. Aucune recommandation ne porte sur la production de données futures (pas de "intégrer des mesures objectives", "réaliser des scores HOOS/Oxford", "documenter systématiquement", "objectivation clinique"). Les recommandations sont CLINIQUES (réévaluation à distance, ajustement thérapeutique, concertation médicale, orientation chirurgicale, etc.) — jamais MÉTHODOLOGIQUES.
+Tu n'écris JAMAIS de phrase qui souligne une lacune méthodologique du clinicien : aucune mention d'absence de tests objectifs, d'absence de scores fonctionnels, d'absence de mesures d'amplitude, d'absence d'information sur l'observance, ou de manque de documentation. Si l'information n'est pas dans les données, le champ correspondant reste vide — le médecin destinataire le constatera lui-même.
 
 Tu rédiges en français médical professionnel, en prose articulée (phrases complètes, sujet + verbe + complément), jamais en style télégraphique dans les blocs narratifs. L'accord grammatical suit strictement la valeur SEXE_PATIENT transmise en tête de prompt : jamais de formulation inclusive ou neutre (pas de "(e)", "·e", "/" inclusive, "le/la patient·e", "cette personne"). Tu n'infères jamais le sexe depuis le prénom.
 
@@ -429,48 +429,6 @@ Tu réponds UNIQUEMENT par un objet JSON valide conforme au schéma fourni en se
                 </div>
               </div>
             )}
-
-            {/* Recommandations */}
-            {evolution.recommandations.length > 0 && (
-              <div className="ai-section-card">
-                <div className="ai-section-header">
-                  <div className="ai-section-icon" style={{ background: '#f5f3ff' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-                      <rect x="9" y="3" width="6" height="4" rx="1"/>
-                      <polyline points="9 12 11 14 15 10"/>
-                    </svg>
-                  </div>
-                  <h4 style={{ color: '#6d28d9' }}>Recommandations thérapeutiques</h4>
-                </div>
-                <div className="ai-section-body">
-                  {evolution.recommandations.map((r, i) => (
-                    <div key={i} className="treatment-item">
-                      <div className="treatment-num">{i + 1}</div>
-                      <div className="treatment-content">
-                        <div className="title">{r.titre}</div>
-                        <div className="detail">{r.detail}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Conclusion */}
-            <div className="ai-section-card">
-              <div className="ai-section-header">
-                <div className="ai-section-icon" style={{ background: 'var(--info-soft)' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-                  </svg>
-                </div>
-                <h4 style={{ color: 'var(--primary)' }}>Conclusion & orientation</h4>
-              </div>
-              <div className="ai-section-body">
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: 1.6, margin: 0 }}>{evolution.conclusion}</p>
-              </div>
-            </div>
 
             {/* Footer */}
             <div className="ai-footer">

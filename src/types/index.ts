@@ -535,8 +535,6 @@ export interface EvolutionIA {
   }
   pointsForts: string[]
   pointsVigilance: string[]
-  recommandations: Array<{ titre: string; detail: string }>
-  conclusion: string
 }
 
 export type BilanMode = 'noyau' | 'complet' | 'vocal'

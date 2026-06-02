@@ -3942,8 +3942,8 @@ Mobilité articulaire lombaire
               }
               md.push('')
 
-              // SECTION 6 — État actuel et recommandations
-              md.push('### 6. État actuel et recommandations')
+              // SECTION 6 — État actuel
+              md.push('### 6. État actuel')
               const ea = evolution.etatActuel
               const etatParagraphs: string[] = []
               if (ea) {
@@ -3975,16 +3975,9 @@ Mobilité articulaire lombaire
                 evolution.pointsVigilance.forEach(pt => md.push(`- ${pt.replace(/\.$/, '')}.`))
                 md.push('')
               }
-              if (evolution.recommandations.length) {
-                evolution.recommandations.forEach(r => {
-                  md.push(`- **${r.titre}** — ${r.detail}`)
-                })
-                md.push('')
-              }
 
-              // SECTION 7 — Conclusion et signature (signature rendue automatiquement sous ce titre)
-              md.push('### 7. Conclusion et signature')
-              md.push(hasText(evolution.conclusion) ? evolution.conclusion : '—')
+              // SECTION 7 — Signature (rendue automatiquement sous ce titre)
+              md.push('### 7. Signature')
 
               setPdfPreviewMarkdown(md.join('\n'))
               setPdfPreviewZone(currentZoneLabel ?? '')
