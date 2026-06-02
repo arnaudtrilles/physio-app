@@ -266,7 +266,19 @@ export function BilanCompteRendu({
               Fiche d'exercices
             </button>
           )}
-          {hasContent && !generating && onRegenerate && (
+          {/* Régénération d'un CR DÉJÀ rempli : le squelette ne s'affiche pas
+              (hasContent reste vrai), donc sans ce retour visuel le bouton
+              disparaîtrait sans rien montrer. On affiche un bouton « en cours ». */}
+          {hasContent && onRegenerate && generating && (
+            <button
+              disabled
+              style={{ width: '100%', padding: '0.65rem', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border-color)', background: 'white', color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: 0.8, cursor: 'wait' }}
+            >
+              <div className="spinner" />
+              Régénération en cours…
+            </button>
+          )}
+          {hasContent && onRegenerate && !generating && (
             <RegenerateControl onRegenerate={onRegenerate} />
           )}
         </div>

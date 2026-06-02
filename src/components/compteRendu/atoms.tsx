@@ -143,10 +143,15 @@ export function Accordion({ title, count, defaultOpen = false, rightHint, childr
 // ── EVNBadge ──────────────────────────────────────────────────────────
 
 function parseEvnMax(v: string): number | null {
-  const matches = v.match(/\d+(?:[.,]\d+)?/g)
+  // On ne lit QUE le numérateur : tout ce qui suit le « / » est le dénominateur
+  // de l'échelle (ex. « 5/10 »→10) et ne doit jamais être interprété comme une
+  // valeur de douleur. Sans ce split, « 5/10 » donnait max=10 → toujours « Sévère ».
+  const numerator = v.split('/')[0]
+  const matches = numerator.match(/\d+(?:[.,]\d+)?/g)
   if (!matches) return null
   const nums = matches.map(n => parseFloat(n.replace(',', '.'))).filter(n => !Number.isNaN(n))
   if (nums.length === 0) return null
+  // Cas plage (« 5-7/10 ») : on retient la borne la plus élevée.
   return Math.max(...nums)
 }
 
