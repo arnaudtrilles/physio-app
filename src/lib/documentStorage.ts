@@ -2,8 +2,13 @@
  * Supabase Storage layer pour les blobs binaires des documents patients.
  *
  * Bucket : `patient-docs` (privé, RLS basé sur le user_id en 1er segment du path).
- * Path scheme : `{userId}/{scope}/{uniqueId}.{ext}` — préserve l'isolation
- * per-practitioner via RLS et permet le cleanup par dossier.
+ * Path scheme : `{userId}/{scope}/{slug}-{hash(stableId)}.{ext}` — le hash est
+ * DÉTERMINISTE (dérivé de l'identité stable du doc), pas aléatoire : deux appels
+ * pour le même doc produisent le même path, donc un ré-upload écrase le même blob
+ * (upsert) au lieu de créer un orphelin. C'est ce qui rend les documents
+ * récupérables et empêche l'accumulation de blobs fantômes dans Storage.
+ *
+ * Préserve l'isolation per-practitioner via RLS et permet le cleanup par dossier.
  *
  * Les blobs sont stockés bruts (binaires), pas en base64 — gain de ~33%
  * d'espace + Storage gère le streaming natif.
@@ -41,31 +46,43 @@ function slug(s: string): string {
     .slice(0, 40) || 'doc'
 }
 
-function uniqueId(): string {
-  // RFC4122-ish suffix (pas besoin de crypto-grade ici)
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID().split('-')[0]
+/**
+ * Hash DÉTERMINISTE (FNV-1a 32-bit) → base36. Même entrée → même sortie,
+ * sans aléatoire. Sert à construire des paths Storage reconstructibles depuis
+ * l'identité stable d'un document : si le `storagePath` est perdu (race de
+ * persistance, éviction locale), on recalcule exactement le même path et un
+ * ré-upload écrase le même blob au lieu d'en créer un orphelin.
+ */
+function stableHash(input: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
   }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return (h >>> 0).toString(36)
 }
 
 /**
- * Construit un path Storage stable pour un blob.
+ * Construit un path Storage DÉTERMINISTE pour un blob.
  * @param userId UUID du practitioner (1er segment, requis par RLS)
  * @param scope 'bilan-{id}' | 'patient-doc' — sous-dossier logique
- * @param fileName Nom d'origine — sert au slug
+ * @param stableId Identité stable du doc (id pour patient-doc ;
+ *                 `{bilanId}|{name}|{addedAt}` pour un doc de bilan).
+ *                 Garantit qu'un même doc retombe toujours sur le même path.
+ * @param fileName Nom d'origine — sert au slug lisible
  * @param mimeType Pour l'extension finale
  */
 export function buildStoragePath(
   userId: string,
   scope: string,
+  stableId: string,
   fileName: string,
   mimeType: string,
 ): string {
   const safeScope = slug(scope) || 'doc'
   const safeName = slug(fileName.replace(/\.[^.]+$/, ''))
   const ext = extFromMime(mimeType)
-  return `${userId}/${safeScope}/${safeName}-${uniqueId()}.${ext}`
+  return `${userId}/${safeScope}/${safeName}-${stableHash(stableId)}.${ext}`
 }
 
 function base64ToBlob(b64OrDataUrl: string, mimeType: string): Blob {
@@ -145,4 +162,82 @@ export async function deleteDocBlobs(paths: string[]): Promise<void> {
   if (error) {
     console.warn(`[Storage] batch delete failed (${paths.length} files):`, error.message)
   }
+}
+
+/**
+ * Upload AVEC retry (backoff linéaire). Lève si toutes les tentatives échouent —
+ * l'appelant NE DOIT PAS écrire `storage_path` quand ça lève, sinon la métadonnée
+ * prétend qu'un blob existe alors qu'il n'a jamais atterri (→ "introuvable" ailleurs).
+ */
+export async function uploadDocBlobWithRetry(
+  path: string,
+  base64OrDataUrl: string,
+  mimeType: string,
+  attempts = 3,
+): Promise<string> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await uploadDocBlob(path, base64OrDataUrl, mimeType)
+    } catch (err) {
+      lastErr = err
+      if (i < attempts - 1) {
+        await new Promise(r => setTimeout(r, 400 * (i + 1)))
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(`Storage upload échoué après ${attempts} tentatives (${path})`)
+}
+
+export type BlobStatus = 'present' | 'absent' | 'unknown'
+
+/**
+ * État d'un blob en TRI-ÉTAT (via `list` + filtre exact sur le nom de fichier),
+ * sans le télécharger. Distinction cruciale pour ne JAMAIS supprimer un document
+ * sur la base d'une simple panne réseau :
+ * - 'present' : le blob existe (vérifié).
+ * - 'absent'  : le listing a réussi et le fichier n'y figure pas → vraiment absent.
+ * - 'unknown' : impossible de vérifier (réseau/erreur) → ne rien supprimer.
+ */
+export async function docBlobStatus(path: string): Promise<BlobStatus> {
+  const lastSlash = path.lastIndexOf('/')
+  const folder = lastSlash >= 0 ? path.slice(0, lastSlash) : ''
+  const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path
+  try {
+    const { data, error } = await client().storage
+      .from(BUCKET)
+      .list(folder, { search: fileName, limit: 100 })
+    if (error) return 'unknown'
+    return (data || []).some(f => f.name === fileName) ? 'present' : 'absent'
+  } catch {
+    return 'unknown'
+  }
+}
+
+/**
+ * Référence stable d'un document irrécupérable (pour suppression ciblée).
+ * - patient : identifié par `docId`.
+ * - bilan   : identifié par (`bilanId`, `name`, `addedAt`).
+ */
+export interface LostDocRef {
+  kind: 'patient' | 'bilan'
+  name: string
+  docId?: string
+  bilanId?: number
+  addedAt?: string
+}
+
+/**
+ * Bilan d'une passe de réconciliation documents (blob↔métadonnée).
+ * - `uploaded`   : blobs (ré-)uploadés avec succès depuis la copie locale.
+ * - `failed`     : copie locale présente mais upload KO → réessayer plus tard (récupérable).
+ * - `unverified` : blob non vérifiable (réseau) ET pas de copie locale → conservés par prudence.
+ * - `lost`       : blob confirmé absent ET aucune copie locale → définitivement perdus (supprimables).
+ */
+export interface DocReconcileResult {
+  checked: number
+  uploaded: number
+  failed: number
+  unverified: number
+  lost: LostDocRef[]
 }

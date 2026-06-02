@@ -1,134 +1,58 @@
 import { memo } from 'react'
 import type { BilanRecord } from '../types'
-import { objectifsToString } from '../utils/contratObjectifs'
 
 // ---------------------------------------------------------------------------
-// Deterministic extractor — reads fields from bilanData
+// Extraction strictement déterministe — uniquement ce que le thérapeute a saisi.
+// Aucune lecture de `record.analyseIA` (qui contient des inférences IA).
+// Source : record.compteRendu.data (reformulation des champs sans inférence)
+// + record.diagnosticPhysio (diagnostic libre du thérapeute).
 // ---------------------------------------------------------------------------
 
-function getObj(data: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
-  if (!data) return undefined
-  const v = data[key]
-  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined
+interface ResumeData {
+  hypothese: string | null
+  plan: string[]
+  conseils: string[]
 }
 
-function isPositive(v: unknown): boolean {
-  return v === 'oui' || v === true || v === 'Oui' || v === 'OUI'
+// Tronque à ~ 2 lignes (≈ 110 caractères pour un item de puce) avec ellipse propre.
+function trim2lines(text: string, max = 110): string {
+  const t = text.replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  const cut = t.slice(0, max)
+  const lastSpace = cut.lastIndexOf(' ')
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…'
 }
 
-function prettyFlag(key: string): string {
-  return key
-    .replace(/_detail$/, '')
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, s => s.toUpperCase())
-    .trim()
-}
+function extractResume(record: BilanRecord): ResumeData {
+  const data = record.compteRendu?.data
+  const hypothesesPraticien = data?.projetTherapeutique?.hypothesesPraticien?.trim() || ''
+  const diagnosticPhysio = record.diagnosticPhysio?.trim() || ''
+  const hypothese = diagnosticPhysio || hypothesesPraticien
 
-function positiveFlagsList(obj: Record<string, unknown> | undefined, max = 3): string[] {
-  if (!obj) return []
-  const out: string[] = []
-  for (const [k, v] of Object.entries(obj)) {
-    if (k.endsWith('_detail')) continue
-    if (isPositive(v)) out.push(prettyFlag(k))
-    if (out.length >= max) break
+  const plan = (data?.projetTherapeutique?.techniquesRealisees ?? [])
+    .map(s => (typeof s === 'string' ? trim2lines(s) : ''))
+    .filter(Boolean)
+
+  const conseils: string[] = []
+  for (const c of data?.conseilsPatient?.educationTherapeutique ?? []) {
+    if (typeof c === 'string' && c.trim()) conseils.push(trim2lines(c))
   }
-  return out
-}
-
-function positiveTests(obj: Record<string, unknown> | undefined, max = 3): string[] {
-  if (!obj) return []
-  const out: string[] = []
-  for (const [k, v] of Object.entries(obj)) {
-    if (k.endsWith('_detail') || k === 'notes') continue
-    const s = typeof v === 'string' ? v.toLowerCase() : ''
-    if (s === 'positif' || s === 'oui' || s === '+' || v === true) {
-      out.push(prettyFlag(k))
-    }
-    if (out.length >= max) break
+  for (const ex of data?.conseilsPatient?.exercicesEnseignes ?? []) {
+    if (!ex || typeof ex !== 'object') continue
+    const nom = typeof ex.nom === 'string' ? ex.nom.trim() : ''
+    if (nom) conseils.push(trim2lines(nom))
   }
-  return out
-}
-
-// Normalisation `objectifs` ↔ string : voir src/utils/contratObjectifs.ts
-// (helper extrait pour être ré-utilisé dans App.tsx — auto-création SmartObjectifs).
-
-function scoresSummary(obj: Record<string, unknown> | undefined, max = 2): Array<{ label: string; value: string }> {
-  if (!obj) return []
-  const out: Array<{ label: string; value: string }> = []
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === null || v === undefined || v === '') continue
-    if (typeof v === 'object') continue
-    out.push({ label: prettyFlag(k), value: String(v) })
-    if (out.length >= max) break
-  }
-  return out
-}
-
-interface ExtractedSummary {
-  diagnostic: string | null
-  zone: string | null
-  evnPire: string | null
-  evnMoy: string | null
-  douleurType: string | null
-  douleurNocturne: boolean
-  redFlags: string[]
-  yellowFlags: string[]
-  testsPositifs: string[]
-  scores: Array<{ label: string; value: string }>
-  objectifs: string | null
-  priseEnChargePhases: string[]
-  alertes: string[]
-}
-
-function extractSummary(record: BilanRecord): ExtractedSummary {
-  const data = record.bilanData
-  const douleur = getObj(data, 'douleur')
-  const tc = getObj(data, 'troncCommun')
-  const evn = getObj(tc, 'evn')
-  const redFlags = getObj(data, 'redFlags')
-  const yellowFlags = getObj(data, 'yellowFlags')
-  const tests = getObj(data, 'tests')
-  const scores = getObj(data, 'scores')
-  const contrat = getObj(data, 'contrat') ?? getObj(data, 'contratKine')
-
-  const evnPire = (douleur?.evnPire ?? evn?.pireActuel) as string | number | undefined
-  const evnMoy = (douleur?.evnMoy ?? evn?.moyActuel) as string | number | undefined
-
-  const objectifs = objectifsToString(contrat?.objectifs ?? contrat?.objectifsSMART)
-  const douleurTypeRaw = douleur?.douleurType
-  const douleurType = typeof douleurTypeRaw === 'string' && douleurTypeRaw.trim() ? douleurTypeRaw : null
 
   return {
-    diagnostic: record.analyseIA?.diagnostic?.titre ?? null,
-    zone: record.zone ?? null,
-    evnPire: evnPire != null && evnPire !== '' ? String(evnPire) : null,
-    evnMoy: evnMoy != null && evnMoy !== '' ? String(evnMoy) : null,
-    douleurType,
-    douleurNocturne: isPositive(douleur?.douleurNocturne),
-    redFlags: positiveFlagsList(redFlags),
-    yellowFlags: positiveFlagsList(yellowFlags, 2),
-    testsPositifs: positiveTests(tests),
-    scores: scoresSummary(scores),
-    objectifs,
-    priseEnChargePhases: (record.analyseIA?.priseEnCharge ?? [])
-      .map(p => (p && typeof p === 'object' && typeof p.titre === 'string' ? p.titre : ''))
-      .filter(Boolean),
-    alertes: (record.analyseIA?.alertes ?? []).filter((a): a is string => typeof a === 'string' && a.trim() !== ''),
+    hypothese: hypothese ? trim2lines(hypothese, 140) : null,
+    plan,
+    conseils,
   }
 }
 
 // ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, fontSize: 12, lineHeight: 1.45 }}>
-      <div style={{ flexShrink: 0, width: 78, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</div>
-      <div style={{ flex: 1, color: '#0f172a', minWidth: 0 }}>{children}</div>
-    </div>
-  )
-}
 
 interface BilanResumeModalProps {
   record: BilanRecord
@@ -137,11 +61,8 @@ interface BilanResumeModalProps {
 }
 
 export const BilanResumeModal = memo(function BilanResumeModal({ record, bilanNum, onClose }: BilanResumeModalProps) {
-  const s = extractSummary(record)
-
-  const hasContent = s.evnPire || s.evnMoy || s.douleurType || s.redFlags.length > 0 ||
-    s.yellowFlags.length > 0 || s.testsPositifs.length > 0 || s.scores.length > 0 ||
-    s.objectifs || s.priseEnChargePhases.length > 0 || s.alertes.length > 0
+  const r = extractResume(record)
+  const hasContent = !!(r.hypothese || r.plan.length > 0 || r.conseils.length > 0)
 
   return (
     <div
@@ -156,7 +77,7 @@ export const BilanResumeModal = memo(function BilanResumeModal({ record, bilanNu
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto',
+          width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto',
           background: 'white', borderRadius: 14, boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
         }}
       >
@@ -167,10 +88,10 @@ export const BilanResumeModal = memo(function BilanResumeModal({ record, bilanNu
           position: 'sticky', top: 0, background: 'white', zIndex: 1,
         }}>
           <div style={{
-            width: 30, height: 30, borderRadius: 8, background: '#eff6ff',
+            width: 30, height: 30, borderRadius: 8, background: 'var(--info-soft)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
               <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
@@ -182,7 +103,7 @@ export const BilanResumeModal = memo(function BilanResumeModal({ record, bilanNu
               {record.customLabel ? ` — ${record.customLabel}` : ''}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-              {record.dateBilan}{s.zone ? ` · ${s.zone}` : ''}
+              {record.dateBilan}{record.zone ? ` · ${record.zone}` : ''}
             </div>
           </div>
           <button
@@ -203,96 +124,56 @@ export const BilanResumeModal = memo(function BilanResumeModal({ record, bilanNu
         </div>
 
         {/* Body */}
-        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {s.diagnostic && (
-            <div style={{
-              background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
-              padding: '8px 10px',
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>
-                Diagnostic
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.35 }}>
-                {s.diagnostic}
-              </div>
+        <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {!hasContent && (
+            <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5 }}>
+              Rien n'a été renseigné dans le bilan pour ces sections (hypothèse, plan, conseils).
             </div>
           )}
 
-          {!hasContent && !s.diagnostic && (
-            <div style={{ padding: '20px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-              Aucune donnée clinique à afficher.
-            </div>
+          {r.hypothese && (
+            <Section title="Hypothèse">
+              <p style={{ margin: 0 }}>{r.hypothese}</p>
+            </Section>
           )}
-
-          {(s.evnPire || s.evnMoy || s.douleurType || s.douleurNocturne) && (
-            <Row label="Douleur">
-              <span>
-                {s.evnPire && <>EVN pire <strong>{s.evnPire}</strong></>}
-                {s.evnMoy && <> · moy <strong>{s.evnMoy}</strong></>}
-                {s.douleurType && <> · {s.douleurType}</>}
-                {s.douleurNocturne && <> · nocturne</>}
-              </span>
-            </Row>
+          {r.plan.length > 0 && (
+            <Section title="Plan de prise en charge">
+              <BulletList items={r.plan} />
+            </Section>
           )}
-
-          {s.redFlags.length > 0 && (
-            <Row label="Red flags">
-              <span style={{ color: '#be123c', fontWeight: 600 }}>{s.redFlags.join(', ')}</span>
-            </Row>
-          )}
-
-          {s.yellowFlags.length > 0 && (
-            <Row label="Yellow flags">
-              <span style={{ color: '#b45309', fontWeight: 600 }}>{s.yellowFlags.join(', ')}</span>
-            </Row>
-          )}
-
-          {s.testsPositifs.length > 0 && (
-            <Row label="Tests +">
-              {s.testsPositifs.join(', ')}
-            </Row>
-          )}
-
-          {s.scores.length > 0 && (
-            <Row label="Scores">
-              {s.scores.map((sc, i) => (
-                <span key={i}>
-                  {i > 0 && ' · '}
-                  {sc.label} <strong>{sc.value}</strong>
-                </span>
-              ))}
-            </Row>
-          )}
-
-          {s.objectifs && (
-            <Row label="Objectifs">
-              {s.objectifs}
-            </Row>
-          )}
-
-          {s.priseEnChargePhases.length > 0 && (
-            <Row label="Plan PEC">
-              <ul style={{ margin: 0, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {s.priseEnChargePhases.map((p, i) => <li key={i}>{p}</li>)}
-              </ul>
-            </Row>
-          )}
-
-          {s.alertes.length > 0 && (
-            <div style={{
-              background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8,
-              padding: '6px 10px', marginTop: 2,
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#be123c', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>
-                Alertes
-              </div>
-              {s.alertes.map((a, i) => (
-                <div key={i} style={{ fontSize: 12, color: '#9f1239', lineHeight: 1.4 }}>• {a}</div>
-              ))}
-            </div>
+          {r.conseils.length > 0 && (
+            <Section title="Conseils donnés">
+              <BulletList items={r.conseils} />
+            </Section>
           )}
         </div>
       </div>
     </div>
   )
 })
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: 'var(--primary)',
+        textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3,
+      }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 13, color: '#0f172a', lineHeight: 1.4 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {items.map((t, i) => (
+        <li key={i} style={{ lineHeight: 1.4 }}>{t}</li>
+      ))}
+    </ul>
+  )
+}

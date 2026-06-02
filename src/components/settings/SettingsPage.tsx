@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { Theme } from '../../hooks/useTheme'
 import type { SyncStatus } from '../../hooks/useSync'
+import type { DocReconcileResult, LostDocRef } from '../../lib/documentStorage'
 
 type Language = 'fr' | 'de' | 'en'
 
@@ -12,6 +14,12 @@ type SettingsPageProps = {
   onToggleNotifications: (enabled: boolean) => void
   syncStatus: SyncStatus
   isOnline: boolean
+  /** Nombre de documents présents en local mais pas encore confirmés dans le cloud. */
+  cloudDocsPending: number
+  /** Lance la réconciliation blob↔métadonnée (ré-upload des blobs manquants). */
+  onRepairDocuments: () => Promise<DocReconcileResult>
+  /** Supprime du dossier les documents définitivement perdus identifiés par la réconciliation. */
+  onDeleteLostDocuments: (refs: LostDocRef[]) => void
   onBack: () => void
   onProfile: () => void
   onPricing: () => void
@@ -45,10 +53,36 @@ export function SettingsPage({
   language, onChangeLanguage,
   notificationsEnabled, onToggleNotifications,
   syncStatus, isOnline,
+  cloudDocsPending, onRepairDocuments, onDeleteLostDocuments,
   onBack, onProfile, onPricing, onRelaunchTutorial, onSignOut,
   analyticsEnabled, onToggleAnalytics,
 }: SettingsPageProps) {
   const syncConfig = SYNC_STATUS_CONFIG[syncStatus]
+
+  const [repairing, setRepairing] = useState(false)
+  const [repairResult, setRepairResult] = useState<DocReconcileResult | null>(null)
+  const [repairFailed, setRepairFailed] = useState(false)
+  const [deletedCount, setDeletedCount] = useState(0)
+  const handleRepair = async () => {
+    if (repairing) return
+    setRepairing(true)
+    setRepairResult(null)
+    setRepairFailed(false)
+    setDeletedCount(0)
+    try {
+      setRepairResult(await onRepairDocuments())
+    } catch {
+      setRepairFailed(true)
+    } finally {
+      setRepairing(false)
+    }
+  }
+  const handleDeleteLost = () => {
+    if (!repairResult || repairResult.lost.length === 0) return
+    onDeleteLostDocuments(repairResult.lost)
+    setDeletedCount(repairResult.lost.length)
+    setRepairResult({ ...repairResult, lost: [] })
+  }
 
   return (
     <div className="general-info-screen fade-in">
@@ -214,16 +248,103 @@ export function SettingsPage({
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
 
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: syncConfig.color }} />
-                <span style={{ fontSize: '0.72rem', color: syncConfig.color, fontWeight: 500 }}>{isOnline ? syncConfig.label : 'Hors ligne'}</span>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
               </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Synchronisation cloud</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: syncConfig.color }} />
+                  <span style={{ fontSize: '0.72rem', color: syncConfig.color, fontWeight: 500 }}>{isOnline ? syncConfig.label : 'Hors ligne'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Santé des documents : indicateur + réparation */}
+            <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.85rem', paddingTop: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                <div style={{
+                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  background: cloudDocsPending > 0 ? '#f59e0b' : '#22c55e',
+                }} />
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-main)', fontWeight: 500, flex: 1 }}>
+                  {cloudDocsPending > 0
+                    ? `${cloudDocsPending} document${cloudDocsPending > 1 ? 's' : ''} pas encore sauvegardé${cloudDocsPending > 1 ? 's' : ''} dans le cloud`
+                    : 'Documents sauvegardés dans le cloud'}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '0.7rem' }}>
+                Vérifie que chaque document du dossier patient possède bien sa copie dans le cloud
+                et ré-uploade ceux qui manquent. À lancer si des documents apparaissent « introuvables ».
+              </div>
+              <button
+                onClick={handleRepair}
+                disabled={repairing || !isOnline}
+                style={{
+                  width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--primary)',
+                  background: repairing || !isOnline ? 'var(--secondary)' : 'color-mix(in srgb, var(--primary) 8%, var(--surface))',
+                  color: repairing || !isOnline ? 'var(--text-muted)' : 'var(--primary)',
+                  fontWeight: 600, fontSize: '0.82rem',
+                  cursor: repairing || !isOnline ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                }}
+              >
+                {repairing ? 'Vérification en cours…' : !isOnline ? 'Hors ligne — connexion requise' : 'Réparer les documents'}
+              </button>
+
+              {repairFailed && !repairing && (
+                <div style={{
+                  marginTop: '0.7rem', padding: '0.65rem 0.75rem', borderRadius: 'var(--radius-md)',
+                  background: 'var(--secondary)', fontSize: '0.74rem', lineHeight: 1.6,
+                }}>
+                  <span style={{ color: '#dc2626', fontWeight: 600 }}>La vérification a échoué. Réessayez quand la connexion est stable.</span>
+                </div>
+              )}
+
+              {repairResult && !repairing && (
+                <div style={{
+                  marginTop: '0.7rem', padding: '0.65rem 0.75rem', borderRadius: 'var(--radius-md)',
+                  background: 'var(--secondary)', fontSize: '0.74rem', color: 'var(--text-main)', lineHeight: 1.6,
+                }}>
+                  <div><strong>{repairResult.checked}</strong> document{repairResult.checked > 1 ? 's' : ''} vérifié{repairResult.checked > 1 ? 's' : ''}.</div>
+                  {repairResult.uploaded > 0 && (
+                    <div style={{ color: '#16a34a' }}>✓ {repairResult.uploaded} réparé{repairResult.uploaded > 1 ? 's' : ''} (ré-uploadé{repairResult.uploaded > 1 ? 's' : ''} dans le cloud).</div>
+                  )}
+                  {repairResult.failed > 0 && (
+                    <div style={{ color: '#d97706' }}>⚠ {repairResult.failed} non réparé{repairResult.failed > 1 ? 's' : ''} (réessayez plus tard).</div>
+                  )}
+                  {repairResult.unverified > 0 && (
+                    <div style={{ color: '#d97706' }}>⚠ {repairResult.unverified} non vérifiable{repairResult.unverified > 1 ? 's' : ''} (réseau) — conservé{repairResult.unverified > 1 ? 's' : ''} par prudence.</div>
+                  )}
+                  {deletedCount > 0 && (
+                    <div style={{ color: '#16a34a' }}>🗑 {deletedCount} document{deletedCount > 1 ? 's' : ''} perdu{deletedCount > 1 ? 's' : ''} supprimé{deletedCount > 1 ? 's' : ''} du dossier.</div>
+                  )}
+                  {repairResult.lost.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ color: '#dc2626' }}>
+                        ✗ {repairResult.lost.length} définitivement perdu{repairResult.lost.length > 1 ? 's' : ''} (plus aucune copie, locale ou cloud)&nbsp;:
+                        <div style={{ marginTop: 2, fontStyle: 'italic', wordBreak: 'break-word' }}>{repairResult.lost.map(r => r.name).join(', ')}</div>
+                      </div>
+                      <button
+                        onClick={handleDeleteLost}
+                        style={{
+                          marginTop: 8, width: '100%', padding: '0.55rem', borderRadius: 'var(--radius-md)',
+                          border: '1px solid #fecaca', background: 'color-mix(in srgb, #dc2626 6%, var(--surface))',
+                          color: '#dc2626', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                        }}
+                      >
+                        Supprimer {repairResult.lost.length} document{repairResult.lost.length > 1 ? 's' : ''} perdu{repairResult.lost.length > 1 ? 's' : ''} du dossier
+                      </button>
+                    </div>
+                  )}
+                  {repairResult.uploaded === 0 && repairResult.failed === 0 && repairResult.unverified === 0 && repairResult.lost.length === 0 && deletedCount === 0 && (
+                    <div style={{ color: '#16a34a' }}>✓ Tout est en ordre, aucun document manquant.</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

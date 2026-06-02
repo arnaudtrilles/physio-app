@@ -127,7 +127,7 @@ async function transcribeWithRetry(blob: Blob, retries = MAX_RETRIES): Promise<s
   throw lastError!
 }
 
-function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
+export function useVoiceRecorder(onResult: (text: string) => void, fieldHint: string) {
   const [state, setState] = useState<VoiceMicState>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [bars, setBars] = useState<number[]>(() => Array(BAR_COUNT).fill(3))
