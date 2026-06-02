@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import type { BilanRecord, BilanDocument, AICallAuditEntry } from '../types'
 import { buildClinicalPrompt, roleTitle } from '../utils/clinicalPrompt'
 import type { BilanContext } from '../utils/clinicalPrompt'
 import { callClaudeSecure, UnmaskedDocumentsError } from '../utils/claudeSecure'
+import { useVoiceRecorder } from './VoiceMic'
 
 interface BilanChatBubbleProps {
   apiKey: string
@@ -21,48 +23,100 @@ interface ChatMessage {
   ts: number
 }
 
-/**
- * Bulle de chat thérapeute ↔ IA — pivot hors-DM (2026-05-10).
- *
- * Différence clé avec BilanAnalyseIA :
- *  - L'IA ne propose RIEN d'elle-même. Elle répond uniquement aux questions
- *    explicites du thérapeute.
- *  - Le contexte du bilan est injecté en system prompt (anonymisé) pour que
- *    les réponses soient pertinentes — mais c'est le thérapeute qui pose
- *    chaque question.
- *  - Test mental : « est-ce qu'un thérapeute pourrait copier-coller son bilan
- *    dans ChatGPT et poser ces mêmes questions ? » → oui = même statut légal.
- *
- * Position : bouton flottant en bas à droite. Click → drawer de chat.
- * Pas de persistance entre sessions (transient).
- */
+const COLLAPSED_WIDTH = 56
+const EXPANDED_WIDTH = 340
+const FEED_WIDTH = EXPANDED_WIDTH
+
+// Toutes les couleurs viennent du thème actif (soft = vert, medical = bleu).
+const PRACT_GRADIENT = 'linear-gradient(135deg, var(--primary), var(--primary-light))'
+const PILL_GRADIENT_EXPANDED = 'linear-gradient(120deg, var(--info-soft), var(--surface))'
+const USER_BUBBLE_GRADIENT = 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, transparent), color-mix(in srgb, var(--primary-light) 92%, transparent))'
+const SHADOW_COLLAPSED = '0 10px 28px color-mix(in srgb, var(--primary) 38%, transparent), 0 2px 6px rgba(0,0,0,0.08)'
+const SHADOW_EXPANDED = '0 12px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06)'
+const SHADOW_SEND = '0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent)'
+const SHADOW_AVATAR = '0 4px 12px color-mix(in srgb, var(--primary) 30%, transparent)'
+
 export function BilanChatBubble({
   apiKey, record, patientKey, profession, documents, onAudit, onUnmaskedDocsConfirm,
 }: BilanChatBubbleProps) {
+  const shouldReduceMotion = useReducedMotion()
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const isMountedRef = useRef(true)
+  const autoSendAfterStopRef = useRef(false)
+  const inputAtStopRef = useRef('')
+  // onTranscribed est figé ([] deps) ; sans ce ref il appellerait le `send` du
+  // render 0 (messages vide), ce qui perdrait tout l'historique de conversation
+  // pour les questions dictées via stop→envoi auto. Le ref pointe toujours sur
+  // le dernier `send`.
+  const sendRef = useRef<(textOverride?: string) => Promise<void>>(async () => {})
   useEffect(() => {
     isMountedRef.current = true
     return () => { isMountedRef.current = false }
   }, [])
 
+  const onTranscribed = useCallback((transcribed: string) => {
+    const clean = transcribed.trim()
+    if (!clean) return
+    if (autoSendAfterStopRef.current) {
+      autoSendAfterStopRef.current = false
+      const previous = inputAtStopRef.current
+      const combined = previous ? `${previous} ${clean}` : clean
+      inputAtStopRef.current = ''
+      setInput('')
+      void sendRef.current(combined)
+    } else {
+      setInput(prev => prev ? `${prev} ${clean}` : clean)
+      setTimeout(() => inputRef.current?.focus(), 30)
+    }
+  }, [])
+
+  const {
+    state: micState,
+    bars,
+    errorMsg: micError,
+    start: micStart,
+    stop: micStop,
+  } = useVoiceRecorder(onTranscribed, 'question clinique pour assistant IA')
+
+  const isRecording = micState === 'recording'
+  const isProcessingVoice = micState === 'transcribing' || micState === 'reformulating'
+
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages, open])
+  }, [messages, open, loading])
 
   useEffect(() => {
     if (open && inputRef.current) {
-      const t = setTimeout(() => inputRef.current?.focus(), 250)
+      const t = setTimeout(() => inputRef.current?.focus(), 200)
       return () => clearTimeout(t)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
     }
   }, [open])
 
@@ -95,9 +149,12 @@ CADRE :
 - Si la question dépasse ton domaine ou les données fournies, dis-le franchement.
 
 STYLE :
-- Réponses concises et structurées (puces si pertinent).
-- Français médical professionnel.
-- Pas de bullshit, pas de disclaimers inutiles à chaque message — un disclaimer global suffit.
+- Français médical professionnel, ton conversationnel — comme si tu répondais à un confrère.
+- Concis et structuré : puces markdown (« - »), gras markdown (« **mot** ») et sous-titres courts si la réponse le justifie. Sinon des paragraphes courts suffisent.
+- INTERDIT : JSON, blocs de code (\`\`\`…\`\`\`), pseudo-code, tableaux ASCII, listes numérotées avec champs (« numéro: 1, titre: …, dose: … »). Même pour décrire une séance ou un protocole — utilise des phrases et des puces, jamais une structure de données.
+- Quand tu détailles plusieurs items (exercices, tests, hypothèses), formate chaque item ainsi :
+  **Nom court** — une phrase de description, puis une phrase pour la dose / le critère / l'objectif. Sépare les items par une ligne vide.
+- Pas de bullshit, pas de disclaimers à chaque message — un disclaimer global suffit.
 - Tu emploies « ${role} ». INTERDIT : « ${otherRole} », abréviations « kiné »/« physio ».
 
 ACCORD :
@@ -108,8 +165,8 @@ CONTEXTE DU BILAN — données saisies par le thérapeute, à utiliser comme bas
 ${buildBilanContextBlock()}`
   }
 
-  const send = async () => {
-    const text = input.trim()
+  const send = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim()
     if (!text || loading) return
 
     const userMsg: ChatMessage = {
@@ -124,8 +181,6 @@ ${buildBilanContextBlock()}`
     setError(null)
 
     try {
-      // Construit l'historique conversationnel injecté dans userPrompt — Claude
-      // lit le system + tout l'historique sérialisé.
       const history = [...messages, userMsg]
         .map(m => `${m.role === 'user' ? 'THÉRAPEUTE' : 'ASSISTANT'} : ${m.content}`)
         .join('\n\n')
@@ -165,339 +220,506 @@ ${buildBilanContextBlock()}`
       setMessages(prev => [...prev, assistantMsg])
     } catch (err: unknown) {
       if (!isMountedRef.current) return
-      if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') {
-        return
-      }
+      if (err instanceof Error && err.message === 'UNMASKED_DOCS_CANCELLED') return
       const msg = err instanceof Error ? err.message : 'Erreur inconnue'
       setError(msg)
     } finally {
       if (isMountedRef.current) setLoading(false)
     }
   }
+  sendRef.current = send
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       send()
     }
   }
 
+  const sendDisabled = !apiKey || loading || isProcessingVoice
+    || (!isRecording && !input.trim())
+  const micDisabled = !apiKey || loading || isProcessingVoice
+  const hasFeed = open && (messages.length > 0 || loading || error || micError || !apiKey)
+  const showSuggestions = open && messages.length === 0 && !loading && !error && !micError && apiKey && !isRecording && !isProcessingVoice
+
+  const handleSendClick = () => {
+    if (isRecording) {
+      autoSendAfterStopRef.current = true
+      inputAtStopRef.current = input.trim()
+      micStop()
+      return
+    }
+    void send()
+  }
+
+  const handleMicClick = () => {
+    if (micDisabled) return
+    if (isRecording) {
+      autoSendAfterStopRef.current = false
+      micStop()
+    } else {
+      void micStart()
+    }
+  }
+
+  const pillSpring = shouldReduceMotion
+    ? { duration: 0 }
+    : { type: 'spring' as const, stiffness: open ? 300 : 500, damping: open ? 30 : 35, mass: open ? 0.8 : 0.6 }
+
   return (
-    <>
-      {/* Bouton flottant */}
-      {!open && (
-        <button
-          aria-label="Ouvrir l'assistant clinique"
-          onClick={() => setOpen(true)}
+    <div
+      ref={containerRef}
+      style={{
+        position: 'fixed',
+        right: 16,
+        bottom: 88,
+        zIndex: 60,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 10,
+        pointerEvents: 'none',
+      }}
+    >
+      {/* Feed flottant — bulles iMessage glass */}
+      <AnimatePresence>
+        {hasFeed && (
+          <motion.div
+            key="feed"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+            style={{
+              pointerEvents: 'auto',
+              width: FEED_WIDTH,
+              maxHeight: '60vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              padding: '4px 2px',
+              scrollbarWidth: 'thin',
+            }}
+          >
+            <div ref={scrollRef} style={{ display: 'contents' }} />
+            {!apiKey && (
+              <FloatNote tone="warn">
+                Service IA indisponible — vérifiez votre connexion ou la clé API.
+              </FloatNote>
+            )}
+            <AnimatePresence initial={false}>
+              {messages.map(m => (
+                <FloatBubble key={m.id} role={m.role} text={m.content} />
+              ))}
+              {loading && (
+                <motion.div
+                  key="typing"
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                  style={{
+                    alignSelf: 'flex-start',
+                    padding: '10px 14px',
+                    borderRadius: '18px 18px 18px 4px',
+                    background: 'rgba(255, 255, 255, 0.78)',
+                    backdropFilter: 'blur(24px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                    border: '1px solid rgba(226, 232, 240, 0.7)',
+                    boxShadow: '0 6px 18px rgba(15, 23, 42, 0.1)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <TypingDot delay={0} /><TypingDot delay={150} /><TypingDot delay={300} />
+                </motion.div>
+              )}
+              {error && <FloatNote key="err" tone="error">{error}</FloatNote>}
+              {micError && <FloatNote key="mic-err" tone="warn">{micError}</FloatNote>}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Suggestions */}
+      <AnimatePresence>
+        {showSuggestions && (
+          <motion.div
+            key="suggestions"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+            style={{
+              pointerEvents: 'auto',
+              width: FEED_WIDTH,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              padding: '4px 2px',
+            }}
+          >
+            {SUGGESTIONS.map((s, i) => (
+              <motion.div
+                key={s}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 + i * 0.06, type: 'spring', stiffness: 380, damping: 28 }}
+                style={{ alignSelf: 'flex-end', maxWidth: '92%' }}
+              >
+                <button
+                  onClick={() => { setInput(s); inputRef.current?.focus() }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 14,
+                    background: 'rgba(255, 255, 255, 0.7)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    border: '1px solid color-mix(in srgb, var(--primary) 22%, transparent)',
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                    color: 'var(--primary-dark)',
+                    textAlign: 'right',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontWeight: 500,
+                  }}
+                >
+                  {s}
+                </button>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pill */}
+      <motion.div
+        role="dialog"
+        aria-label="Assistant clinique"
+        animate={{ width: open ? EXPANDED_WIDTH : COLLAPSED_WIDTH }}
+        transition={pillSpring}
+        style={{
+          pointerEvents: 'auto',
+          height: 56,
+          borderRadius: 28,
+          background: open ? PILL_GRADIENT_EXPANDED : PRACT_GRADIENT,
+          backdropFilter: open ? 'blur(24px) saturate(200%)' : undefined,
+          WebkitBackdropFilter: open ? 'blur(24px) saturate(200%)' : undefined,
+          border: open ? '1px solid color-mix(in srgb, var(--primary) 14%, white)' : 'none',
+          boxShadow: open ? SHADOW_EXPANDED : SHADOW_COLLAPSED,
+          display: 'flex',
+          alignItems: 'center',
+          padding: open ? '0 6px 0 4px' : 0,
+          gap: open ? 8 : 0,
+          overflow: 'hidden',
+          position: 'relative',
+          transition: 'background 0.25s ease, padding 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease',
+        }}
+      >
+        {/* Avatar */}
+        <motion.div
+          animate={{ width: open ? 48 : 56, height: open ? 48 : 56 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          whileHover={!shouldReduceMotion ? { scale: open ? 1.04 : 1.05, y: open ? 0 : -2 } : undefined}
+          whileTap={{ scale: 0.94 }}
           style={{
-            position: 'fixed',
-            right: 16,
-            bottom: 88,
-            width: 56,
-            height: 56,
+            flexShrink: 0,
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #0e7490, #0891b2)',
-            border: 'none',
-            color: 'white',
-            cursor: 'pointer',
-            boxShadow: '0 6px 20px rgba(14, 116, 144, 0.35), 0 2px 6px rgba(0,0,0,0.1)',
+            background: open ? PRACT_GRADIENT : 'transparent',
+            boxShadow: open ? SHADOW_AVATAR : 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 50,
-            transition: 'transform 0.18s ease',
+            position: 'relative',
+            cursor: 'pointer',
+            color: 'white',
           }}
-          onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.95)')}
-          onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
-          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+          onClick={() => setOpen(o => !o)}
+          role="button"
+          aria-label={open ? "Réduire l'assistant clinique" : "Ouvrir l'assistant clinique"}
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setOpen(o => !o) }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          {messages.length > 0 && (
-            <span style={{
-              position: 'absolute',
-              top: -4,
-              right: -4,
-              minWidth: 22,
-              height: 22,
-              borderRadius: 11,
-              background: '#ef4444',
-              color: 'white',
-              fontSize: 11,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0 6px',
-              border: '2px solid white',
-            }}>{messages.length}</span>
-          )}
-        </button>
-      )}
+          <PractitionerAvatar />
+        </motion.div>
 
-      {/* Drawer */}
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Assistant clinique"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.4)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
-        >
-          <div
-            className="slide-in-up"
-            style={{
-              width: '100%',
-              maxWidth: 480,
-              height: '85vh',
-              background: 'white',
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.15)',
-            }}
-          >
-            {/* Header */}
-            <div style={{
-              padding: '14px 16px',
-              borderBottom: '1px solid var(--border-color)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              background: 'linear-gradient(135deg, #0e7490, #0891b2)',
-              color: 'white',
-            }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(255, 255, 255, 0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>Assistant clinique</div>
-                <div style={{ fontSize: 11, opacity: 0.85 }}>
-                  Contexte : {record.zone || record.bilanType || 'bilan'} · {record.prenom}
-                </div>
-              </div>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Fermer"
-                style={{
-                  width: 32, height: 32, borderRadius: 8,
-                  background: 'rgba(255, 255, 255, 0.15)',
-                  border: 'none',
-                  color: 'white', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-
-            {/* Messages */}
-            <div ref={scrollRef} style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              background: '#f8fafc',
-            }}>
-              {messages.length === 0 && (
-                <div style={{
-                  margin: 'auto',
-                  textAlign: 'center',
-                  padding: '20px',
-                  color: 'var(--text-muted)',
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  maxWidth: 320,
-                }}>
-                  <div style={{
-                    width: 56, height: 56, borderRadius: 16,
-                    background: '#ecfeff', color: '#0e7490',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto 14px',
-                  }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                  </div>
-                  <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: 6 }}>
-                    Posez votre question
-                  </div>
-                  <p style={{ margin: 0 }}>
-                    L'assistant a accès au contexte de ce bilan. Demandez-lui ce que vous souhaitez vérifier ou approfondir.
-                  </p>
-                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {SUGGESTIONS.map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setInput(s)}
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: 10,
-                          background: 'white',
-                          border: '1px solid var(--border-color)',
-                          fontSize: 12.5,
-                          color: 'var(--text-main)',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {messages.map(m => (
-                <div
-                  key={m.id}
-                  style={{
-                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    padding: '10px 14px',
-                    borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    background: m.role === 'user' ? 'linear-gradient(135deg, #0e7490, #0891b2)' : 'white',
-                    color: m.role === 'user' ? 'white' : 'var(--text-main)',
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                    whiteSpace: 'pre-wrap',
-                    boxShadow: m.role === 'assistant' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                    border: m.role === 'assistant' ? '1px solid #e2e8f0' : 'none',
-                  }}
-                >
-                  {m.content}
-                </div>
-              ))}
-
-              {loading && (
-                <div style={{
-                  alignSelf: 'flex-start',
-                  padding: '10px 14px',
-                  borderRadius: '16px 16px 16px 4px',
-                  background: 'white',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                }}>
-                  <TypingDot delay={0} /><TypingDot delay={150} /><TypingDot delay={300} />
-                </div>
-              )}
-
-              {error && (
-                <div style={{
-                  alignSelf: 'center',
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  background: '#fef2f2',
-                  border: '1px solid #fca5a5',
-                  color: '#991b1b',
-                  fontSize: 12.5,
-                  maxWidth: '90%',
-                  textAlign: 'center',
-                }}>
-                  {error}
-                </div>
-              )}
-            </div>
-
-            {/* Input */}
-            <div style={{
-              padding: '12px',
-              borderTop: '1px solid var(--border-color)',
-              background: 'white',
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                gap: 8,
-                background: 'var(--secondary)',
-                borderRadius: 12,
-                padding: '8px 8px 8px 12px',
-                border: '1px solid var(--border-color)',
-              }}>
-                <textarea
+        {/* Input area — bascule entre input texte, waveform ou spinner traitement */}
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              key="input-wrap"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              transition={{ delay: 0.18, type: 'spring', stiffness: 400, damping: 30 }}
+              style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}
+            >
+              {isRecording ? (
+                <Waveform bars={bars} />
+              ) : isProcessingVoice ? (
+                <ProcessingHint label={micState === 'transcribing' ? 'Transcription…' : 'Reformulation…'} />
+              ) : (
+                <input
                   ref={inputRef}
+                  type="text"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  rows={1}
-                  placeholder={apiKey ? 'Votre question…' : 'Service IA indisponible'}
+                  placeholder={apiKey ? 'Votre question…' : 'Indisponible'}
                   disabled={!apiKey || loading}
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     border: 'none',
                     background: 'transparent',
                     outline: 'none',
-                    resize: 'none',
                     fontSize: 14,
-                    lineHeight: 1.5,
-                    color: 'var(--text-main)',
+                    color: '#0f172a',
                     fontFamily: 'inherit',
-                    maxHeight: 120,
-                    padding: '4px 0',
+                    padding: '0 2px',
                   }}
                 />
-                <button
-                  onClick={send}
-                  disabled={!apiKey || !input.trim() || loading}
-                  aria-label="Envoyer"
-                  style={{
-                    width: 36, height: 36, borderRadius: 10,
-                    background: !input.trim() || loading || !apiKey ? '#cbd5e1' : 'linear-gradient(135deg, #0e7490, #0891b2)',
-                    border: 'none',
-                    color: 'white',
-                    cursor: !input.trim() || loading || !apiKey ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bouton micro / stop */}
+        <AnimatePresence>
+          {open && !isProcessingVoice && (
+            <motion.div
+              key="mic-wrap"
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0, transition: { duration: 0.12 } }}
+              transition={{ delay: 0.20, type: 'spring', stiffness: 400, damping: 28 }}
+              whileHover={!micDisabled ? { scale: 1.08 } : undefined}
+              whileTap={!micDisabled ? { scale: 0.9 } : undefined}
+              style={{ flexShrink: 0 }}
+            >
+              <button
+                onClick={handleMicClick}
+                disabled={micDisabled}
+                aria-label={isRecording ? 'Arrêter la dictée' : 'Dicter la question'}
+                title={isRecording ? 'Arrêter' : 'Dicter'}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  background: isRecording
+                    ? 'color-mix(in srgb, var(--primary) 12%, white)'
+                    : 'transparent',
+                  border: isRecording
+                    ? '1px solid color-mix(in srgb, var(--primary) 30%, transparent)'
+                    : 'none',
+                  color: isRecording ? 'var(--primary-dark)' : 'var(--text-muted)',
+                  cursor: micDisabled ? 'not-allowed' : 'pointer',
+                  opacity: micDisabled ? 0.4 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                }}
+              >
+                {isRecording ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
                   </svg>
-                </button>
-              </div>
-              <div style={{
-                fontSize: 10.5,
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-                marginTop: 6,
-                lineHeight: 1.4,
-              }}>
-                Réponses à titre indicatif. La décision clinique reste celle du thérapeute.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="1" width="6" height="12" rx="3" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              key="send-wrap"
+              initial={{ opacity: 0, scale: 0, rotate: -90 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0, rotate: 90, transition: { duration: 0.12 } }}
+              transition={{ delay: 0.22, type: 'spring', stiffness: 400, damping: 28 }}
+              whileHover={!sendDisabled ? { scale: 1.08 } : undefined}
+              whileTap={!sendDisabled ? { scale: 0.9 } : undefined}
+              style={{ flexShrink: 0 }}
+            >
+              <button
+                onClick={handleSendClick}
+                disabled={sendDisabled}
+                aria-label="Envoyer"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  background: sendDisabled ? 'rgba(203, 213, 225, 0.7)' : PRACT_GRADIENT,
+                  border: 'none',
+                  color: 'white',
+                  cursor: sendDisabled ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  boxShadow: sendDisabled ? 'none' : SHADOW_SEND,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  )
+}
+
+function FloatBubble({ role, text }: { role: 'user' | 'assistant'; text: string }) {
+  const isUser = role === 'user'
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10, scale: 0.94 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.94 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+      style={{
+        alignSelf: isUser ? 'flex-end' : 'flex-start',
+        maxWidth: '88%',
+        padding: '10px 14px',
+        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+        background: isUser ? USER_BUBBLE_GRADIENT : 'rgba(255, 255, 255, 0.78)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        border: isUser
+          ? '1px solid color-mix(in srgb, var(--primary) 35%, transparent)'
+          : '1px solid rgba(226, 232, 240, 0.7)',
+        boxShadow: '0 6px 18px rgba(15, 23, 42, 0.1)',
+        color: isUser ? 'white' : 'var(--text-main)',
+        fontSize: 13.5,
+        lineHeight: 1.5,
+        wordBreak: 'break-word',
+      }}
+    >
+      <MarkdownLite text={text} />
+    </motion.div>
+  )
+}
+
+function MarkdownLite({ text }: { text: string }) {
+  const blocks = text.trim().split(/\n\s*\n/)
+  return (
+    <>
+      {blocks.map((block, bi) => {
+        const lines = block.split('\n')
+        const isList = lines.length > 0 && lines.every(l => /^\s*[-*]\s+/.test(l))
+        if (isList) {
+          return (
+            <ul key={bi} style={{ margin: bi === 0 ? '0 0 0 18px' : '6px 0 0 18px', padding: 0 }}>
+              {lines.map((l, i) => (
+                <li key={i} style={{ marginBottom: 3 }}>
+                  {renderInline(l.replace(/^\s*[-*]\s+/, ''))}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <p key={bi} style={{ margin: bi === 0 ? 0 : '6px 0 0' }}>
+            {lines.map((l, i) => (
+              <span key={i}>
+                {renderInline(l)}
+                {i < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        )
+      })}
     </>
   )
 }
 
+function renderInline(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = []
+  const regex = /\*\*(.+?)\*\*/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
+    parts.push(<strong key={`b-${key++}`}>{match[1]}</strong>)
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+  return parts.length === 0 ? text : parts
+}
+
+function FloatNote({ tone, children }: { tone: 'warn' | 'error'; children: React.ReactNode }) {
+  const palette = tone === 'error'
+    ? { bg: 'rgba(254, 242, 242, 0.92)', border: 'rgba(252, 165, 165, 0.7)', fg: '#991b1b' }
+    : { bg: 'rgba(255, 251, 235, 0.92)', border: 'rgba(253, 230, 138, 0.7)', fg: '#92400e' }
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+      style={{
+        alignSelf: 'center',
+        maxWidth: '92%',
+        padding: '8px 12px',
+        borderRadius: 12,
+        background: palette.bg,
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        border: `1px solid ${palette.border}`,
+        color: palette.fg,
+        fontSize: 12,
+        lineHeight: 1.45,
+        textAlign: 'center',
+      }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function PractitionerAvatar() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {/* Mèche de cheveux — petit arc au-dessus du front */}
+      <path d="M11.6 7.2 C13 5.4, 19 5.4, 20.4 7.2" strokeWidth="1.6" />
+      {/* Tête */}
+      <circle cx="16" cy="9.6" r="4.2" strokeWidth="1.7" />
+      {/* Blouse — épaules + tronc */}
+      <path d="M4.8 28 C4.8 21.5, 9 17.5, 16 17.5 C23 17.5, 27.2 21.5, 27.2 28" strokeWidth="1.7" />
+      {/* Col en V de la blouse */}
+      <path d="M12.4 19.2 L16 23.4 L19.6 19.2" strokeWidth="1.5" />
+      {/* Stéthoscope — embouts auriculaires (deux petits cercles) */}
+      <circle cx="12.4" cy="17.2" r="0.7" strokeWidth="1.1" fill="currentColor" />
+      <circle cx="19.6" cy="17.2" r="0.7" strokeWidth="1.1" fill="currentColor" />
+      {/* Tube — U autour du cou puis branche qui descend à droite */}
+      <path d="M12.4 17.9 C12.4 20.6, 14 22 16 22 C18 22, 19.6 20.6, 19.6 17.9 M19.6 22.2 C19.6 23.4, 20.2 24.5, 21.4 25.2" strokeWidth="1.2" />
+      {/* Pavillon (chest piece) */}
+      <circle cx="22" cy="26" r="1.6" strokeWidth="1.2" />
+    </svg>
+  )
+}
+
 const SUGGESTIONS = [
-  'Quels diagnostics différentiels envisager pour cette zone et ce profil ?',
-  'Quels tests cliniques manquent pour préciser mon hypothèse ?',
-  'Quels drapeaux rouges devrais-je écarter avant de commencer ?',
+  'Quels diagnostics différentiels envisager ?',
+  'Quels tests cliniques manquent ?',
+  'Quels drapeaux rouges écarter ?',
 ]
 
 function TypingDot({ delay }: { delay: number }) {
@@ -509,5 +731,71 @@ function TypingDot({ delay }: { delay: number }) {
         animation: `chat-typing 1.2s ${delay}ms infinite ease-in-out`,
       }}
     />
+  )
+}
+
+function Waveform({ bars }: { bars: number[] }) {
+  // Visualisation type Gemini : barres verticales fines centrées, animées en
+  // direct sur l'amplitude du micro. La couleur suit le thème actif.
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        flex: 1,
+        minWidth: 0,
+        height: 34,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 3,
+        padding: '0 4px',
+      }}
+    >
+      {bars.map((h, i) => (
+        <span
+          key={i}
+          style={{
+            display: 'inline-block',
+            width: 2.5,
+            height: Math.max(3, Math.min(28, h + 2)),
+            borderRadius: 2,
+            background: 'var(--primary)',
+            opacity: 0.55 + Math.min(0.45, h / 60),
+            transition: 'height 80ms linear, opacity 80ms linear',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ProcessingHint({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 8,
+        padding: '0 4px',
+        color: 'var(--text-muted)',
+        fontSize: 13,
+        fontStyle: 'italic',
+      }}
+    >
+      <span
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: '50%',
+          border: '2px solid color-mix(in srgb, var(--primary) 30%, transparent)',
+          borderTopColor: 'var(--primary)',
+          animation: 'spin 0.7s linear infinite',
+        }}
+      />
+      {label}
+    </div>
   )
 }

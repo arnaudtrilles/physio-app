@@ -21,7 +21,7 @@ import type {
   BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord,
   SmartObjectif, ExerciceBankEntry, PatientDocument,
   PatientPrescription, LetterRecord, LetterAuditEntry,
-  AICallAuditEntry, ClosedTreatment, ProfileData, BilanType,
+  AICallAuditEntry, ClosedTreatment, ProfileData, BilanType, Sexe,
 } from '../types'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -565,6 +565,17 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
   const bilansRows = await fetchAll('bilans', userId)
   const db: BilanRecord[] = bilansRows.map(b => {
     const p = pi(b.patient_id as string)
+    // Extrait le sexe embarqué dans bilan_data (cf. convertBilans) vers r.sexe,
+    // et retire la clé technique `_patientSexe` du blob rendu au reste de l'app.
+    const rawData = (b.bilan_data as Record<string, unknown>) || undefined
+    let sexe: Sexe | undefined
+    let bilanData: Record<string, unknown> | undefined = rawData
+    if (rawData && (rawData._patientSexe === 'masculin' || rawData._patientSexe === 'feminin')) {
+      sexe = rawData._patientSexe as Sexe
+      const { _patientSexe: _unused, ...rest } = rawData
+      void _unused
+      bilanData = Object.keys(rest).length ? rest : undefined
+    }
     return {
       id: b.id as number, nom: p.nom, prenom: p.prenom, dateNaissance: p.dateNaissance,
       dateBilan: (b.date_bilan as string) || '', zoneCount: (b.zone_count as number) || 0,
@@ -573,7 +584,8 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
       status: (b.status as 'incomplet' | 'complet') || 'complet',
       customLabel: b.custom_label as string | undefined,
       bilanType: b.bilan_type as BilanType | undefined,
-      bilanData: (b.bilan_data as Record<string, unknown>) || undefined,
+      bilanData,
+      sexe,
       notes: b.notes as string | undefined,
       silhouetteData: b.silhouette_data as Record<string, unknown> | undefined,
       documents: (b.documents as BilanRecord['documents']) || undefined,
@@ -992,7 +1004,12 @@ export function convertBilans(bilans: BilanRecord[], userId: string, pm: Patient
       date_bilan: b.dateBilan || null, zone_count: b.zoneCount || 0,
       evn: b.evn ?? null, zone: b.zone || null, pathologie: b.pathologie || null,
       status: b.status || 'complet', custom_label: b.customLabel || null,
-      bilan_type: b.bilanType || null, bilan_data: b.bilanData || {},
+      bilan_type: b.bilanType || null,
+      // Le sexe n'a pas de colonne dédiée : on l'embarque dans bilan_data (JSONB)
+      // pour qu'il survive aux round-trips cloud et soit dispo sur tous les appareils.
+      bilan_data: (b.sexe === 'masculin' || b.sexe === 'feminin')
+        ? { ...(b.bilanData || {}), _patientSexe: b.sexe }
+        : (b.bilanData || {}),
       notes: b.notes || null, silhouette_data: b.silhouetteData || null,
       documents: stripDocs(b.documents as Array<Record<string, unknown>> | undefined),
       analyse_ia: b.analyseIA || null, fiche_exercice: b.ficheExercice || null,

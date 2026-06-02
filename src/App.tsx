@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, lazy, Suspense, Component } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense, Component } from 'react'
 import type { ReactNode, ErrorInfo } from 'react'
 import { useIndexedDB } from './hooks/useIndexedDB'
 import { useTheme } from './hooks/useTheme'
@@ -61,7 +61,8 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { pk, renamePatientInCloud } from './lib/syncEngine'
-import { uploadDocBlob, buildStoragePath } from './lib/documentStorage'
+import { buildStoragePath, uploadDocBlobWithRetry, docBlobStatus } from './lib/documentStorage'
+import type { DocReconcileResult, LostDocRef } from './lib/documentStorage'
 import { PatientEditModal } from './components/database/PatientEditModal'
 import { usePlanSync } from './hooks/usePlanSync'
 import { canAccess } from './utils/planGating'
@@ -296,11 +297,16 @@ function App() {
   // ── Backfill Storage : upload des blobs locaux sans storagePath ───────────
   // Au démarrage et à chaque ajout de doc, on scanne dbPatientDocs et db[].documents
   // pour repérer les binaires (`data` présent) jamais uploadés (`storagePath` absent).
-  // Chaque upload réussi est patché dans le state — la sync remontera ensuite le path
-  // dans Supabase pour cross-device access.
+  //
+  // Robustesse : path DÉTERMINISTE (reconstructible depuis l'identité du doc) +
+  // upload AVEC retry. `storagePath` n'est patché dans le state QUE si l'upload est
+  // confirmé — donc la sync ne remonte jamais une métadonnée qui pointe vers un blob
+  // inexistant. Si l'upload échoue (hors-ligne, etc.), le doc reste local et sera
+  // re-tenté au prochain passage (l'effet re-fire tant que storagePath est absent).
   useEffect(() => {
     if (!user?.id || !allDataLoaded) return
     const inFlight = uploadInFlightRef.current
+    const uid = user.id
 
     // 1. Patient docs (standalone)
     for (const d of dbPatientDocs) {
@@ -308,12 +314,12 @@ function App() {
       const key = `patient:${d.id}`
       if (inFlight.has(key)) continue
       inFlight.add(key)
-      const path = buildStoragePath(user.id, 'patient-doc', d.name, d.mimeType)
-      void uploadDocBlob(path, d.data, d.mimeType)
+      const path = buildStoragePath(uid, 'patient-doc', d.id, d.name, d.mimeType)
+      void uploadDocBlobWithRetry(path, d.data, d.mimeType)
         .then(uploadedPath => {
           setDbPatientDocs(prev => prev.map(x => x.id === d.id ? { ...x, storagePath: uploadedPath } : x))
         })
-        .catch(err => { console.warn('[Storage] backfill patient-doc failed:', err) })
+        .catch(err => { console.warn('[Storage] backfill patient-doc failed (retry au prochain passage):', err) })
         .finally(() => { inFlight.delete(key) })
     }
 
@@ -326,8 +332,9 @@ function App() {
         const key = `bilan:${b.id}:${idx}:${d.name}`
         if (inFlight.has(key)) return
         inFlight.add(key)
-        const path = buildStoragePath(user.id, `bilan-${b.id}`, d.name, d.mimeType)
-        void uploadDocBlob(path, d.data, d.mimeType)
+        const stableId = `${b.id}|${d.name}|${d.addedAt}`
+        const path = buildStoragePath(uid, `bilan-${b.id}`, stableId, d.name, d.mimeType)
+        void uploadDocBlobWithRetry(path, d.data, d.mimeType)
           .then(uploadedPath => {
             setDb(prev => prev.map(r => {
               if (r.id !== b.id) return r
@@ -339,11 +346,120 @@ function App() {
               return { ...r, documents: next }
             }))
           })
-          .catch(err => { console.warn('[Storage] backfill bilan-doc failed:', err) })
+          .catch(err => { console.warn('[Storage] backfill bilan-doc failed (retry au prochain passage):', err) })
           .finally(() => { inFlight.delete(key) })
       })
     }
   }, [user?.id, allDataLoaded, dbPatientDocs, db, setDbPatientDocs, setDb])
+
+  // ── Stockage persistant : demande au navigateur de NE PAS évincer IndexedDB ──
+  // Sans ça, Safari/iOS purge le stockage scriptable après 7 jours d'inactivité
+  // (ITP) ou sous pression disque → perte de la copie locale des documents.
+  // Best-effort : si le navigateur refuse, on ne casse rien.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persist) return
+    void navigator.storage.persisted()
+      .then(already => { if (!already) return navigator.storage.persist() })
+      .then(granted => { if (granted === false) console.info('[Storage] persistance refusée par le navigateur') })
+      .catch(() => { /* non supporté — best-effort */ })
+  }, [])
+
+  // Nombre de documents présents en local mais PAS encore confirmés dans le cloud
+  // (data sans storagePath). Surface l'indicateur "X docs pas encore sauvegardés".
+  const cloudDocsPending = useMemo(() => {
+    let n = 0
+    for (const d of dbPatientDocs) if (d.data && !d.storagePath) n++
+    for (const b of db) for (const doc of (b.documents ?? [])) if (doc.data && !doc.storagePath) n++
+    return n
+  }, [dbPatientDocs, db])
+
+  // ── Réconciliation manuelle : "Réparer les documents" ─────────────────────
+  // Pour chaque doc on vérifie le blob cloud en TRI-ÉTAT :
+  //  - present  → rien à faire.
+  //  - absent/unknown + copie locale → (ré-)upload sur le path déterministe.
+  //  - absent (confirmé) + AUCUNE copie locale → "perdu" (listé pour suppression).
+  //  - unknown + aucune copie locale → "unverified" : on NE TOUCHE PAS (prudence réseau).
+  // Cette passe est ADDITIVE : elle ne supprime jamais rien (cf. deleteLostDocuments).
+  const repairDocuments = useCallback(async (): Promise<DocReconcileResult> => {
+    const uid = user?.id
+    if (!uid) return { checked: 0, uploaded: 0, failed: 0, unverified: 0, lost: [] }
+    let checked = 0, uploaded = 0, failed = 0, unverified = 0
+    const lost: LostDocRef[] = []
+
+    // 1. Patient docs
+    const patientPatches = new Map<string, string>()
+    for (const d of dbPatientDocs) {
+      checked++
+      const status = d.storagePath ? await docBlobStatus(d.storagePath) : 'absent'
+      if (status === 'present') continue
+      if (d.data) {
+        const path = buildStoragePath(uid, 'patient-doc', d.id, d.name, d.mimeType)
+        try { await uploadDocBlobWithRetry(path, d.data, d.mimeType); patientPatches.set(d.id, path); uploaded++ }
+        catch { failed++ }
+      } else if (status === 'absent') {
+        lost.push({ kind: 'patient', name: d.name, docId: d.id })
+      } else {
+        unverified++ // unknown + pas de copie locale → on conserve
+      }
+    }
+    if (patientPatches.size > 0) {
+      setDbPatientDocs(prev => prev.map(x => patientPatches.has(x.id) ? { ...x, storagePath: patientPatches.get(x.id)! } : x))
+    }
+
+    // 2. Bilan docs — clé stable = `${bilanId}|${name}|${addedAt}`
+    const bilanPatches = new Map<string, string>()
+    for (const b of db) {
+      for (const d of (b.documents ?? [])) {
+        checked++
+        const status = d.storagePath ? await docBlobStatus(d.storagePath) : 'absent'
+        if (status === 'present') continue
+        const stableId = `${b.id}|${d.name}|${d.addedAt}`
+        if (d.data) {
+          const path = buildStoragePath(uid, `bilan-${b.id}`, stableId, d.name, d.mimeType)
+          try { await uploadDocBlobWithRetry(path, d.data, d.mimeType); bilanPatches.set(stableId, path); uploaded++ }
+          catch { failed++ }
+        } else if (status === 'absent') {
+          lost.push({ kind: 'bilan', name: d.name, bilanId: b.id, addedAt: d.addedAt })
+        } else {
+          unverified++
+        }
+      }
+    }
+    if (bilanPatches.size > 0) {
+      setDb(prev => prev.map(r => {
+        const docs = r.documents
+        if (!docs?.length) return r
+        let changed = false
+        const next = docs.map(doc => {
+          const k = `${r.id}|${doc.name}|${doc.addedAt}`
+          if (bilanPatches.has(k)) { changed = true; return { ...doc, storagePath: bilanPatches.get(k)! } }
+          return doc
+        })
+        return changed ? { ...r, documents: next } : r
+      }))
+    }
+
+    return { checked, uploaded, failed, unverified, lost }
+  }, [user?.id, dbPatientDocs, db, setDbPatientDocs, setDb])
+
+  // Supprime les documents définitivement perdus du state local. La sync
+  // (full-replace local→cloud) nettoiera ensuite les lignes cloud correspondantes.
+  // Ne perd rien de récupérable : ces docs n'ont ni copie locale ni blob cloud.
+  const deleteLostDocuments = useCallback((refs: LostDocRef[]) => {
+    const patientIds = new Set(refs.filter(r => r.kind === 'patient' && r.docId).map(r => r.docId!))
+    const bilanKeys = new Set(refs.filter(r => r.kind === 'bilan').map(r => `${r.bilanId}|${r.name}|${r.addedAt}`))
+    if (patientIds.size > 0) {
+      setDbPatientDocs(prev => prev.filter(d => !patientIds.has(d.id)))
+    }
+    if (bilanKeys.size > 0) {
+      setDb(prev => prev.map(b => {
+        const docs = b.documents
+        if (!docs?.length) return b
+        const next = docs.filter(d => !bilanKeys.has(`${b.id}|${d.name}|${d.addedAt}`))
+        return next.length === docs.length ? b : { ...b, documents: next }
+      }))
+    }
+  }, [setDbPatientDocs, setDb])
 
   /**
    * Attache un PDF auto-généré (bilan, analyse IA, évolution) au dossier patient.
@@ -1050,7 +1166,10 @@ Règles :
         return merged[key] ? { ...r, sexe: merged[key] } : r
       }))
     }
-  }, [dbLoaded, sexeMapLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+    // `db` est dans les deps : après un sync qui remplace les bilans (et restitue
+    // r.sexe depuis le cloud), le registre se re-sème automatiquement. L'effet est
+    // idempotent (ne setState que si une vraie différence existe) → il converge.
+  }, [dbLoaded, sexeMapLoaded, db]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migration sexe : à l'ouverture d'une fiche patient existante, si le registre
   // ne contient pas encore le sexe, déclencher la popup bloquante.
@@ -1073,8 +1192,10 @@ Règles :
       setSexeMigrationTarget({ patKey: selectedPatient, nom: first.nom, prenom: first.prenom })
       setSexeMigrationChoice('')
     }
+    // dbPatientSexe/sexeMapLoaded dans les deps : si le registre se remplit après
+    // coup (seed au démarrage ou sync), la popup déjà ouverte se referme d'elle-même.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPatient, db, dbLoaded])
+  }, [selectedPatient, db, dbLoaded, dbPatientSexe, sexeMapLoaded])
 
   // ── Clôture de prise en charge ───────────────────────────────────────────
   /** Timestamps (ms) des clôtures pour un (patient, bilanType), triés ASC. */
@@ -1368,9 +1489,14 @@ Règles :
   // Fire-and-forget : après save d'un bilan complet, on génère le compte rendu
   // en arrière-plan. Une fois prêt, on le merge dans le record. Le clic sur
   // « Compte rendu » est alors instantané (cache hit).
-  const kickOffCompteRendu = useCallback(async (snapshot: BilanRecord) => {
+  const kickOffCompteRendu = useCallback(async (
+    snapshot: BilanRecord,
+    options?: { force?: boolean; instructions?: string },
+  ) => {
     if (!apiKey) return
-    if (!isCompteRenduStale(snapshot)) return
+    // `force` court-circuite la garde de fraîcheur : un clic « Regénérer » doit
+    // toujours relancer, même quand la source n'a pas changé (sinon bouton mort).
+    if (!options?.force && !isCompteRenduStale(snapshot)) return
     setGeneratingCompteRenduIds(prev => prev.includes(snapshot.id) ? prev : [...prev, snapshot.id])
     try {
       const cr = await generateCompteRendu({
@@ -1379,6 +1505,7 @@ Règles :
         patientKey: pk(snapshot.nom, snapshot.prenom),
         profession: profile.profession,
         documents: snapshot.documents,
+        instructions: options?.instructions,
         onAudit: recordAIAudit,
         onUnmaskedDocsConfirm: askUnmaskedDocsConfirm,
       })
@@ -2864,6 +2991,9 @@ Mobilité articulaire lombaire
           onToggleNotifications={setNotificationsEnabled}
           syncStatus={syncStatus}
           isOnline={isOnline}
+          cloudDocsPending={cloudDocsPending}
+          onRepairDocuments={repairDocuments}
+          onDeleteLostDocuments={deleteLostDocuments}
           onBack={() => setStep('dashboard')}
           onProfile={() => setStep('profile')}
           onPricing={() => setStep('pricing')}
@@ -4105,7 +4235,7 @@ Mobilité articulaire lombaire
                   onExport={handleExportPDF}
                   exporting={exportingPDF}
                   onGoToProfile={() => setStep('profile')}
-                  onRegenerate={() => kickOffCompteRendu(currentRecord)}
+                  onRegenerate={(instructions) => kickOffCompteRendu(currentRecord, { force: true, instructions })}
                   onFicheExercice={handleFiche}
                 />
                 <BilanChatBubble

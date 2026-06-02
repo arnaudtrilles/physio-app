@@ -151,12 +151,13 @@ function parseEvnMax(v: string): number | null {
 }
 
 function evnSeverity(max: number | null): { fg: string; tone: string } {
+  // Échelle EVN : 7-10 Sévère (rouge), 4-6 Modérée (orange),
+  // 1-3 Légère (vert), 0 Aucune (vert).
   if (max === null) return { fg: '#94a3b8', tone: 'Non renseigné' }
-  if (max >= 8) return { fg: '#be123c', tone: 'Sévère' }
-  if (max >= 6) return { fg: '#c2410c', tone: 'Modérée +' }
-  if (max >= 4) return { fg: '#d97706', tone: 'Modérée' }
-  if (max >= 1) return { fg: '#65a30d', tone: 'Légère' }
-  return { fg: '#0d9488', tone: 'Absente' }
+  if (max >= 7) return { fg: '#be123c', tone: 'Sévère' }
+  if (max >= 4) return { fg: '#ea580c', tone: 'Modérée' }
+  if (max >= 1) return { fg: '#16a34a', tone: 'Légère' }
+  return { fg: '#16a34a', tone: 'Aucune' }
 }
 
 export function EVNBadge({ value, label = 'EVN' }: { value: string; label?: string }) {
