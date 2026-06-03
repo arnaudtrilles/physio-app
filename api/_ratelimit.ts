@@ -10,11 +10,16 @@ import { Redis } from '@upstash/redis'
 //   3. Si Upstash répond une erreur réseau → fallback in-memory pour ne pas
 //      bloquer les utilisateurs légitimes pendant une panne du provider
 //
-// La clé de bucket est `${name}:user:${userId}` ou `${name}:ip:${ip}` :
-//   - userId existe → on n'utilise QUE la limite per-user (pas de fausse
-//     positive sur cabinet partagé / 4G CGNAT)
-//   - userId absent → fallback IP avec limite plus stricte (anti-abus
-//     anonyme)
+// La clé de bucket est `${name}:user:${userId}`, `${name}:ip:${ip}` ou
+// `${name}:ipceil:${ip}` :
+//   - userId existe → limite per-user (généreuse, pas de fausse positive sur
+//     cabinet partagé / 4G CGNAT) ET un plafond per-IP large appliqué EN PLUS.
+//     Le plafond borne l'abus par JWT forgé : le userId n'étant qu'un décodage
+//     best-effort (cf. _auth.ts), un attaquant peut générer des `sub` aléatoires
+//     → autant de buckets per-user neufs = quota per-user illimité. Le plafond
+//     per-IP (par défaut perUser.max × 6) rattrape ce cas sans gêner un cabinet
+//     réel (6 postes à plein régime derrière une même IP).
+//   - userId absent → fallback IP avec limite plus stricte (anti-abus anonyme)
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
@@ -90,6 +95,13 @@ export interface RateLimitConfig {
   perUser: { max: number; windowMs: number }
   /** Per-IP limit (applied as anonymous fallback only) */
   perIp: { max: number; windowMs: number }
+  /**
+   * Plafond per-IP appliqué EN PLUS de la limite per-user sur les requêtes
+   * authentifiées, pour borner l'abus par JWT forgé (sub aléatoires → buckets
+   * per-user illimités). Doit rester large pour ne pas pénaliser un cabinet /
+   * CGNAT partageant une IP. Par défaut : perUser.max × 6, même fenêtre.
+   */
+  perIpCeiling?: { max: number; windowMs: number }
 }
 
 export interface RateLimitResult {
@@ -106,13 +118,30 @@ export async function rateLimit(opts: {
   const { config, userId, ip } = opts
 
   if (userId) {
-    return await checkScope({
+    // 1. Limite per-user (généreuse)
+    const userRes = await checkScope({
       bucketKey: `${config.name}:user:${userId}`,
       upstashId: userId,
       upstashName: `${config.name}:user`,
       max: config.perUser.max,
       windowMs: config.perUser.windowMs,
       scope: 'user',
+    })
+    if (!userRes.allowed) return userRes
+
+    // 2. Plafond per-IP anti-abus (borne les JWT forgés sans gêner les
+    //    cabinets / CGNAT partageant une IP — plafond large par défaut).
+    const ceiling = config.perIpCeiling ?? {
+      max: config.perUser.max * 6,
+      windowMs: config.perUser.windowMs,
+    }
+    return await checkScope({
+      bucketKey: `${config.name}:ipceil:${ip}`,
+      upstashId: ip,
+      upstashName: `${config.name}:ipceil`,
+      max: ceiling.max,
+      windowMs: ceiling.windowMs,
+      scope: 'ip',
     })
   }
 

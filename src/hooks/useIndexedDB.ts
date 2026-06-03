@@ -22,6 +22,28 @@ function openDB(): Promise<IDBDatabase> {
   return dbPromise
 }
 
+/**
+ * Ferme la connexion ouverte et réinitialise le singleton — préalable à une
+ * suppression de base (deleteDatabase reste bloqué tant qu'une connexion est
+ * ouverte). Utilisé par la purge des données de santé à la déconnexion.
+ */
+export async function closeAppDB(): Promise<void> {
+  if (!dbPromise) return
+  try { (await dbPromise).close() } catch { /* ignore */ }
+  dbPromise = null
+}
+
+/** Supprime entièrement la base `physio_app` (toutes les données patient). */
+export function deleteAppDB(): Promise<void> {
+  dbPromise = null
+  return new Promise((resolve) => {
+    const req = indexedDB.deleteDatabase(DB_NAME)
+    req.onsuccess = () => resolve()
+    req.onerror = () => resolve()
+    req.onblocked = () => resolve()
+  })
+}
+
 async function idbGet<T>(key: string): Promise<T | undefined> {
   const db = await openDB()
   return new Promise((resolve, reject) => {

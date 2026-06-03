@@ -95,6 +95,28 @@ function openVocalDB(): Promise<IDBDatabase> {
   return dbPromise
 }
 
+/**
+ * Ferme la connexion ouverte et réinitialise le singleton — préalable à une
+ * suppression de base (deleteDatabase reste bloqué tant qu'une connexion est
+ * ouverte). Utilisé par la purge des données de santé à la déconnexion.
+ */
+export async function closeVocalDB(): Promise<void> {
+  if (!dbPromise) return
+  try { (await dbPromise).close() } catch { /* ignore */ }
+  dbPromise = null
+}
+
+/** Supprime entièrement la base `physio_vocal` (audio + transcriptions). */
+export function deleteVocalDB(): Promise<void> {
+  dbPromise = null
+  return new Promise((resolve) => {
+    const req = indexedDB.deleteDatabase(DB_NAME)
+    req.onsuccess = () => resolve()
+    req.onerror = () => resolve()
+    req.onblocked = () => resolve()
+  })
+}
+
 export async function saveRecovery(rec: VocalRecovery): Promise<void> {
   const db = await openVocalDB()
   return new Promise((resolve, reject) => {

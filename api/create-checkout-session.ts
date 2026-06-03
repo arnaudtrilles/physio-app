@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Stripe from 'stripe'
+import { createClient } from '@supabase/supabase-js'
 import { rateLimit, getClientIp } from './_ratelimit.js'
 import { extractUserId } from './_auth.js'
 
@@ -32,7 +33,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${retrySec}s.` })
   }
 
-  const { priceId, userId, userEmail, successUrl, cancelUrl } = req.body
+  // Authentification réelle : on vérifie le token côté serveur et on DÉRIVE
+  // l'identité (userId + email) de la session vérifiée. Tout `userId`/`userEmail`
+  // présent dans le body est volontairement ignoré : sans cette vérification, un
+  // client pouvait provisionner le plan payant d'un AUTRE compte en passant un
+  // userId arbitraire (client_reference_id/metadata → webhook → table profiles).
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentification requise' })
+  }
+  const token = authHeader.slice(7)
+
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !anonKey) {
+    return res.status(500).json({ error: 'Supabase non configuré' })
+  }
+
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false },
+  })
+  const { data: { user }, error: authError } = await userClient.auth.getUser()
+  if (authError || !user) return res.status(401).json({ error: 'Token invalide' })
+
+  const userId = user.id
+  const userEmail = user.email ?? undefined
+
+  const { priceId, successUrl, cancelUrl } = req.body
 
   if (!priceId || !successUrl || !cancelUrl) {
     return res.status(400).json({ error: 'Missing required fields' })

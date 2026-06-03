@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { User, Session, AuthError } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { purgeLocalPHI } from '../lib/localDataPurge'
 
 interface AuthState {
   user: User | null
@@ -70,6 +71,13 @@ export function useAuth() {
   const signOut = useCallback(async (): Promise<AuthResult> => {
     if (!supabase) return { error: null }
     const { error } = await supabase.auth.signOut()
+    if (!error) {
+      // Sur poste partagé, le praticien suivant ne doit hériter d'aucune donnée
+      // de santé : on purge les bases locales PUIS on recharge en dur pour vider
+      // l'état mémoire (React + cache PDF). Cf. purgeLocalPHI.
+      await purgeLocalPHI()
+      window.location.assign('/')
+    }
     return { error }
   }, [])
 
