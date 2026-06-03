@@ -15,6 +15,17 @@ const PLAN_BY_PRICE: Record<string, string> = {
   'price_1TRt28D0F8LY2YWQ1irmWUBU': 'cabinet',
 }
 
+// Stripe signe le corps brut de la requête. Sur @vercel/node, le bodyParser par
+// défaut consomme/parse le stream avant le handler : getRawBody() ne reçoit alors
+// plus les octets originaux et constructEvent() rejette la signature (webhook
+// inopérant) ou, pire, ne protège plus rien. On désactive donc le parsing
+// automatique pour lire le corps brut nous-mêmes (cf. api/transcribe.ts).
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 

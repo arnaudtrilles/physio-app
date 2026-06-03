@@ -75,3 +75,17 @@ CREATE TABLE IF NOT EXISTS stripe_events (
 CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_org_members_org ON organization_members(organization_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_stripe_customer ON profiles(stripe_customer_id);
+
+-- 7. RLS sur profiles (plan + identifiants Stripe = données sensibles)
+-- Sans RLS, tout utilisateur authentifié (clé anon) pouvait lire/écrire TOUTES les
+-- lignes profiles. On verrouille en LECTURE SEULE de sa propre ligne : un client ne
+-- peut donc PAS s'auto-attribuer un plan payant (UPDATE refusé côté anon). Toutes les
+-- écritures légitimes du plan passent par le webhook Stripe et admin-stats, qui
+-- utilisent la clé service_role et contournent la RLS.
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "own_profile_select" ON profiles;
+CREATE POLICY "own_profile_select" ON profiles
+  FOR SELECT USING (id = auth.uid());
+
+-- Vérification en prod : SELECT relrowsecurity FROM pg_class WHERE relname = 'profiles'; -- doit valoir true
