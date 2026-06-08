@@ -225,7 +225,12 @@ export async function ensurePatient(
   query = dateNaissance
     ? query.eq('date_naissance', dateNaissance)
     : query.is('date_naissance', null)
-  const { data: existing } = await query.limit(1).single()
+  // `.limit(1)` sans `.single()` : `.single()` lève une erreur si 0 OU >1 ligne.
+  // Sur des doublons patient legacy (>1 ligne en cloud), l'erreur faisait
+  // retomber le flux sur l'INSERT plus bas → création d'un 3e doublon. Ici on
+  // récupère la 1re ligne existante sans jamais lever, et on la réutilise.
+  const { data: rows } = await query.limit(1)
+  const existing = rows?.[0]
 
   if (existing) {
     setPatientMap(pm, nom, prenom, dateNaissance, existing.id)
@@ -991,8 +996,51 @@ export async function syncProfile(userId: string, p: ProfileData): Promise<void>
 export async function replaceStore(
   userId: string, table: string, rows: Record<string, unknown>[],
 ): Promise<void> {
+  // delete+insert n'est PAS transactionnel côté client Supabase : ce sont deux
+  // appels réseau distincts. Sans filet, un insert qui échoue APRÈS le delete
+  // (RLS, FK, payload invalide, coupure réseau, batch partiel) efface
+  // définitivement les données médicales du praticien sur le cloud — la
+  // régression la plus grave possible pour des données de santé.
+  //
+  // Filet sans migration : on photographie l'état cloud (fetchAll, ids
+  // compris — toutes les tables sont en bigserial/uuid, donc ré-insérables
+  // tels quels) avant le delete, et on restaure ce snapshot si le ré-insert
+  // échoue. (Une RPC Postgres transactionnelle serait plus robuste encore,
+  // mais reste optionnelle et hors périmètre « zéro migration ».)
+  let snapshot: Record<string, unknown>[]
+  try {
+    snapshot = await fetchAll(table, userId)
+  } catch (e) {
+    // Pas de snapshot fiable → on refuse d'effacer : mieux vaut un cloud en
+    // retard d'un cycle qu'une perte sèche de données de santé.
+    throw new Error(
+      `replaceStore ${table}: snapshot impossible, delete annulé (${e instanceof Error ? e.message : String(e)})`,
+    )
+  }
+
   await supabase.from(table).delete().eq('practitioner_id', userId)
-  if (rows.length > 0) await batchInsert(table, rows)
+  if (rows.length === 0) return
+
+  try {
+    await batchInsert(table, rows)
+  } catch (insertErr) {
+    // Le delete a réussi mais le ré-insert a échoué : on restaure l'état
+    // d'avant (best-effort) pour ne rien perdre, puis on propage l'erreur.
+    console.error(
+      `[Sync] replaceStore ${table}: insert échoué — restauration du snapshot (${snapshot.length} lignes)`,
+      insertErr,
+    )
+    try {
+      await supabase.from(table).delete().eq('practitioner_id', userId)
+      if (snapshot.length > 0) await batchInsert(table, snapshot)
+    } catch (restoreErr) {
+      console.error(
+        `[Sync] replaceStore ${table}: RESTAURATION ÉCHOUÉE — données potentiellement perdues sur le cloud`,
+        restoreErr,
+      )
+    }
+    throw insertErr
+  }
 }
 
 // ── Converter helpers for ongoing sync ──────────────────────────

@@ -154,7 +154,9 @@ async function reconcileUpload(
         practitioner_id: userId,
         patient_id: pm.get(d.patientKey)!,
         name: d.name, mime_type: d.mimeType,
-        storage_path: null, masked: d.masked || false,
+        // Préserver storage_path (Supabase Storage HDS) : l'écraser à null au
+        // re-sync perdait le pointeur vers le fichier stocké côté serveur.
+        storage_path: d.storagePath || null, masked: d.masked || false,
         added_at: d.addedAt || new Date().toISOString(),
       })))
   }
@@ -438,7 +440,9 @@ export function useSync(params: UseSyncParams) {
             practitioner_id: userId,
             patient_id: pm.get(d.patientKey)!,
             name: d.name, mime_type: d.mimeType,
-            storage_path: null, masked: d.masked || false,
+            // Préserver storage_path (Supabase Storage HDS) : l'écraser à null
+            // au re-sync perdait le pointeur vers le fichier stocké serveur.
+            storage_path: d.storagePath || null, masked: d.masked || false,
             added_at: d.addedAt || new Date().toISOString(),
           })))
       })
