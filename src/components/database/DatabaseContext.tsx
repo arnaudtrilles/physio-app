@@ -2,7 +2,6 @@ import { createContext, useContext } from 'react'
 import type { CSSProperties, Dispatch, MutableRefObject, ReactNode, SetStateAction, TouchEvent } from 'react'
 import type {
   AICallAuditEntry,
-  AnalyseIA,
   BilanDocument,
   BilanIntermediaireRecord,
   BilanRecord,
@@ -112,7 +111,6 @@ export interface DatabaseContextValue {
   setDiagnosticPhysio: Dispatch<SetStateAction<string>>
   setBilanZoneBackStep: Dispatch<SetStateAction<'identity' | 'database'>>
   setConsultationChooserOpen: Dispatch<SetStateAction<boolean>>
-  setCurrentAnalyseIA: Dispatch<SetStateAction<AnalyseIA | null>>
   setCurrentBilanDataOverride: Dispatch<SetStateAction<Record<string, unknown> | null>>
   setCurrentBilanId: Dispatch<SetStateAction<number | null>>
   setCurrentBilanIntermediaireData: Dispatch<SetStateAction<Record<string, unknown> | null>>

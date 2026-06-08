@@ -5,10 +5,10 @@
  * pour éviter toute collision entre un Bilan PDF direct et un Bilan+Analyse.
  *
  *   pdfBilanCache   → flow PDF_BILAN (exportBilanFromRecord)
- *   pdfAnalyseCache → flow PDF_ANALYSE (handleExportPDF + onExport BilanAnalyseIA)
+ *   pdfAnalyseCache → flow PDF_ANALYSE (handleExportPDF du compte rendu)
  *
  * La clé est un hash stable des entrées pertinentes pour la génération
- * (données du bilan, analyse IA, identité patient, sexe, documents…).
+ * (données du bilan, identité patient, sexe, documents…).
  * Si le hash d'une requête identique est déjà présent, on sert le markdown
  * mémorisé sans refaire d'appel Claude. Le cache vit pour la session — un
  * rechargement de la page le vide.

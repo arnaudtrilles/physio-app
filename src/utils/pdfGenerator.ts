@@ -342,7 +342,6 @@ export const generatePDF = async (
   zoneData: Record<string, any>,
   bilanZoneData?: { sectionTitle: string; data: Record<string, unknown> } | null,
   improvementData?: { generalScore: number | null; bilans: ImprovementEntry[] } | null,
-  analyseIA?: { diagnostic: { titre: string; description: string }; hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>; priseEnCharge: Array<{ phase: string; titre: string; detail: string }>; alertes: string[] } | null,
   notesLibres?: string,
   pdfTitle?: string,
 ): Promise<{ blob: Blob; fileName: string }> => {
@@ -579,28 +578,23 @@ export const generatePDF = async (
     }
 
     // Drapeaux cliniques — Red / Yellow / Blue-Black fusionnés, positifs uniquement.
-    // Masqué quand l'analyse IA est jointe : les alertes IA couvrent déjà ce contenu
-    // avec interprétation, pas la peine d'imprimer les données brutes deux fois.
-    const showFlagsBlock = !analyseIA || analyseIA.alertes.length === 0
-    if (showFlagsBlock) {
-      const flagPositives: Array<{ cat: string; label: string; value: string }> = []
-      const collectFlags = (cat: string, obj: unknown) => {
-        if (!obj || typeof obj !== 'object') return
-        for (const e of renderObjCompact(obj as Record<string, unknown>, FLAG_LABELS)) {
-          flagPositives.push({ cat, label: e.label, value: e.value })
-        }
+    const flagPositives: Array<{ cat: string; label: string; value: string }> = []
+    const collectFlags = (cat: string, obj: unknown) => {
+      if (!obj || typeof obj !== 'object') return
+      for (const e of renderObjCompact(obj as Record<string, unknown>, FLAG_LABELS)) {
+        flagPositives.push({ cat, label: e.label, value: e.value })
       }
-      collectFlags('Red', d.redFlags)
-      collectFlags('Yellow', d.yellowFlags)
-      collectFlags('Blue/Black', d.blueBlackFlags)
-      if (flagPositives.length > 0) {
-        subTitle('Drapeaux cliniques (positifs)')
-        for (const p of flagPositives) {
-          const txt = p.value === 'Oui' ? `${p.cat} · ${p.label}` : `${p.cat} · ${p.label} — ${p.value}`
-          bulletPoint(txt, 6)
-        }
-        y += 2
+    }
+    collectFlags('Red', d.redFlags)
+    collectFlags('Yellow', d.yellowFlags)
+    collectFlags('Blue/Black', d.blueBlackFlags)
+    if (flagPositives.length > 0) {
+      subTitle('Drapeaux cliniques (positifs)')
+      for (const p of flagPositives) {
+        const txt = p.value === 'Oui' ? `${p.cat} · ${p.label}` : `${p.cat} · ${p.label} — ${p.value}`
+        bulletPoint(txt, 6)
       }
+      y += 2
     }
 
     // 5D 3N (cervical — signes de VBI) — positifs uniquement
@@ -1252,75 +1246,6 @@ export const generatePDF = async (
       y += 4.5
     }
     y += 3
-  }
-
-  // ── 6. Analyse IA ─────────────────────────────────────────────────────────
-  if (analyseIA) {
-    doc.addPage()
-    y = 18
-
-    sectionTitle('Analyse clinique assistée par IA', secNum++)
-
-    check(8)
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(7.5)
-    doc.setTextColor(...C.muted)
-    doc.text('À titre indicatif uniquement — ne remplace pas le jugement clinique du professionnel de santé.', ML + 4, y)
-    doc.setTextColor(...C.text)
-    y += 6
-
-    subTitle('Diagnostic principal')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    const diagLines = split(analyseIA.diagnostic.titre, MW - 12)
-    for (const dl of diagLines) { check(6); doc.text(dl, ML + 6, y); y += 5 }
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    const descLines = split(analyseIA.diagnostic.description, MW - 12)
-    for (const dl of descLines) { check(5); doc.text(dl, ML + 6, y); y += 4.5 }
-    y += 4
-
-    if (analyseIA.hypotheses.length > 0) {
-      subTitle('Hypothèses cliniques')
-      for (const h of analyseIA.hypotheses) {
-        check(10)
-        // H1 : Titre en bold
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        const hLabel = sanitize(`H${h.rang} : ${h.titre}`)
-        doc.text(hLabel, ML + 6, y)
-        y += 4.5
-        // Justification en normal (pas italic, pas grisé)
-        if (h.justification) {
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(8)
-          const jLines = split(h.justification, MW - 14)
-          for (const jl of jLines) { check(5); doc.text(jl, ML + 8, y); y += 4 }
-        }
-        y += 2
-      }
-    }
-
-    if (analyseIA.priseEnCharge.length > 0) {
-      subTitle('Prise en charge suggérée')
-      analyseIA.priseEnCharge.forEach((p, i) => {
-        check(10)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.text(`${i + 1}. ${p.phase} — ${p.titre}`, ML + 6, y)
-        y += 4.5
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        const pLines = split(p.detail, MW - 16)
-        for (const pl of pLines) { check(5); doc.text(pl, ML + 10, y); y += 4 }
-        y += 2
-      })
-    }
-
-    if (analyseIA.alertes.length > 0) {
-      subTitle('Alertes cliniques')
-      analyseIA.alertes.forEach(a => bulletPoint(a, 6))
-    }
   }
 
   // ── Footer sur chaque page ────────────────────────────────────────────────

@@ -100,7 +100,6 @@ export interface BilanRecord {
   notes?: string
   silhouetteData?: Record<string, unknown>
   documents?: BilanDocument[]
-  analyseIA?: AnalyseIA
   ficheExercice?: FicheExercice
   /** Diagnostic en physiothérapie/kinésithérapie saisi par le thérapeute (champ libre, optionnel). */
   diagnosticPhysio?: string
@@ -225,14 +224,6 @@ export interface CompteRendu {
   sourceHash: string
   /** Schéma V10 : objet structuré consommé par BilanCompteRendu (chips/badges/accordéons). */
   data: CompteRenduData
-}
-
-export interface AnalyseIA {
-  generatedAt: string
-  diagnostic: { titre: string; description: string }
-  hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>
-  priseEnCharge: Array<{ phase: string; titre: string; detail: string; points?: string[] }>
-  alertes: string[]
 }
 
 export interface AnalyseIAIntermediaire {
@@ -478,8 +469,8 @@ export interface LetterAuditEntry {
  */
 export type AICallCategory =
   | 'letter'                  // LetterGenerator
-  | 'bilan_analyse'           // BilanAnalyseIA
-  | 'bilan_analyse_refine'    // BilanAnalyseIA — correction thérapeute
+  | 'bilan_analyse'           // synthèse d'un champ du compte rendu (App.onGenerateSyntheseField)
+  | 'bilan_analyse_refine'    // legacy — ancien moteur d'analyse DM retiré, conservé pour l'historique d'audit
   | 'bilan_evolution'         // BilanEvolutionIA
   | 'bilan_intermediaire'     // BilanNoteIntermediaire
   | 'fiche_exercice'          // FicheExerciceIA

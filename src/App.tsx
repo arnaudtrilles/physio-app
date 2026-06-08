@@ -27,7 +27,6 @@ import { BilanIntermediaire } from './components/bilans/BilanIntermediaire'
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
 import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
 import type { BilanIntermediaireGeriatriqueHandle } from './components/bilans/BilanIntermediaireGeriatrique'
-const BilanAnalyseIA = lazy(() => import('./components/BilanAnalyseIA').then(m => ({ default: m.BilanAnalyseIA })))
 const BilanCompteRendu = lazy(() => import('./components/BilanCompteRendu').then(m => ({ default: m.BilanCompteRendu })))
 const BilanChatBubble = lazy(() => import('./components/BilanChatBubble').then(m => ({ default: m.BilanChatBubble })))
 import { generateCompteRendu, isCompteRenduStale } from './utils/compteRendu'
@@ -42,7 +41,7 @@ import { hashInputs, documentFingerprint, getCachedBilanPDF, setCachedBilanPDF, 
 import { buildGeneratedPatientDoc, buildVerbalConsentDoc } from './utils/pdfPersistence'
 import type { PatientDocumentSource } from './types'
 import type { BilanIntermediaireEntry } from './utils/clinicalPrompt'
-import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, AnalyseIA, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
+import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, SmartObjectif, ExerciceBankEntry, ProfileData, FicheExercice, BilanDocument, PatientDocument, PatientPrescription, LetterRecord, LetterAuditEntry, AICallAuditEntry, ClosedTreatment, BilanType } from './types'
 import { callClaudeSecure, UnmaskedDocumentsError } from './utils/claudeSecure'
 import { parseExercicesFromMarkdown, addExercicesToBank } from './utils/parseExercices'
 import { downloadExercicesPDF } from './utils/exercicesDomicilePdf'
@@ -586,7 +585,6 @@ function App() {
 
   // ── Transient UI state ────────────────────────────────────────────────────────
   const [currentBilanId, setCurrentBilanId] = useState<number | null>(null)
-  const [currentAnalyseIA, setCurrentAnalyseIA] = useState<AnalyseIA | null>(null)
   const [currentBilanDataOverride, setCurrentBilanDataOverride] = useState<Record<string, unknown> | null>(null)
   const [ficheBackStep, setFicheBackStep] = useState<'analyse_ia' | 'database'>('analyse_ia')
   const [ficheExerciceContextOverride, setFicheExerciceContextOverride] = useState<{ notesLibres: string; bilanData: Record<string, unknown>; zone: string } | null>(null)
@@ -771,7 +769,6 @@ function App() {
   const [diagnosticPhysio, setDiagnosticPhysio] = useState('')
 
   // Pivot hors-DM : le compte rendu est l'écran par défaut quand un record existe.
-  // BilanAnalyseIA reste en fallback (cas: pas encore de record sauvegardé).
 
   // ── Refs ──────────────────────────────────────────────────────────────────────
   // Documents en cours d'upload Storage — évite les uploads concurrents du même blob.
@@ -820,7 +817,6 @@ function App() {
     setSilhouetteData({})
     setBilanDocuments([])
     setPatientMode('new')
-    setCurrentAnalyseIA(null)
     setBilanNotes('')
     setDiagnosticPhysio('')
     setCurrentBilanId(null)
@@ -1095,8 +1091,8 @@ Règles :
       .filter(r => r.id !== rec.id)
       .sort((a, b) => a.id - b.id)
     const historique: BilanIntermediaireEntry[] = [
-      ...initiaux.map((r, i) => ({ type: 'initial' as const, num: i + 1, date: r.dateBilan, evn: r.evn ?? null, bilanData: r.bilanData ?? {}, analyseIA: r.analyseIA ? { titre: r.analyseIA.diagnostic.titre, description: r.analyseIA.diagnostic.description } : null, ficheExercice: r.ficheExercice })),
-      ...interms.map((r, i) => ({ type: 'intermediaire' as const, num: i + 1, date: r.dateBilan, evn: null, bilanData: r.data ?? {}, analyseIA: r.analyseIA ? { titre: r.analyseIA.noteDiagnostique.titre, description: r.analyseIA.noteDiagnostique.description, evolution: r.analyseIA.noteDiagnostique.evolution } : null, ficheExercice: r.ficheExercice })),
+      ...initiaux.map((r, i) => ({ type: 'initial' as const, num: i + 1, date: r.dateBilan, evn: r.evn ?? null, bilanData: r.bilanData ?? {}, ficheExercice: r.ficheExercice })),
+      ...interms.map((r, i) => ({ type: 'intermediaire' as const, num: i + 1, date: r.dateBilan, evn: null, bilanData: r.data ?? {}, ficheExercice: r.ficheExercice })),
     ]
     setFormData(prev => ({ ...prev, nom: rec.nom, prenom: rec.prenom, dateNaissance: rec.dateNaissance }))
     setCurrentIntermediaireForNote(rec)
@@ -1671,7 +1667,6 @@ Règles :
         bilanType: getBilanType(selectedBodyZone ?? '') ?? '',
         bilanData,
         notesLibres: bilanNotes || '',
-        analyseIA: currentAnalyseIA ?? null,
         patient: {
           nom: formData.nom,
           prenom: formData.prenom,
@@ -1702,7 +1697,6 @@ Règles :
           bilanType: getBilanType(selectedBodyZone ?? '') ?? '',
           bilanData,
           notesLibres: bilanNotes || undefined,
-          analyseIA: currentAnalyseIA ?? null,
           therapistProfession: profile.profession,
         })
         const report = await callClaudeWithDocGuard({
@@ -1742,7 +1736,7 @@ Règles :
         const out = await generatePDF(formDataAsPatientInfo(formData), formDataAsPatientInfo(formData), silhouetteData,
           bilanData ? { sectionTitle: selectedBodyZone ?? '', data: bilanData } : null,
           entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
-          currentAnalyseIA ?? undefined, bilanNotes || undefined)
+          bilanNotes || undefined)
         attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
       } finally {
         setExportingPDF(false)
@@ -1760,7 +1754,7 @@ Règles :
     const out = await generatePDF(formDataAsPatientInfo(formData), formDataAsPatientInfo(formData), silhouetteData,
       bilanData ? { sectionTitle: selectedBodyZone ?? '', data: bilanData } : null,
       entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
-      currentAnalyseIA ?? undefined, bilanNotes || undefined)
+      bilanNotes || undefined)
     attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
   }
 
@@ -2471,7 +2465,6 @@ Mobilité articulaire lombaire
               bilanType: getBilanType(record.zone ?? '') ?? '',
               bilanData: record.bilanData,
               notesLibres: record.notes || undefined,
-              analyseIA: null, // Bilan PDF = pas d'analyse IA
               therapistProfession: profile.profession,
             })
         const report = await callClaudeWithDocGuard({
@@ -2510,7 +2503,7 @@ Mobilité articulaire lombaire
         const out = await generatePDF(pi, pi, record.silhouetteData ?? {},
           record.bilanData ? { sectionTitle: record.zone ?? '', data: record.bilanData } : null,
           entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
-          undefined, record.notes || undefined)
+          record.notes || undefined)
         attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
       } finally {
         setExportingRecordId(null)
@@ -2527,7 +2520,7 @@ Mobilité articulaire lombaire
       const out = await generatePDF(pi, pi, record.silhouetteData ?? {},
         record.bilanData ? { sectionTitle: record.zone ?? '', data: record.bilanData } : null,
         entries.length > 0 ? { generalScore: patientGeneralScore(patKey), bilans: entries } : null,
-        undefined, record.notes || undefined)
+        record.notes || undefined)
       attachPdfToPatient(out.blob, out.fileName, patKey, 'bilan')
     }
   }
@@ -2755,7 +2748,6 @@ Mobilité articulaire lombaire
           setDiagnosticPhysio,
           setBilanZoneBackStep,
           setConsultationChooserOpen,
-          setCurrentAnalyseIA,
           setCurrentBilanDataOverride,
           setCurrentBilanId,
           setCurrentBilanIntermediaireData,
@@ -4242,38 +4234,15 @@ Mobilité articulaire lombaire
                 />
               </>
             ) : (
-              <BilanAnalyseIA
-                apiKey={apiKey}
-                context={{
-                  patient: { nom: formData.nom, prenom: formData.prenom, dateNaissance: formData.dateNaissance, profession: formData.profession, sport: formData.sport, antecedents: formData.famille },
-                  zone: selectedBodyZone ?? '',
-                  bilanType: getBilanType(selectedBodyZone ?? ''),
-                  bilanData: currentBilanDataOverride ?? getBilanData() ?? {},
-                  notesLibres: bilanNotes,
-                  therapist: { specialites: profile.specialites, techniques: profile.techniques, equipements: profile.equipements, autresCompetences: profile.autresCompetences },
-                  therapistProfession: profile.profession,
-                  closedAntecedents: getClosedAntecedents(pk(formData.nom || 'Anonyme', formData.prenom), getBilanType(selectedBodyZone ?? '')),
-                }}
-                patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
-                profession={profile.profession}
-                onAudit={recordAIAudit}
-                onUnmaskedDocsConfirm={askUnmaskedDocsConfirm}
-                documents={bilanDocuments.length > 0 ? bilanDocuments : undefined}
-                cached={currentAnalyseIA}
-                onResult={(analyse) => {
-                  setCurrentAnalyseIA(analyse)
-                  if (currentBilanId !== null) {
-                    setDb(prev => prev.map(r => r.id === currentBilanId ? { ...r, analyseIA: analyse } : r))
-                  }
-                  showToast('Analyse générée', 'success')
-                }}
-                onBack={handleBack}
-                onClose={handleClose}
-                onExport={handleExportPDF}
-                exporting={exportingPDF}
-                onGoToProfile={() => setStep('profile')}
-                onFicheExercice={handleFiche}
-              />
+              // Garde défensive : les deux chemins de navigation positionnent currentBilanId
+              // (donc currentRecord) avant d'ouvrir cet écran. Si aucun record n'est résolu,
+              // on affiche un état neutre plutôt qu'un moteur d'analyse (retiré — conformité hors-DM).
+              <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '2rem', textAlign: 'center' }}>
+                <p style={{ color: 'var(--text-secondary)', maxWidth: 420, margin: 0 }}>
+                  Aucun bilan sélectionné. Revenez à la base de données pour ouvrir un compte rendu.
+                </p>
+                <button className="btn-back" onClick={handleBack}>Retour</button>
+              </div>
             )}
           </Suspense>
         )

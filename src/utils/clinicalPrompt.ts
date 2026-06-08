@@ -1,4 +1,4 @@
-import type { AnalyseIA, AnalyseIAIntermediaire, EvolutionIA } from '../types'
+import type { AnalyseIAIntermediaire, EvolutionIA } from '../types'
 
 export interface TherapistProfile {
   specialites?: string[]
@@ -99,9 +99,15 @@ export function anonymizePatientData(patient: BilanContext['patient']): {
   }
 }
 
-// ── Prompt builder ────────────────────────────────────────────────────────────
+// ── Résumé neutre des données du bilan ─────────────────────────────────────────
+// DM-conformité (2026-06-04) : remplace l'ancien buildClinicalPrompt (moteur de
+// diagnostic). Ne produit QU'UN bloc de données anonymisées — aucune instruction
+// d'analyse, aucune hypothèse, aucun schéma JSON de sortie. Sert de contexte
+// factuel au chat d'aide à la compréhension du cas (cf. BilanChatBubble). Le
+// raisonnement clinique reste l'entière responsabilité du thérapeute.
+// Code de diagnostic d'origine archivé sous le tag git `dm-clinical-inference-archive`.
 
-export function buildClinicalPrompt(ctx: BilanContext): string {
+export function buildBilanDataSummary(ctx: BilanContext): string {
   const { patient, zone, bilanType, bilanData } = ctx
   const { age, sexe, scrub } = anonymizePatientData(patient)
 
@@ -125,10 +131,6 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
 
   const ageLine = age !== null ? `${age} ans` : 'Âge non renseigné'
   const sexeLine = sexe ? ` — Sexe : ${sexe}` : ''
-  const sexeNorm = sexe === 'feminin' ? 'feminin' : sexe === 'masculin' ? 'masculin' : null
-  const sexeHeader = sexeNorm
-    ? `SEXE_PATIENT : ${sexeNorm}  ← accord grammatical OBLIGATOIRE selon cette valeur (voir règle 4).`
-    : `SEXE_PATIENT : inconnu  ← défaut masculin singulier, JAMAIS de formulation inclusive.`
   const notesLibresStr = ctx.notesLibres ? scrub(ctx.notesLibres) : null
 
   // Profil thérapeute
@@ -166,18 +168,7 @@ export function buildClinicalPrompt(ctx: BilanContext): string {
       })()
     : ''
 
-  const role = roleTitle(ctx.therapistProfession)
-  const isPhysio = /physio/i.test(ctx.therapistProfession ?? '')
-  const adjMetier = isPhysio ? 'physiothérapique' : 'kinésithérapique'
-  const titreInterdit = isPhysio ? 'kinésithérapeute' : 'physiothérapeute'
-  const metierInterdit = isPhysio ? 'kinésithérapie' : 'physiothérapie'
-  const adjInterdit = isPhysio ? 'kinésithérapique' : 'physiothérapique'
-
-  return `${sexeHeader}
-
-Tu es un ${role} expert en musculo-squelettique. Analyse ce bilan clinique et fournis une évaluation précise et personnalisée.
-
-DONNÉES DU BILAN (données anonymisées) :
+  return `DONNÉES DU BILAN (anonymisées) :
 - Patient : ${ageLine}${sexeLine}
 - Profession : ${profession}
 - Activité sportive : ${sport}
@@ -196,34 +187,7 @@ TESTS CLINIQUES : ${testsStr}
 SCORES : ${scoresStr}
 ${notesLibresStr ? `\nNOTES CLINIQUES COMPLÉMENTAIRES : ${notesLibresStr}` : ''}
 ${narrativeBlock}
-${therapistSection}
-
-INSTRUCTIONS STRICTES :
-1. Les 3 hypothèses doivent avoir des probabilités RÉELLES calculées à partir des données cliniques (EVN, tests, scores, flags). Les probabilités ne doivent PAS être fixes (pas de 75/45/20 par défaut). Elles doivent refléter la réalité clinique du cas. La somme des 3 probabilités DOIT être exactement égale à 100 (ex: 65+25+10=100, ou 50+30+20=100).
-2. La prise en charge doit être SPÉCIFIQUE à ce patient : cite les techniques précises que le thérapeute maîtrise et les équipements dont il dispose. Ne propose PAS de techniques ou appareils que le thérapeute n'a pas listés. Si aucun profil thérapeute n'est fourni, reste générique. Chaque phase doit contenir 3 à 5 "points" COURTS et ACTIONNABLES (12-18 mots max par point, style télégraphique clinique, pas de phrases longues). Chaque point = une action, une technique ou un exercice concret avec sa dose/fréquence quand pertinent.
-3. AUCUNE STIGMATISATION DU CLINICIEN — Tu n'écris JAMAIS de phrase soulignant une lacune méthodologique : pas de "absence de mesures", "absence de tests objectifs", "données objectives manquantes", "manque de documentation". Quand une donnée n'est pas dans les entrées, elle ne figure tout simplement pas dans la sortie — aucun champ ne contient "Non documenté", "Non renseigné", "Aucune donnée". Les "alertes" ne contiennent QUE des red flags critiques cliniques (signe d'alerte médicale, urgence orientation) — JAMAIS de remarque sur la qualité des données. Aucun "point" de priseEnCharge ne recommande de produire des données futures (HOOS/Oxford/WOMAC/KOOS/DASH/objectivation systématique) — les actions sont THÉRAPEUTIQUES (technique manuelle, exercice, conseil, éducation), pas méthodologiques.
-4. ACCORD GRAMMATICAL SELON SEXE_PATIENT — Valeur en tête de prompt fait foi. Si \`feminin\` : "La patiente", "âgée", "Elle", "active", "sportive", "présentait". Si \`masculin\` : "Le patient", "âgé", "Il", "actif", "sportif". Si \`inconnu\` : masculin singulier par défaut. INTERDICTIONS ABSOLUES : \`(e)\`, \`·e\`, \`/\` inclusive (\`Le/la\`, \`il/elle\`, \`né(e)\`), parenthèses d'ajout féminin, circonlocutions. JAMAIS inférer le sexe depuis le prénom — seule SEXE_PATIENT fait foi. Vérifie chaque occurrence de "le patient"/"la patiente" avant de produire le JSON.
-5. ÉCHELLE DOULEUR COHÉRENTE — Étiquette EVN pour les valeurs des bilans, EVA pour les valeurs des séances. Pas de mélange "EVN/EVA" dans une même phrase, pas de conversion de l'une en l'autre.
-6. VOCABULAIRE PROFESSION — Tu rédiges en tant que ${role}. Tu emploies EXCLUSIVEMENT « ${role} » et ses dérivés (« ${adjMetier} »). INTERDICTION ABSOLUE des termes « ${titreInterdit} », « ${metierInterdit} », « ${adjInterdit} », ainsi que des abréviations « kiné » et « physio ». Aucune exception, même dans une citation, un exemple ou un titre.
-7. Réponds UNIQUEMENT en JSON valide, sans markdown ni texte autour.
-
-{
-  "diagnostic": {
-    "titre": "Titre court et précis du diagnostic ${adjMetier} principal",
-    "description": "Description clinique détaillée et personnalisée en 2-3 phrases basée sur les données fournies"
-  },
-  "hypotheses": [
-    { "rang": 1, "titre": "Hypothèse H1 spécifique", "probabilite": <calculé>, "justification": "Justification basée sur les données cliniques concrètes" },
-    { "rang": 2, "titre": "Hypothèse H2 spécifique", "probabilite": <calculé>, "justification": "Justification basée sur les données cliniques concrètes" },
-    { "rang": 3, "titre": "Hypothèse H3 spécifique", "probabilite": <calculé>, "justification": "Justification basée sur les données cliniques concrètes" }
-  ],
-  "priseEnCharge": [
-    { "phase": "Phase aiguë (J1–J7)", "titre": "Titre spécifique", "points": ["Action concise 1 (technique + fréquence)", "Action concise 2", "Action concise 3", "Action concise 4"] },
-    { "phase": "Phase subaiguë (J8–J21)", "titre": "Titre spécifique", "points": ["Action concise 1", "Action concise 2", "Action concise 3", "Action concise 4"] },
-    { "phase": "Phase fonctionnelle (J22–J42)", "titre": "Titre spécifique", "points": ["Action concise 1", "Action concise 2", "Action concise 3", "Action concise 4"] }
-  ],
-  "alertes": ["Red flag CLINIQUE critique nécessitant orientation médicale urgente — sinon tableau vide. INTERDIT : remarques sur la qualité ou la quantité des données, mentions d'absence de mesures ou de scores."]
-}`
+${therapistSection}`
 }
 
 // ── Fiche d'exercices prompt ──────────────────────────────────────────────────
@@ -548,54 +512,6 @@ export function parseEvolutionIA(raw: string): EvolutionIA | null {
   }
 }
 
-export function parseAnalyseIA(raw: string): AnalyseIA | null {
-  try {
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
-    const parsed = JSON.parse(jsonMatch[0]) as AnalyseIA
-    if (!parsed.diagnostic || !parsed.hypotheses || !parsed.priseEnCharge) return null
-
-    // Normaliser les probabilités pour que la somme = 100
-    if (parsed.hypotheses.length > 0) {
-      const total = parsed.hypotheses.reduce((s, h) => s + (h.probabilite ?? 0), 0)
-      if (total > 0 && total !== 100) {
-        let remaining = 100
-        parsed.hypotheses.forEach((h, i) => {
-          if (i < parsed.hypotheses.length - 1) {
-            h.probabilite = Math.round((h.probabilite / total) * 100)
-            remaining -= h.probabilite
-          } else {
-            h.probabilite = remaining
-          }
-        })
-      }
-    }
-
-    // Normaliser la prise en charge : garantir que chaque phase a `points` ET `detail`
-    // (points = liste condensée pour l'affichage ; detail = texte concaténé pour PDF/export)
-    if (Array.isArray(parsed.priseEnCharge)) {
-      parsed.priseEnCharge = parsed.priseEnCharge.map(p => {
-        const raw = p as { phase?: string; titre?: string; detail?: string; points?: unknown }
-        let points: string[] = []
-        if (Array.isArray(raw.points)) {
-          points = raw.points.map(x => String(x).trim()).filter(Boolean)
-        } else if (typeof raw.detail === 'string' && raw.detail.trim()) {
-          // Legacy : découper le paragraphe en bullets
-          points = raw.detail
-            .split(/(?:\s*[•·]\s*|\.\s+(?=[A-ZÀ-Ÿ])|;\s+|\n+-?\s*)/)
-            .map(s => s.trim().replace(/^[-–•·]\s*/, '').replace(/\.$/, ''))
-            .filter(s => s.length > 2)
-        }
-        const detail = points.length > 0 ? points.join(' • ') : (raw.detail ?? '')
-        return { phase: raw.phase ?? '', titre: raw.titre ?? '', detail, points }
-      })
-    }
-    return { ...parsed, generatedAt: new Date().toISOString(), alertes: parsed.alertes ?? [] }
-  } catch {
-    return null
-  }
-}
-
 // ── Bilan intermédiaire prompt ────────────────────────────────────────────────
 
 export interface BilanIntermediaireEntry {
@@ -604,7 +520,6 @@ export interface BilanIntermediaireEntry {
   date: string
   evn: number | null
   bilanData: Record<string, unknown>
-  analyseIA?: { titre?: string; description?: string; evolution?: string } | null
   ficheExercice?: { markdown: string } | null
 }
 
@@ -668,8 +583,6 @@ export function buildIntermediairePrompt(
       `EVN pire : ${evnPire} | EVN mieux : ${evnMieux} | EVN moyen : ${evnMoy}`]
     if (d?.douleurType) lines.push(`Type douleur : ${d.douleurType} | Évolution : ${d.situation ?? 'N/R'} | Nocturne : ${d.douleurNocturne ?? 'N/R'}`)
     if (scores2 && Object.keys(scores2).length > 0) lines.push(`Scores : ${scrub(JSON.stringify(scores2))}`)
-    if (b.analyseIA?.titre) lines.push(`Analyse IA : ${b.analyseIA.titre}${b.analyseIA.evolution ? ` — ${b.analyseIA.evolution}` : ''}`)
-    if (b.analyseIA?.description) lines.push(`Description : ${scrub(b.analyseIA.description)}`)
     return lines.join('\n')
   }).join('\n\n')
 
@@ -779,17 +692,11 @@ export interface PDFReportContext {
   bilanType: string
   bilanData: Record<string, unknown>
   notesLibres?: string
-  analyseIA?: {
-    diagnostic: { titre: string; description: string }
-    hypotheses: Array<{ rang: number; titre: string; probabilite: number; justification: string }>
-    priseEnCharge: Array<{ phase: string; titre: string; detail: string }>
-    alertes: string[]
-  } | null
   therapistProfession?: string
 }
 
 export function buildPDFReportPrompt(ctx: PDFReportContext): string {
-  const { patient, zone, bilanType, bilanData, notesLibres, analyseIA } = ctx
+  const { patient, zone, bilanType, bilanData, notesLibres } = ctx
   const { age, sexe, scrub } = anonymizePatientData(patient)
   const isPhysio = /physio/i.test(ctx.therapistProfession ?? '')
   const titreRole = isPhysio ? 'physiothérapeute' : 'kinésithérapeute'
@@ -947,17 +854,6 @@ export function buildPDFReportPrompt(ctx: PDFReportContext): string {
       })()
     : ''
 
-  // Hypothèses : on passe un classement qualitatif (rang) SANS pourcentages — la section 7
-  // de sortie doit être rédigée en langage médical argumenté, pas en statistiques chiffrées.
-  const rangLabel = (r: number) => r === 1 ? 'Principale' : r === 2 ? 'Second plan' : r === 3 ? 'Troisième plan' : `Rang ${r}`
-  const analyseSection = analyseIA ? `
-ANALYSE CLINIQUE (données issues du bilan — à intégrer au diagnostic, SANS rien ajouter, SANS reproduire de pourcentages) :
-- Diagnostic retenu : ${analyseIA.diagnostic.titre}
-- Justification : ${scrub(analyseIA.diagnostic.description)}
-- Hypothèses (classement qualitatif, NE PAS reporter le rang sous forme de %) : ${analyseIA.hypotheses.map(h => `[${rangLabel(h.rang)}] ${h.titre} — ${scrub(h.justification)}`).join(' | ')}
-- Plan de traitement : ${analyseIA.priseEnCharge.map(p => `${p.phase} : ${p.titre} — ${scrub(p.detail)}`).join(' | ')}
-${analyseIA.alertes.length > 0 ? `- Alertes cliniques : ${analyseIA.alertes.join(', ')}` : ''}` : ''
-
   const ageLine = age !== null ? `${age} ans` : null
   const profession = defined(patient.profession)
   const sport = defined(patient.sport)
@@ -1033,8 +929,7 @@ ${testsStr ? `\nTESTS SPÉCIFIQUES :\n${testsStr}` : ''}
 ${scoresStr ? `\nSCORES FONCTIONNELS :\n${scoresStr}` : ''}
 ${contratStr ? `\nCONTRAT THÉRAPEUTIQUE :\n${contratStr}` : ''}
 ${narrativeBlock ? `\n${narrativeBlock}` : ''}
-${notesLibres ? `\nNOTES DU THÉRAPEUTE :\n${scrub(notesLibres)}` : ''}
-${analyseSection}`
+${notesLibres ? `\nNOTES DU THÉRAPEUTE :\n${scrub(notesLibres)}` : ''}`
 }
 
 // ── Sortie PDF prompt ────────────────────────────────────────────────────────

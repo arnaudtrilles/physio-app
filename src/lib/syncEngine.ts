@@ -364,7 +364,9 @@ export async function uploadAll(userId: string, data: LocalData): Promise<Patien
         bilan_type: b.bilanType || null, bilan_data: b.bilanData || {},
         notes: b.notes || null, silhouette_data: b.silhouetteData || null,
         documents: stripDocs(b.documents as Array<Record<string, unknown>> | undefined),
-        analyse_ia: b.analyseIA || null, fiche_exercice: b.ficheExercice || null,
+        // analyse_ia volontairement null : le moteur d'analyse diagnostique a été retiré
+        // (conformité hors-DM). Écrire null écrase aussi les diagnostics obsolètes au re-sync.
+        analyse_ia: null, fiche_exercice: b.ficheExercice || null,
       }))
     if (bilanRows.length > 0) await batchInsert('bilans', bilanRows)
   } catch (e) { console.error('[Sync] upload bilans:', e) }
@@ -589,7 +591,6 @@ export async function downloadAll(userId: string): Promise<{ data: LocalData; pa
       notes: b.notes as string | undefined,
       silhouetteData: b.silhouette_data as Record<string, unknown> | undefined,
       documents: (b.documents as BilanRecord['documents']) || undefined,
-      analyseIA: b.analyse_ia as BilanRecord['analyseIA'] | undefined,
       ficheExercice: b.fiche_exercice as BilanRecord['ficheExercice'] | undefined,
     }
   })
@@ -1012,7 +1013,9 @@ export function convertBilans(bilans: BilanRecord[], userId: string, pm: Patient
         : (b.bilanData || {}),
       notes: b.notes || null, silhouette_data: b.silhouetteData || null,
       documents: stripDocs(b.documents as Array<Record<string, unknown>> | undefined),
-      analyse_ia: b.analyseIA || null, fiche_exercice: b.ficheExercice || null,
+      // analyse_ia volontairement null : le moteur d'analyse diagnostique a été retiré
+      // (conformité hors-DM). Écrire null écrase aussi les diagnostics obsolètes au re-sync.
+      analyse_ia: null, fiche_exercice: b.ficheExercice || null,
     }))
 }
 

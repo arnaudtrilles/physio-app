@@ -54,13 +54,6 @@ export const bilanRecordSchema = z.object({
     data: z.string(),
     addedAt: z.string(),
   })).optional(),
-  analyseIA: z.object({
-    generatedAt: z.string(),
-    diagnostic: z.object({ titre: z.string(), description: z.string() }),
-    hypotheses: z.array(z.object({ rang: z.number(), titre: z.string(), probabilite: z.number(), justification: z.string() })),
-    priseEnCharge: z.array(z.object({ phase: z.string(), titre: z.string(), detail: z.string(), points: z.array(z.string()).optional() })),
-    alertes: z.array(z.string()),
-  }).optional(),
   ficheExercice: z.object({
     generatedAt: z.string(),
     markdown: z.string(),

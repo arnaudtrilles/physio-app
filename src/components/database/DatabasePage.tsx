@@ -53,7 +53,6 @@ export function DatabasePage() {
     setDiagnosticPhysio,
     setBilanZoneBackStep,
     setConsultationChooserOpen,
-    setCurrentAnalyseIA,
     setCurrentBilanDataOverride,
     setCurrentBilanId,
     setCurrentBilanIntermediaireData,
@@ -1191,11 +1190,6 @@ export function DatabasePage() {
                                 </div>
                               ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 0.9rem 0.75rem' }}>
-                                  {record.analyseIA && (
-                                    <div style={{ marginBottom: 2 }}>
-                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-full)', background: 'var(--info-soft)', color: 'var(--primary)', border: '1px solid var(--border-soft)' }}>Analysé</span>
-                                    </div>
-                                  )}
                                   {/* Rangée 1 : Bilan PDF + Analyse */}
                                   <div style={{ display: 'flex', gap: 6 }}>
                                     <button
@@ -1217,7 +1211,6 @@ export function DatabasePage() {
                                         setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
                                         setSelectedBodyZone(record.zone ?? null)
                                         setCurrentBilanId(record.id)
-                                        setCurrentAnalyseIA(record.analyseIA ?? null)
                                         setCurrentBilanDataOverride(record.bilanData ?? null)
                                         setBilanDocuments(record.documents ?? [])
                                         setStep('analyse_ia')
@@ -1239,7 +1232,6 @@ export function DatabasePage() {
                                       setFormData(prev => ({ ...prev, nom: record.nom, prenom: record.prenom, dateNaissance: record.dateNaissance }))
                                       setSelectedBodyZone(record.zone ?? null)
                                       setCurrentBilanId(record.id)
-                                      setCurrentAnalyseIA(record.analyseIA ?? null)
                                       setCurrentBilanDataOverride(record.bilanData ?? null)
                                       setFicheBackStep('database')
                                       setStep('fiche_exercice')
@@ -1407,7 +1399,6 @@ export function DatabasePage() {
                                                         const lines = [`--- Bilan initial ${b.dateBilan} ---`, `EVN : ${b.evn ?? '?'}/10`]
                                                         if (d?.douleurType) lines.push(`Type douleur : ${d.douleurType} | Évolution : ${d.situation ?? 'N/R'} | Nocturne : ${d.douleurNocturne ?? 'N/R'}`)
                                                         if (sc && Object.keys(sc).length > 0) lines.push(`Scores : ${JSON.stringify(sc)}`)
-                                                        if (b.analyseIA) lines.push(`Diagnostic IA : ${b.analyseIA.diagnostic.titre} — ${b.analyseIA.diagnostic.description}`)
                                                         if (b.ficheExercice?.markdown) { const md = b.ficheExercice.markdown; lines.push(`Exercices prescrits : ${md.length > 300 ? md.slice(0, 300) + '...' : md}`) }
                                                         return lines.join('\n')
                                                       }).join('\n\n')
