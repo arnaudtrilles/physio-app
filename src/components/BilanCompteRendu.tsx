@@ -822,6 +822,11 @@ function HypothesisColoredBlock({ label, text, accent }: { label: string; text: 
  * - Sinon, fallback en carte orange unique avec troncature/expansion.
  */
 function HypothesisBlock({ text }: { text: string }) {
+  // Hooks AVANT tout return conditionnel (Rules of Hooks) : `text` peut alterner
+  // entre le format structuré (return anticipé) et le format fallback selon le
+  // dossier rendu. Si useState était appelé après le return, le nombre de hooks
+  // varierait d'un rendu à l'autre → React « Rendered fewer hooks than expected ».
+  const [expanded, setExpanded] = useState(false)
   const blocks = parseHypothesesBlocks(text)
   if (!blocks.fallback) {
     return (
@@ -834,7 +839,6 @@ function HypothesisBlock({ text }: { text: string }) {
   }
   const truncateAt = 260
   const isLong = text.length > truncateAt
-  const [expanded, setExpanded] = useState(false)
   const shown = isLong && !expanded ? text.slice(0, truncateAt).trimEnd() + '…' : text
   return (
     <div

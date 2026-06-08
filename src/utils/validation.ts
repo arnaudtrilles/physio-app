@@ -71,15 +71,55 @@ export const analyseSeanceMiniSchema = z.object({
 })
 
 // ── Backup import validation ───────────────────────────────────────────────
+// Données de santé importées d'un fichier utilisateur → on valide AU MINIMUM
+// les champs d'identité par lesquels l'app indexe/dédoublonne (id, patientKey).
+// Avant, ces tableaux n'étaient validés que comme `record(unknown)` : un fichier
+// corrompu (id manquant, patientKey du mauvais type) passait et corrompait
+// silencieusement l'IndexedDB. `.passthrough()` garantit qu'aucun autre champ
+// n'est ni rejeté ni supprimé — on ne durcit que le socle d'identité.
+const intermediaireImportSchema = z.object({
+  id: z.number(),
+  patientKey: z.string(),
+}).passthrough()
+
+const noteImportSchema = z.object({
+  id: z.number(),
+  patientKey: z.string(),
+  data: z.object({}).passthrough(), // `note.data.*` est accédé sans garde au render
+}).passthrough()
+
+const objectifImportSchema = z.object({
+  id: z.number(),
+  patientKey: z.string(),
+}).passthrough()
+
+const exerciceBankImportSchema = z.object({
+  id: z.string(),
+}).passthrough()
+
+const patientDocImportSchema = z.object({
+  id: z.string(),
+  patientKey: z.string(),
+}).passthrough()
+
+const prescriptionImportSchema = z.object({
+  patientKey: z.string(),
+}).passthrough()
+
+const profileImportSchema = z.object({
+  nom: z.string(),
+  prenom: z.string(),
+}).passthrough()
+
 export const backupSchema = z.object({
   db: z.array(bilanRecordSchema),
-  dbIntermediaires: z.array(z.record(z.string(), z.unknown())).optional(),
-  dbNotes: z.array(z.record(z.string(), z.unknown())).optional(),
-  dbObjectifs: z.array(z.record(z.string(), z.unknown())).optional(),
-  dbExerciceBank: z.array(z.record(z.string(), z.unknown())).optional(),
-  dbPatientDocs: z.array(z.record(z.string(), z.unknown())).optional(),
-  dbPrescriptions: z.array(z.record(z.string(), z.unknown())).optional(),
-  profile: z.record(z.string(), z.unknown()).optional(),
+  dbIntermediaires: z.array(intermediaireImportSchema).optional(),
+  dbNotes: z.array(noteImportSchema).optional(),
+  dbObjectifs: z.array(objectifImportSchema).optional(),
+  dbExerciceBank: z.array(exerciceBankImportSchema).optional(),
+  dbPatientDocs: z.array(patientDocImportSchema).optional(),
+  dbPrescriptions: z.array(prescriptionImportSchema).optional(),
+  profile: profileImportSchema.optional(),
   exportedAt: z.string().optional(),
 })
 

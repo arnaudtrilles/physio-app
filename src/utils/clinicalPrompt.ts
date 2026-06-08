@@ -504,8 +504,11 @@ export function parseEvolutionIA(raw: string): EvolutionIA | null {
       progression: parsed.progression,
       interventionsRealisees: interventions,
       etatActuel,
-      pointsForts: parsed.pointsForts ?? [],
-      pointsVigilance: parsed.pointsVigilance ?? [],
+      // `?? []` ne protège que du null/undefined : si l'IA renvoie une string
+      // ou un objet, le `.map()` downstream planterait. Array.isArray garantit
+      // un tableau réel avant tout usage.
+      pointsForts: Array.isArray(parsed.pointsForts) ? parsed.pointsForts : [],
+      pointsVigilance: Array.isArray(parsed.pointsVigilance) ? parsed.pointsVigilance : [],
     }
   } catch {
     return null
@@ -677,8 +680,16 @@ export function parseAnalyseIAIntermediaire(raw: string): AnalyseIAIntermediaire
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return null
     const parsed = JSON.parse(jsonMatch[0]) as AnalyseIAIntermediaire
-    if (!parsed.noteDiagnostique || !parsed.priseEnChargeAjustee) return null
-    return { ...parsed, generatedAt: new Date().toISOString(), alertes: parsed.alertes ?? [] }
+    // Gardes structurelles : la garde truthy seule laissait passer un objet
+    // mal formé. Surtout, un priseEnChargeAjustee non-tableau faisait planter
+    // le `.map()` au render (BilanNoteIntermediaire) — hors de ce try/catch.
+    if (!parsed.noteDiagnostique || typeof parsed.noteDiagnostique !== 'object') return null
+    if (!Array.isArray(parsed.priseEnChargeAjustee)) return null
+    return {
+      ...parsed,
+      generatedAt: new Date().toISOString(),
+      alertes: Array.isArray(parsed.alertes) ? parsed.alertes : [],
+    }
   } catch {
     return null
   }
