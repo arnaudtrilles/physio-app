@@ -5,27 +5,32 @@ import { useTheme } from './hooks/useTheme'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
-import { BilanEpaule } from './components/bilans/BilanEpaule'
+// Composants de bilan : un seul est monté à la fois (rendu exclusif par
+// bilanType). Chargés en lazy → un chunk par type, chargé seulement quand ce
+// type est ouvert (≈470 Ko sortis du chunk principal). Les *Handle restent en
+// import type (effacés au build, aucun coût runtime). Le rendu est enveloppé
+// dans un <Suspense> (zone bilan_zone). lazy + forwardRef transmet la ref.
+const BilanEpaule = lazy(() => import('./components/bilans/BilanEpaule').then(m => ({ default: m.BilanEpaule })))
 import type { BilanEpauleHandle } from './components/bilans/BilanEpaule'
-import { BilanCheville } from './components/bilans/BilanCheville'
+const BilanCheville = lazy(() => import('./components/bilans/BilanCheville').then(m => ({ default: m.BilanCheville })))
 import type { BilanChevilleHandle } from './components/bilans/BilanCheville'
-import { BilanGenou } from './components/bilans/BilanGenou'
+const BilanGenou = lazy(() => import('./components/bilans/BilanGenou').then(m => ({ default: m.BilanGenou })))
 import type { BilanGenouHandle } from './components/bilans/BilanGenou'
-import { BilanHanche } from './components/bilans/BilanHanche'
+const BilanHanche = lazy(() => import('./components/bilans/BilanHanche').then(m => ({ default: m.BilanHanche })))
 import type { BilanHancheHandle } from './components/bilans/BilanHanche'
-import { BilanCervical } from './components/bilans/BilanCervical'
+const BilanCervical = lazy(() => import('./components/bilans/BilanCervical').then(m => ({ default: m.BilanCervical })))
 import type { BilanCervicalHandle } from './components/bilans/BilanCervical'
-import { BilanLombaire } from './components/bilans/BilanLombaire'
+const BilanLombaire = lazy(() => import('./components/bilans/BilanLombaire').then(m => ({ default: m.BilanLombaire })))
 import type { BilanLombaireHandle } from './components/bilans/BilanLombaire'
-import { BilanGenerique } from './components/bilans/BilanGenerique'
+const BilanGenerique = lazy(() => import('./components/bilans/BilanGenerique').then(m => ({ default: m.BilanGenerique })))
 import type { BilanGeneriqueHandle } from './components/bilans/BilanGenerique'
-import { BilanGeriatrique } from './components/bilans/BilanGeriatrique'
+const BilanGeriatrique = lazy(() => import('./components/bilans/BilanGeriatrique').then(m => ({ default: m.BilanGeriatrique })))
 import type { BilanGeriatriqueHandle } from './components/bilans/BilanGeriatrique'
-import { BilanDrainageLymphatique } from './components/bilans/BilanDrainageLymphatique'
+const BilanDrainageLymphatique = lazy(() => import('./components/bilans/BilanDrainageLymphatique').then(m => ({ default: m.BilanDrainageLymphatique })))
 import type { BilanDrainageLymphatiqueHandle } from './components/bilans/BilanDrainageLymphatique'
-import { BilanIntermediaire } from './components/bilans/BilanIntermediaire'
+const BilanIntermediaire = lazy(() => import('./components/bilans/BilanIntermediaire').then(m => ({ default: m.BilanIntermediaire })))
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
-import { BilanIntermediaireGeriatrique } from './components/bilans/BilanIntermediaireGeriatrique'
+const BilanIntermediaireGeriatrique = lazy(() => import('./components/bilans/BilanIntermediaireGeriatrique').then(m => ({ default: m.BilanIntermediaireGeriatrique })))
 import type { BilanIntermediaireGeriatriqueHandle } from './components/bilans/BilanIntermediaireGeriatrique'
 const BilanCompteRendu = lazy(() => import('./components/BilanCompteRendu').then(m => ({ default: m.BilanCompteRendu })))
 const BilanChatBubble = lazy(() => import('./components/BilanChatBubble').then(m => ({ default: m.BilanChatBubble })))
@@ -50,7 +55,8 @@ import { objectifsToItems } from './utils/contratObjectifs'
 const FicheExerciceIA = lazy(() => import('./components/FicheExerciceIA').then(m => ({ default: m.FicheExerciceIA })))
 const DocumentMasker = lazy(() => import('./components/DocumentMasker').then(m => ({ default: m.DocumentMasker })))
 const BilanSortie = lazy(() => import('./components/BilanSortie').then(m => ({ default: m.BilanSortie })))
-import { pdfToImages } from './utils/pdfToImages'
+// pdfToImages tire pdfjs-dist (~976 Ko) : import dynamique au point d'appel
+// (upload d'un PDF) pour le sortir du chunk principal. Voir handler onChange.
 import { NoteSeance } from './components/NoteSeance'
 import type { NoteSeanceHandle, NoteSeanceData, ExerciceDomicile } from './components/NoteSeance'
 import { DictableTextarea } from './components/VoiceMic'
@@ -3567,7 +3573,7 @@ Mobilité articulaire lombaire
               // patientKey transmis aux composants Bilan pour scoper les recoveries
               // vocaux (sinon une dictée orpheline d'un patient ressort sur un autre).
               const currentPatientKey = pk(formData.nom || 'Anonyme', formData.prenom)
-              return <>
+              return <Suspense fallback={<LazyFallback />}><>
             {getBilanType(selectedBodyZone ?? '') === 'epaule'   && <BilanEpaule   key={currentBilanId ?? 'new'} ref={bilanEpauleRef}   initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
             {getBilanType(selectedBodyZone ?? '') === 'cheville' && <BilanCheville key={currentBilanId ?? 'new'} ref={bilanChevilleRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
             {getBilanType(selectedBodyZone ?? '') === 'genou'    && <BilanGenou    key={currentBilanId ?? 'new'} ref={bilanGenouRef}    initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
@@ -3577,7 +3583,7 @@ Mobilité articulaire lombaire
             {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique key={currentBilanId ?? 'new'} ref={bilanGeneriqueRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
             {getBilanType(selectedBodyZone ?? '') === 'geriatrique' && <BilanGeriatrique key={currentBilanId ?? 'new'} ref={bilanGeriatriqueRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
             {getBilanType(selectedBodyZone ?? '') === 'drainage-lymphatique' && <BilanDrainageLymphatique key={currentBilanId ?? 'new'} ref={bilanDrainageLymphatiqueRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-              </>
+              </></Suspense>
             })()}
 
             {/* ── Note de fin de bilan ── */}
@@ -3659,6 +3665,7 @@ Mobilité articulaire lombaire
                         } else if (mimeType === 'application/pdf') {
                           showToast('Conversion du PDF en images…', 'info')
                           try {
+                            const { pdfToImages } = await import('./utils/pdfToImages')
                             const images = await pdfToImages(dataUrl)
                             const baseName = file.name.replace(/\.pdf$/i, '')
                             const items = images.map((imgDataUrl, i) => ({
@@ -4047,6 +4054,7 @@ Mobilité articulaire lombaire
 
             <div className="scroll-area" style={{ padding: '1rem', paddingBottom: '9rem' }}>
               <h2 className="title-section" style={{ marginBottom: 0 }}>Bilan intermédiaire — {ZONE_LABELS[bilanType]}</h2>
+              <Suspense fallback={<LazyFallback />}>
               <div style={{ marginBottom: 16 }}>
                 {bilanType === 'geriatrique' ? (() => {
                   // Récupérer le dernier bilan initial gériatrique du patient pour fournir la baseline
@@ -4067,6 +4075,7 @@ Mobilité articulaire lombaire
                   <BilanIntermediaire key={currentBilanIntermediaireId ?? `new-inter-${bilanIntermediaireZone}`} ref={bilanIntermediaireRef} bilanType={bilanType} initialData={currentBilanIntermediaireData ?? undefined} />
                 )}
               </div>
+              </Suspense>
             </div>
 
             <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderTop: '1px solid var(--border-color)', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: 8, zIndex: 100 }}>

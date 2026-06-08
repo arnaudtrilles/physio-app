@@ -2,7 +2,8 @@ import type { BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord, BilanType
 import { getBilanType, DEFAULT_ZONE_FOR_BILAN } from '../../utils/bilanRouter'
 import { computeAge } from '../../utils/clinicalPrompt'
 import { callClaudeSecure } from '../../utils/claudeSecure'
-import { pdfToImages } from '../../utils/pdfToImages'
+// pdfToImages tire pdfjs (~1 Mo) : importé dynamiquement au moment de l'upload
+// d'un PDF pour ne pas l'embarquer dans le chunk principal (cf. App.tsx).
 import { analyseSeanceMiniSchema } from '../../utils/validation'
 import { colors as c } from '../../design/tokens'
 import { pk } from '../../lib/syncEngine'
@@ -1780,6 +1781,7 @@ export function DatabasePage() {
                               setPatientDocMaskingQueue(prev => [...prev, { dataUrl, name, mimeType }])
                             } else if (mimeType === 'application/pdf') {
                               try {
+                                const { pdfToImages } = await import('../../utils/pdfToImages')
                                 const pages = await pdfToImages(dataUrl)
                                 const baseName = name.replace(/\.pdf$/i, '')
                                 for (let i = 0; i < pages.length; i++) {
