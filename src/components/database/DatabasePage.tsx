@@ -677,7 +677,7 @@ export function DatabasePage() {
                                       const bt = rxEditForm.bilanType || undefined
                                       const cl = bt === 'generique' ? (rxEditForm.customLabel.trim() || undefined) : undefined
                                       if (rxEditPopup!.mode === 'add') {
-                                        const newEntry: PrescriptionEntry = { id: Date.now(), nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, ...(rxEditDoc ? { document: rxEditDoc } : {}), ...(bt ? { bilanType: bt } : {}), ...(cl ? { customLabel: cl } : {}) }
+                                        const newEntry: PrescriptionEntry = { id: Date.now(), createdAt: new Date().toISOString(), nbSeances: nb, prescripteur: rxEditForm.prescripteur.trim(), datePrescription: rxEditForm.datePrescription, ...(rxEditDoc ? { document: rxEditDoc } : {}), ...(bt ? { bilanType: bt } : {}), ...(cl ? { customLabel: cl } : {}) }
                                         // Propager le customLabel à TOUTES les prescriptions générique du patient (un seul label par patient pour cette zone)
                                         const nextList = cl
                                           ? [...rxList.map(pr => pr.bilanType === 'generique' ? { ...pr, customLabel: cl } : pr), newEntry]

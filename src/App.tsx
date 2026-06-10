@@ -66,6 +66,14 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { pk, renamePatientInCloud } from './lib/syncEngine'
+import {
+  getClosureTimes as getClosureTimesPure,
+  isTreatmentClosed as isTreatmentClosedPure,
+  isPrescriptionCurrent as isPrescriptionCurrentPure,
+  getTreatmentEpisodes as getTreatmentEpisodesPure,
+  recordCreatedMs,
+} from './lib/treatmentEpisodes'
+import type { EpisodeData, TreatmentEpisode } from './lib/treatmentEpisodes'
 import { buildStoragePath, uploadDocBlobWithRetry, docBlobStatus } from './lib/documentStorage'
 import type { DocReconcileResult, LostDocRef } from './lib/documentStorage'
 import { PatientEditModal } from './components/database/PatientEditModal'
@@ -956,6 +964,7 @@ function App() {
     } else {
       setDbIntermediaires(prev => [...prev, {
         id: Date.now(),
+        createdAt: new Date().toISOString(),
         patientKey: patKey,
         nom: formData.nom,
         prenom: formData.prenom,
@@ -1064,6 +1073,7 @@ Règles :
     } else {
       setDbNotes(prev => [...prev, {
         id: Date.now(),
+        createdAt: new Date().toISOString(),
         patientKey: patKey,
         nom: formData.nom,
         prenom: formData.prenom,
@@ -1200,12 +1210,18 @@ Règles :
   }, [selectedPatient, db, dbLoaded, dbPatientSexe, sexeMapLoaded])
 
   // ── Clôture de prise en charge ───────────────────────────────────────────
+  // La logique d'épisodes (pure, testée) vit dans ./lib/treatmentEpisodes.
+  // Ces wrappers ne font qu'injecter l'état courant. ⚠️ L'appartenance d'un
+  // record à un épisode se base sur son timestamp de création (createdAt),
+  // PAS sur son id : les ids ne sont pas comparables (bilans = petits entiers,
+  // tout devient BIGSERIAL après synchro). Cf. treatmentEpisodes.ts pour le détail.
+  const episodeData = (): EpisodeData => ({
+    db, dbIntermediaires, dbNotes, dbPrescriptions, dbClosedTreatments,
+  })
+
   /** Timestamps (ms) des clôtures pour un (patient, bilanType), triés ASC. */
   const getClosureTimes = (patientKey: string, bilanType: BilanType): number[] =>
-    dbClosedTreatments
-      .filter(c => c.patientKey === patientKey && c.bilanType === bilanType)
-      .map(c => new Date(c.closedAt).getTime())
-      .sort((a, b) => a - b)
+    getClosureTimesPure(dbClosedTreatments, patientKey, bilanType)
 
   /**
    * Un traitement est "clôturé" (au sens de l'épisode courant) SEULEMENT si la
@@ -1213,104 +1229,18 @@ Règles :
    * ou prescription). Dès qu'un nouvel enregistrement arrive après la clôture,
    * on considère qu'un nouvel épisode est ouvert — le traitement redevient actif.
    */
-  const isTreatmentClosed = (patientKey: string, bilanType: BilanType): boolean => {
-    const closureTimes = getClosureTimes(patientKey, bilanType)
-    if (closureTimes.length === 0) return false
-    const latest = closureTimes[closureTimes.length - 1]
-    const hasBilanAfter = db.some(r =>
-      pk(r.nom || 'Anonyme', r.prenom || '') === patientKey
-      && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
-      && r.id > latest
-    )
-    if (hasBilanAfter) return false
-    const hasInterAfter = dbIntermediaires.some(r =>
-      r.patientKey === patientKey
-      && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
-      && r.id > latest
-    )
-    if (hasInterAfter) return false
-    const hasNoteAfter = dbNotes.some(n =>
-      n.patientKey === patientKey
-      && (n.bilanType ?? getBilanType(n.zone ?? '')) === bilanType
-      && n.id > latest
-    )
-    if (hasNoteAfter) return false
-    const rxEntry = dbPrescriptions.find(p => p.patientKey === patientKey)
-    const hasRxAfter = (rxEntry?.prescriptions ?? []).some(pr =>
-      pr.bilanType === bilanType && pr.id > latest
-    )
-    if (hasRxAfter) return false
-    return true
-  }
+  const isTreatmentClosed = (patientKey: string, bilanType: BilanType): boolean =>
+    isTreatmentClosedPure(episodeData(), patientKey, bilanType)
 
   /** Une prescription appartient à l'épisode courant si aucune clôture n'a été
-   *  enregistrée depuis sa création (pr.id > dernière clôture). Utilisé pour
-   *  séparer prescriptions actives (épisode courant) et archivées (anciens
-   *  épisodes) — sans dépendre de isTreatmentClosed qui retourne false dès
-   *  qu'un nouvel épisode démarre. */
-  const isPrescriptionCurrent = (patientKey: string, pr: import('./types').PrescriptionEntry): boolean => {
-    if (!pr.bilanType) return true
-    const closureTimes = getClosureTimes(patientKey, pr.bilanType)
-    if (closureTimes.length === 0) return true
-    return pr.id > closureTimes[closureTimes.length - 1]
-  }
+   *  enregistrée depuis sa création. Utilisé pour séparer prescriptions actives
+   *  (épisode courant) et archivées (anciens épisodes). */
+  const isPrescriptionCurrent = (patientKey: string, pr: import('./types').PrescriptionEntry): boolean =>
+    isPrescriptionCurrentPure(dbClosedTreatments, patientKey, pr)
 
-  /** Épisode de prise en charge pour un (patient, bilanType).
-   *  Un épisode correspond à une "vie" d'une PEC : début à la création, fin à
-   *  la clôture (ou +∞ si toujours actif). Les records (bilans, interms, notes,
-   *  prescriptions) appartiennent à l'épisode dont l'intervalle contient leur id.
-   *  startExclusive : id > startExclusive — endInclusive : id <= endInclusive.
-   *  Le dernier épisode est actif ssi une clôture n'a PAS été suivie par d'autres
-   *  clôtures (id dans [lastClosure, +∞)). */
-  type TreatmentEpisode = {
-    idx: number
-    startExclusive: number
-    endInclusive: number
-    isActive: boolean
-    closure?: ClosedTreatment
-  }
-  const getTreatmentEpisodes = (patientKey: string, bilanType: BilanType): TreatmentEpisode[] => {
-    const closures = dbClosedTreatments
-      .filter(c => c.patientKey === patientKey && c.bilanType === bilanType)
-      .slice()
-      .sort((a, b) => new Date(a.closedAt).getTime() - new Date(b.closedAt).getTime())
-    const eps: TreatmentEpisode[] = []
-    let prev = Number.NEGATIVE_INFINITY
-    closures.forEach((c, i) => {
-      const end = new Date(c.closedAt).getTime()
-      eps.push({ idx: i, startExclusive: prev, endInclusive: end, isActive: false, closure: c })
-      prev = end
-    })
-    // Épisode actif final : uniquement s'il y a au moins un record après la dernière clôture
-    // (ou aucune clôture du tout). Sinon on ne crée pas de carte "active" vide.
-    const hasRecordAfter = (cutoff: number): boolean => {
-      const hitBilan = db.some(r =>
-        pk(r.nom || 'Anonyme', r.prenom || '') === patientKey
-        && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
-        && r.id > cutoff
-      )
-      if (hitBilan) return true
-      const hitInter = dbIntermediaires.some(r =>
-        r.patientKey === patientKey
-        && (r.bilanType ?? getBilanType(r.zone ?? '')) === bilanType
-        && r.id > cutoff
-      )
-      if (hitInter) return true
-      const hitNote = dbNotes.some(n =>
-        n.patientKey === patientKey
-        && (n.bilanType ?? getBilanType(n.zone ?? '')) === bilanType
-        && n.id > cutoff
-      )
-      if (hitNote) return true
-      const rx = dbPrescriptions.find(p => p.patientKey === patientKey)
-      return (rx?.prescriptions ?? []).some(pr => pr.bilanType === bilanType && pr.id > cutoff)
-    }
-    const cutoff = closures.length > 0 ? new Date(closures[closures.length - 1].closedAt).getTime() : Number.NEGATIVE_INFINITY
-    if (closures.length === 0 || hasRecordAfter(cutoff)) {
-      eps.push({ idx: eps.length, startExclusive: cutoff, endInclusive: Number.POSITIVE_INFINITY, isActive: true })
-    }
-    return eps
-  }
+  /** Épisodes de prise en charge pour un (patient, bilanType). */
+  const getTreatmentEpisodes = (patientKey: string, bilanType: BilanType): TreatmentEpisode[] =>
+    getTreatmentEpisodesPure(episodeData(), patientKey, bilanType)
 
   const getLastClosure = (patientKey: string, bilanType: BilanType): ClosedTreatment | undefined =>
     dbClosedTreatments.filter(c => c.patientKey === patientKey && c.bilanType === bilanType).pop()
@@ -1336,23 +1266,29 @@ Règles :
    *  une PEC par erreur (ex. patient "anonyme") et veut s'en débarrasser complètement. */
   const deleteClosedEpisode = (patientKey: string, bilanType: BilanType, ep: TreatmentEpisode) => {
     if (!ep.closure) return
-    const inWin = (id: number) => id > ep.startExclusive && id <= ep.endInclusive
+    // Les bornes de fenêtre sont des ms de clôture ; on teste donc le timestamp
+    // de CRÉATION du record (recordCreatedMs + date clinique), pas son id
+    // (cohérent avec getTreatmentEpisodes).
+    const inWin = (r: { createdAt?: string; id: number }, clinicalDate?: string) => {
+      const t = recordCreatedMs(r, clinicalDate)
+      return t > ep.startExclusive && t <= ep.endInclusive
+    }
     const matchZone = (bt: BilanType | undefined, zone: string | undefined) =>
       (bt ?? getBilanType(zone ?? '')) === bilanType
     setDb(prev => prev.filter(r => !(
       pk(r.nom || 'Anonyme', r.prenom || '') === patientKey
       && matchZone(r.bilanType, r.zone)
-      && inWin(r.id)
+      && inWin(r, r.dateBilan)
     )))
     setDbIntermediaires(prev => prev.filter(r => !(
-      r.patientKey === patientKey && matchZone(r.bilanType, r.zone) && inWin(r.id)
+      r.patientKey === patientKey && matchZone(r.bilanType, r.zone) && inWin(r, r.dateBilan)
     )))
     setDbNotes(prev => prev.filter(n => !(
-      n.patientKey === patientKey && matchZone(n.bilanType, n.zone) && inWin(n.id)
+      n.patientKey === patientKey && matchZone(n.bilanType, n.zone) && inWin(n, n.dateSeance)
     )))
     setDbPrescriptions(prev => prev.map(p => {
       if (p.patientKey !== patientKey) return p
-      return { ...p, prescriptions: (p.prescriptions ?? []).filter(pr => !(pr.bilanType === bilanType && inWin(pr.id))) }
+      return { ...p, prescriptions: (p.prescriptions ?? []).filter(pr => !(pr.bilanType === bilanType && inWin(pr, pr.datePrescription))) }
     }))
     setDbClosedTreatments(prev => prev.filter(c => c.id !== ep.closure!.id))
     setExpandedClosedEpisodes(prev => {
@@ -1572,6 +1508,7 @@ Règles :
       const newId = Math.max(0, ...db.map(r => r.id)) + 1
       const record: BilanRecord = {
         id: newId,
+        createdAt: new Date().toISOString(),
         nom: nomNorm,
         prenom: prenomNorm,
         dateBilan: new Date().toLocaleDateString('fr-FR'),
@@ -3453,6 +3390,7 @@ Mobilité articulaire lombaire
                 const prenomNorm = quickAddData.prenom.trim().replace(/\b\w/g, c => c.toUpperCase())
                 const record: BilanRecord = {
                   id: newId,
+                  createdAt: new Date().toISOString(),
                   nom: nomNorm,
                   prenom: prenomNorm,
                   dateBilan: new Date().toLocaleDateString('fr-FR'),

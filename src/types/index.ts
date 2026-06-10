@@ -107,6 +107,10 @@ export interface BilanRecord {
   compteRendu?: CompteRendu
   /** Erreur dernière tentative de génération du compte rendu (pour retry à la demande). */
   compteRenduError?: string | null
+  /** Indice de précision LOCAL (ISO, sub-jour) posé à la création — NON synchronisé
+   *  (la synchro est un full-replace ; cf. treatmentEpisodes). Pour dater l'épisode
+   *  de PEC, le signal DURABLE est la date clinique (dateBilan), pas ce champ. */
+  createdAt?: string
 }
 
 export type CompteRenduSectionId =
@@ -250,6 +254,10 @@ export interface BilanIntermediaireRecord {
   ficheExercice?: FicheExercice
   /** 'sortie' = bilan de fin de PEC, sinon bilan intermédiaire classique */
   type?: 'intermediaire' | 'sortie'
+  /** Indice de précision LOCAL (ISO, sub-jour) posé à la création — NON synchronisé
+   *  (la synchro est un full-replace ; cf. treatmentEpisodes). La date clinique
+   *  (dateBilan/dateSeance/datePrescription) reste le signal DURABLE d'épisode. */
+  createdAt?: string
 }
 
 export interface AnalyseSeanceMini {
@@ -294,6 +302,10 @@ export interface NoteSeanceRecord {
   }
   analyseIA?: AnalyseSeanceMini
   ficheExercice?: FicheExercice
+  /** Indice de précision LOCAL (ISO, sub-jour) posé à la création — NON synchronisé
+   *  (la synchro est un full-replace ; cf. treatmentEpisodes). La date clinique
+   *  (dateBilan/dateSeance/datePrescription) reste le signal DURABLE d'épisode. */
+  createdAt?: string
 }
 
 export interface BanqueExerciceEntry {
@@ -332,6 +344,10 @@ export interface PrescriptionEntry {
   bilanType?: BilanType
   /** Libellé personnalisé (utile pour renommer "Autres bilans" en ex: "ATM"). */
   customLabel?: string
+  /** Indice de précision LOCAL (ISO, sub-jour) posé à la création — NON synchronisé
+   *  (la synchro est un full-replace ; cf. treatmentEpisodes). La date clinique
+   *  (dateBilan/dateSeance/datePrescription) reste le signal DURABLE d'épisode. */
+  createdAt?: string
 }
 
 export interface PatientPrescription {
