@@ -1,5 +1,6 @@
 import type { LetterType, LetterFormData, BilanRecord, BilanIntermediaireRecord, NoteSeanceRecord } from '../types'
 import { computeAge } from './clinicalPrompt'
+import { parseFrDate } from './parseFrDate'
 
 export const LETTER_TYPES: Array<{
   id: LetterType
@@ -437,14 +438,6 @@ export function letterTitleFor(type: LetterType, d: LetterFormData): string {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Pré-remplissage riche d'un courrier depuis les données patient
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Convertit une date française "jj/mm/aaaa" en timestamp pour tri
-function parseFrDate(s: string | undefined): number {
-  if (!s) return 0
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (!m) return 0
-  return new Date(+m[3], +m[2] - 1, +m[1]).getTime()
-}
 
 export function buildPatientPrefill(
   patientKey: string,

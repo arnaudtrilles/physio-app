@@ -5,6 +5,7 @@ import type {
   LetterFormData,
 } from '../types'
 import { computeAge } from './clinicalPrompt'
+import { parseFrDate } from './parseFrDate'
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Confection IA d'UNE zone d'un courrier (≠ courrier complet).
@@ -46,12 +47,6 @@ const fmt = (label: string, v: string | undefined | null): string =>
   isFilled(v) ? `- ${label} : ${v.trim()}` : ''
 
 const join = (parts: string[]): string => parts.filter(p => p && p.trim() !== '').join('\n')
-
-const parseFrDate = (s: string | undefined): number => {
-  if (!s) return 0
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Dossier patient compact — sert de source factuelle pour toute confection.

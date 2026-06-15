@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { parseFrDate } from '../utils/parseFrDate'
 
 /* ──────────────────────────────────────────────────────────────────────────
  * ScoreEvolutionChart
@@ -49,13 +50,6 @@ const SCORE_LABELS: Record<string, string> = {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
-
-function parseFrDate(s: string | undefined): number {
-  if (!s) return 0
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (!m) return 0
-  return new Date(+m[3], +m[2] - 1, +m[1]).getTime()
-}
 
 function isNum(v: unknown): v is number {
   return typeof v === 'number' && !isNaN(v)

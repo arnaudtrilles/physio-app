@@ -66,6 +66,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { useAuth } from './hooks/useAuth'
 import { useSync } from './hooks/useSync'
 import { useDocumentSync } from './hooks/useDocumentSync'
+import { parseFrDate } from './utils/parseFrDate'
 import { pk, renamePatientInCloud } from './lib/syncEngine'
 import {
   getClosureTimes as getClosureTimesPure,
@@ -1176,16 +1177,6 @@ Règles :
      .replace(/^[\-\*]\s+/gm, '- ')
      .replace(/`(.+?)`/g, '$1')
      .replace(/\[(.+?)\]\(.+?\)/g, '$1')
-
-  // Parse dd/mm/yyyy → Date (fallback: id-based ordering handled separately)
-  const parseFrDate = (raw: string | undefined): number => {
-    if (!raw) return 0
-    const parts = raw.split('/')
-    if (parts.length !== 3) return 0
-    const [d, m, y] = parts.map(Number)
-    const t = new Date(y, m - 1, d).getTime()
-    return isNaN(t) ? 0 : t
-  }
 
   const patientGeneralScore = (key: string): number | null => {
     // Collecte chronologique de TOUS les points EVN/EVA du patient

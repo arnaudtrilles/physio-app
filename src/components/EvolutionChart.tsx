@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { parseFrDate } from '../utils/parseFrDate'
 
 /**
  * Graphique d'évolution EVN/EVA dans le temps pour une zone donnée.
@@ -24,13 +25,6 @@ interface EvolutionChartProps {
   compact?: boolean
   /** Pourcentage d'amélioration globale (ex: 40 = +40%) */
   improvementPct?: number | null
-}
-
-function parseFrDate(s: string | undefined): number {
-  if (!s) return 0
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (!m) return 0
-  return new Date(+m[3], +m[2] - 1, +m[1]).getTime()
 }
 
 const COLORS = {
