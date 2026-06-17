@@ -5,29 +5,20 @@ import { useTheme } from './hooks/useTheme'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
-// Composants de bilan : un seul est monté à la fois (rendu exclusif par
-// bilanType). Chargés en lazy → un chunk par type, chargé seulement quand ce
-// type est ouvert (≈470 Ko sortis du chunk principal). Les *Handle restent en
-// import type (effacés au build, aucun coût runtime). Le rendu est enveloppé
-// dans un <Suspense> (zone bilan_zone). lazy + forwardRef transmet la ref.
-const BilanEpaule = lazy(() => import('./components/bilans/BilanEpaule').then(m => ({ default: m.BilanEpaule })))
+import { LazyFallback } from './components/ui/LazyFallback'
+// Formulaires de bilan : seuls les types *Handle restent ici (effacés au build)
+// car les refs impératives sont déclarées dans App et lues par getBilanData. Le
+// montage lazy (un chunk par type) et le <Suspense> vivent dans <BilanZoneForms>.
 import type { BilanEpauleHandle } from './components/bilans/BilanEpaule'
-const BilanCheville = lazy(() => import('./components/bilans/BilanCheville').then(m => ({ default: m.BilanCheville })))
 import type { BilanChevilleHandle } from './components/bilans/BilanCheville'
-const BilanGenou = lazy(() => import('./components/bilans/BilanGenou').then(m => ({ default: m.BilanGenou })))
 import type { BilanGenouHandle } from './components/bilans/BilanGenou'
-const BilanHanche = lazy(() => import('./components/bilans/BilanHanche').then(m => ({ default: m.BilanHanche })))
 import type { BilanHancheHandle } from './components/bilans/BilanHanche'
-const BilanCervical = lazy(() => import('./components/bilans/BilanCervical').then(m => ({ default: m.BilanCervical })))
 import type { BilanCervicalHandle } from './components/bilans/BilanCervical'
-const BilanLombaire = lazy(() => import('./components/bilans/BilanLombaire').then(m => ({ default: m.BilanLombaire })))
 import type { BilanLombaireHandle } from './components/bilans/BilanLombaire'
-const BilanGenerique = lazy(() => import('./components/bilans/BilanGenerique').then(m => ({ default: m.BilanGenerique })))
 import type { BilanGeneriqueHandle } from './components/bilans/BilanGenerique'
-const BilanGeriatrique = lazy(() => import('./components/bilans/BilanGeriatrique').then(m => ({ default: m.BilanGeriatrique })))
 import type { BilanGeriatriqueHandle } from './components/bilans/BilanGeriatrique'
-const BilanDrainageLymphatique = lazy(() => import('./components/bilans/BilanDrainageLymphatique').then(m => ({ default: m.BilanDrainageLymphatique })))
 import type { BilanDrainageLymphatiqueHandle } from './components/bilans/BilanDrainageLymphatique'
+import { BilanZoneForms } from './components/bilans/BilanZoneForms'
 const BilanIntermediaire = lazy(() => import('./components/bilans/BilanIntermediaire').then(m => ({ default: m.BilanIntermediaire })))
 import type { BilanIntermediaireHandle } from './components/bilans/BilanIntermediaire'
 const BilanIntermediaireGeriatrique = lazy(() => import('./components/bilans/BilanIntermediaireGeriatrique').then(m => ({ default: m.BilanIntermediaireGeriatrique })))
@@ -96,16 +87,12 @@ import { ZonePickerSheet } from './components/shared/ZonePicker'
 import { IdentityStep } from './components/wizard/IdentityStep'
 import { VerbalConsentStep } from './components/consent/VerbalConsentStep'
 import { GeneralInfoProvider } from './components/bilans/InfosGeneralesSection'
+import { DocumentAttachmentSection } from './components/DocumentAttachmentSection'
 import './App.css'
 import { phCapture, phIdentify, phReset, phOptIn, phOptOut, phIsOptedIn } from './lib/posthog'
 
 type Step = 'dashboard' | 'database' | 'profile' | 'settings' | 'pricing' | 'identity' | 'consent' | 'bilan_zone' | 'bilan_intermediaire' | 'note_intermediaire' | 'note_seance' | 'pdf_preview' | 'analyse_ia' | 'evolution_ia' | 'fiche_exercice' | 'letter' | 'bilan_sortie'
 
-const LazyFallback = () => (
-  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
-    <div className="spinner" style={{ width: 28, height: 28 }} />
-  </div>
-)
 
 class ErrorBoundary extends Component<{ children: ReactNode; onReset?: () => void }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
@@ -433,7 +420,6 @@ function App() {
   const [patientMode, setPatientMode] = useState<'new' | 'existing'>('new')
   const [silhouetteData, setSilhouetteData] = useState<Record<string, unknown>>({})
   const [bilanDocuments, setBilanDocuments] = useState<BilanDocument[]>([])
-  const [showDocSourceMenu, setShowDocSourceMenu] = useState(false)
   const [rxEditPopup, setRxEditPopup] = useState<{ mode: 'add' | 'edit'; entry?: import('./types').PrescriptionEntry } | null>(null)
   const [rxEditForm, setRxEditForm] = useState<{ nbSeances: string; prescripteur: string; datePrescription: string; seancesAnterieures: string; bilanType: BilanType | ''; customLabel: string }>({ nbSeances: '', prescripteur: '', datePrescription: '', seancesAnterieures: '', bilanType: '', customLabel: '' })
   const [orphanPopupOpen, setOrphanPopupOpen] = useState(false)
@@ -2660,22 +2646,23 @@ Règles :
           <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width: `${stepProgress}%` }} /></div>
 
           <div className="scroll-area" style={{ paddingBottom: '5.5rem' }}>
-            {(() => {
-              // patientKey transmis aux composants Bilan pour scoper les recoveries
-              // vocaux (sinon une dictée orpheline d'un patient ressort sur un autre).
-              const currentPatientKey = pk(formData.nom || 'Anonyme', formData.prenom)
-              return <Suspense fallback={<LazyFallback />}><>
-            {getBilanType(selectedBodyZone ?? '') === 'epaule'   && <BilanEpaule   key={currentBilanId ?? 'new'} ref={bilanEpauleRef}   initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'cheville' && <BilanCheville key={currentBilanId ?? 'new'} ref={bilanChevilleRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'genou'    && <BilanGenou    key={currentBilanId ?? 'new'} ref={bilanGenouRef}    initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'hanche'   && <BilanHanche   key={currentBilanId ?? 'new'} ref={bilanHancheRef}   initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'cervical' && <BilanCervical key={currentBilanId ?? 'new'} ref={bilanCervicalRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'lombaire' && <BilanLombaire key={currentBilanId ?? 'new'} ref={bilanLombaireRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'generique'&& <BilanGenerique key={currentBilanId ?? 'new'} ref={bilanGeneriqueRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'geriatrique' && <BilanGeriatrique key={currentBilanId ?? 'new'} ref={bilanGeriatriqueRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-            {getBilanType(selectedBodyZone ?? '') === 'drainage-lymphatique' && <BilanDrainageLymphatique key={currentBilanId ?? 'new'} ref={bilanDrainageLymphatiqueRef} initialData={currentBilanDataOverride ?? undefined} patientKey={currentPatientKey} />}
-              </></Suspense>
-            })()}
+            <BilanZoneForms
+              bilanType={getBilanType(selectedBodyZone ?? '')}
+              bilanId={currentBilanId}
+              initialData={currentBilanDataOverride ?? undefined}
+              patientKey={pk(formData.nom || 'Anonyme', formData.prenom)}
+              refs={{
+                epaule: bilanEpauleRef,
+                cheville: bilanChevilleRef,
+                genou: bilanGenouRef,
+                hanche: bilanHancheRef,
+                cervical: bilanCervicalRef,
+                lombaire: bilanLombaireRef,
+                generique: bilanGeneriqueRef,
+                geriatrique: bilanGeriatriqueRef,
+                drainageLymphatique: bilanDrainageLymphatiqueRef,
+              }}
+            />
 
             {/* ── Note de fin de bilan ── */}
             <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
@@ -2712,105 +2699,12 @@ Règles :
             </div>
 
             {/* ── Documents joints ── */}
-            <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-              <label style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--primary-dark)', display: 'block', marginBottom: 4 }}>
-                Documents joints
-              </label>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 10px' }}>
-                Radios, comptes rendus médicaux, IRM… L'analyse en tiendra compte.
-              </p>
-              {bilanDocuments.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                  {bilanDocuments.map((doc, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--secondary)', borderRadius: 8, padding: '6px 10px' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                      </svg>
-                      <span style={{ flex: 1, fontSize: '0.8rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</span>
-                      <button onClick={() => setBilanDocuments(prev => prev.filter((_, i) => i !== idx))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Hidden file inputs for each source */}
-              {(['camera', 'gallery', 'files'] as const).map(source => (
-                <input key={source} id={`doc-input-${source}`} type="file"
-                  accept={source === 'files' ? 'image/*,application/pdf' : 'image/*'}
-                  {...(source === 'camera' ? { capture: 'environment' } : {})}
-                  multiple={source !== 'camera'}
-                  style={{ display: 'none' }}
-                  onChange={e => {
-                    const files = Array.from(e.target.files ?? [])
-                    files.forEach(file => {
-                      const reader = new FileReader()
-                      reader.onload = async ev => {
-                        const dataUrl = ev.target?.result as string
-                        const mimeType = file.type || 'application/octet-stream'
-                        if (mimeType.startsWith('image/')) {
-                          setMaskingQueue(prev => [...prev, { dataUrl, name: file.name, mimeType }])
-                        } else if (mimeType === 'application/pdf') {
-                          showToast('Conversion du PDF en images…', 'info')
-                          try {
-                            const { pdfToImages } = await import('./utils/pdfToImages')
-                            const images = await pdfToImages(dataUrl)
-                            const baseName = file.name.replace(/\.pdf$/i, '')
-                            const items = images.map((imgDataUrl, i) => ({
-                              dataUrl: imgDataUrl,
-                              name: images.length > 1 ? `${baseName} — page ${i + 1}.jpg` : `${baseName}.jpg`,
-                              mimeType: 'image/jpeg',
-                            }))
-                            setMaskingQueue(prev => [...prev, ...items])
-                          } catch (err) {
-                            console.error('Erreur conversion PDF', err)
-                            showToast('Erreur lors de la conversion du PDF', 'error')
-                          }
-                        } else {
-                          showToast('Format non supporté. Uniquement images et PDF.', 'error')
-                        }
-                      }
-                      reader.readAsDataURL(file)
-                    })
-                    e.target.value = ''
-                  }} />
-              ))}
-              <div style={{ position: 'relative' }}>
-                <button type="button" onClick={() => setShowDocSourceMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-xl)', border: '1.5px solid var(--border-color)', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600, background: 'var(--input-bg)', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                  </svg>
-                  Ajouter un document
-                </button>
-                {showDocSourceMenu && (
-                  <>
-                  <div onClick={() => setShowDocSourceMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
-                  <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', zIndex: 20, overflow: 'hidden' }}>
-                    {[
-                      { id: 'camera', label: 'Prendre une photo', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> },
-                      { id: 'gallery', label: 'Galerie photo', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
-                      { id: 'files', label: 'Fichiers', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
-                    ].map(opt => (
-                      <button key={opt.id} type="button"
-                        onClick={() => { setShowDocSourceMenu(false); document.getElementById(`doc-input-${opt.id}`)?.click() }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '0.7rem 1rem', background: 'none', border: 'none', borderBottom: '1px solid var(--border-color)', cursor: 'pointer', fontSize: '0.84rem', color: 'var(--text-main)', fontWeight: 500 }}>
-                        <span style={{ color: 'var(--primary)', display: 'flex' }}>{opt.icon}</span>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  </>
-                )}
-              </div>
-              <p style={{ fontSize: '0.7rem', color: '#92400e', margin: '6px 0 0', lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Masquez les infos patient (nom, date de naissance, n° sécu) avant l'envoi à l'IA.
-              </p>
-            </div>
+            <DocumentAttachmentSection
+              documents={bilanDocuments}
+              setDocuments={setBilanDocuments}
+              setMaskingQueue={setMaskingQueue}
+              showToast={showToast}
+            />
 
             {/* ── Actions (fin de page) ── */}
             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
