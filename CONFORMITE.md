@@ -12,9 +12,11 @@
 > mesure, base légale retenue) relèvent du conseil ; ce document fournit les
 > faits, pas les conclusions de droit.
 >
-> **Version** — v1.1 · 18 juin 2026 · cartographie IA corrigée (deux fournisseurs
-> en production : **Azure OpenAI** pour l'audio + **Anthropic Claude** pour le texte ;
-> **Gemini/Vertex dormant**). À mettre à jour à chaque évolution des traitements.
+> **Version** — v1.2 · 18 juin 2026 · inventaire des sous-traitants complété (ajout
+> **Sentry, Upstash, WhatsApp/Meta, jsDelivr** au §7.1, via audit exhaustif des flux
+> sortants) ; cartographie IA : **Azure OpenAI** (audio, région UE) + **Anthropic
+> Claude** (texte, US) ; **Gemini/Vertex dormant**. À mettre à jour à chaque
+> évolution des traitements.
 
 ---
 
@@ -172,9 +174,16 @@ de remplacements de scrubbing), sans réintroduire les données nominatives.
 | **Vercel** | Hébergement front + fonctions serverless | Trafic applicatif, logs | UE/US selon config | `/api/*` |
 | **Stripe** | Paiement abonnement praticien | Métadonnées d'abonnement (userId), **pas de PHI** | UE/US, DPC Stripe | `api/stripe-webhook.ts`, `api/create-checkout-session.ts` |
 | **PostHog** | Mesure d'audience | Événements d'usage, **pas de PHI** | ✅ **hôte UE** (`eu.i.posthog.com`), enregistrement de session **désactivé** | `src/lib/posthog.ts:4,16-20` |
+| **Sentry** | Suivi d'erreurs / monitoring (frontend + dashboard admin) | Erreurs, stack traces, contexte d'exécution ; **replays de session sur erreur** (`maskAllText` + `blockAllMedia` ; session replay off, erreur 100 %) — pas de PHI en principe, replay à qualifier | ⚠️ **câblé, actif uniquement si `VITE_SENTRY_DSN` est défini** (prod — vide en local) ; **sentry.io US par défaut** (région EU non épinglée) → transfert hors UE (§7.2) | `src/main.tsx:9-23`, `vite.config.ts:398-401`, `api/admin-stats.ts:153-179` |
+| **Upstash Redis** | Rate-limiting (quotas par utilisateur/IP) | Clés `physio:<endpoint>:user:<userId>` / `:ip:<ip>` + compteurs = **identifiants** (userId, IP) ; **pas de PHI clinique** | ⚠️ **câblé, actif si `UPSTASH_REDIS_REST_URL/TOKEN` définis** (repli mémoire sinon) ; région managée à confirmer (UE vs US) ; DPA à obtenir | `api/_ratelimit.ts:24-52` |
+| **WhatsApp / Meta** (`wa.me`) | Partage de courriers (déclenché par le praticien) | **Nom + prénom patient** dans le paramètre d'URL `wa.me?text=` ; le PDF (nom + données cliniques) est téléchargé localement puis **attaché manuellement** par le praticien | ⚠️ infrastructure Meta (hors UE) — canal grand public, **pas de DPA / pas HDS** | `src/components/letters/LetterGenerator.tsx:402-451` |
+| **jsDelivr** (CDN) | Distribution du worker PDF.js (rendu PDF côté client) | **Aucune donnée patient** ; seulement **IP + User-Agent** du praticien au chargement du script | ⚠️ CDN tiers (global, hors UE possible) — alternative : self-hosting du worker | `src/utils/pdfToImages.ts:6` |
 
 > **Action** : constituer/centraliser les **DPA** (accords de sous-traitance
-> art. 28) pour chaque sous-traitant et tenir le registre des sous-traitants.
+> art. 28) pour chaque sous-traitant et tenir le registre des sous-traitants. DPA
+> manquants à obtenir en priorité : **Anthropic, Azure (Microsoft), Sentry,
+> Upstash** ; **Supabase, Vercel, Stripe, PostHog** à vérifier. **WhatsApp/Meta**
+> n'offre **pas** de DPA exploitable pour du PHI → cf. §7.2.
 
 ### 7.2 Transferts IA hors UE — cartographie réelle (écart hds-2)
 
@@ -202,6 +211,25 @@ L'application utilise **deux fournisseurs IA en production** (+ un dormant) :
   toutefois provisionnés (`GCP_REGION=europe-west9`, avec un repli endpoint `global`
   non épinglé). *Action* : supprimer la fonction et révoquer le compte de service,
   ou la documenter comme sous-traitant actif.
+
+**Autres transferts hors UE (non-IA)** — au-delà des trois flux IA ci-dessus,
+l'inventaire des sous-traitants (§7.1) recense trois autres destinations hors UE
+possibles :
+
+- **Sentry (suivi d'erreurs)** — s'il est activé en prod (`VITE_SENTRY_DSN`
+  défini), il appelle le **même encadrement chap. V que Claude** (sentry.io US par
+  défaut). Atténuation : `maskAllText` + `blockAllMedia`, replay **sur erreur
+  seulement** ; le risque résiduel (replay déclenché sur une page affichant un
+  dossier patient) reste à qualifier. Option : projet Sentry en **région UE**.
+- **WhatsApp / Meta** — le partage de courrier place **nom + prénom patient** dans
+  l'URL `wa.me` (le PDF clinique étant ensuite attaché manuellement). Canal grand
+  public **sans DPA ni garantie HDS**. *Recommandation* : retirer l'identité patient
+  de l'URL et/ou retirer ce canal pour les documents de santé, ou l'encadrer
+  explicitement comme une action du praticien sous sa responsabilité.
+- **jsDelivr (CDN)** — ne transmet **aucune donnée patient**, mais l'**IP** du
+  praticien (cf. jurisprudence « Google Fonts »). *Recommandation* : self-héberger
+  le worker PDF.js (déjà présent dans `node_modules/pdfjs-dist`) pour supprimer ce
+  sous-traitant.
 
 ---
 
