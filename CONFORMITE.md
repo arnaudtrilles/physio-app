@@ -34,7 +34,7 @@ dossier). Le moteur d'inférence clinique (diagnostic, probabilités, pronostic)
 | Statut dispositif médical (re-cadrage hors-DM) | ✅ en place |
 | Consentement verbal documenté | ✅ en place |
 | **Hébergement certifié HDS (France)** | ❌ **écart bloquant** (Supabase non HDS) |
-| **Transfert IA hors UE** | ⚠️ **écart partiel** : texte → Anthropic **US** (pseudonymisé) · audio → **Azure UE-capable** (région à confirmer) |
+| **Transfert IA hors UE** | ⚠️ **écart résiduel ciblé** : audio → **Azure région UE** (confirmée par l'exploitant ✅) · reste le texte → Anthropic **US** (pseudonymisé) |
 | **Droit à l'effacement effectif en cloud** | ⚠️ **partiel** (soft-delete only) |
 | Conservation / archivage | ⚠️ politique écrite mais non appliquée |
 | Chiffrement au repos local (IndexedDB) | ❌ absent |
@@ -119,6 +119,8 @@ texte).**
 > Le scrubbing (#1) s'applique au **texte retourné** par Azure, **avant** envoi à
 > Claude ; il ne masque **pas** l'audio lui-même. La maîtrise de ce flux repose donc
 > sur la **région UE d'Azure** (§7.2) et le DPA Microsoft, pas sur la pseudonymisation.
+> La ressource Azure est **configurée en région UE** (confirmée par l'exploitant) ;
+> **archiver la preuve** (capture portail Azure de la région + DPA Microsoft).
 
 | # | Mécanisme | Fichier | Ce qu'il fait |
 |---|---|---|---|
@@ -165,7 +167,7 @@ de remplacements de scrubbing), sans réintroduire les données nominatives.
 |---|---|---|---|---|
 | **Supabase** | Base de données, auth, stockage documents | Toutes les données patient (synchronisées) | ❌ **non certifié HDS** (voir §8) | `src/lib/supabase.ts` |
 | **Anthropic (Claude)** | IA **texte** : chat assistant, courriers, synthèses, fiches exercices | Prompts **pseudonymisés** (§5) + documents masqués | ⚠️ **endpoint US par défaut** (aucun épinglage UE) | `api/claude.ts`, `src/utils/claudeClient.ts` |
-| **Azure OpenAI** | IA **audio→texte** : transcription des dictées et séances | **Audio brut** de la séance (non scrubbé — voir §5) | ⚠️ **région à confirmer** dans le portail Azure (ressource `physio-app-bilan` ; UE-capable, ex. France Central) | `api/transcribe.ts` |
+| **Azure OpenAI** | IA **audio→texte** : transcription des dictées et séances | **Audio brut** de la séance (non scrubbé — voir §5) | ✅ **région UE** (confirmée par l'exploitant ; archiver preuve portail + DPA Microsoft) | `api/transcribe.ts` |
 | **Google Cloud (Vertex AI / Gemini)** | IA texte (ancien moteur, remplacé par Claude) | — | 🟡 **dormant** : `GCP_REGION=europe-west9` (Paris) mais **aucun appel runtime** ; fonction + compte de service GCP encore provisionnés (repli endpoint `global` non épinglé) | `api/gemini.ts` |
 | **Vercel** | Hébergement front + fonctions serverless | Trafic applicatif, logs | UE/US selon config | `/api/*` |
 | **Stripe** | Paiement abonnement praticien | Métadonnées d'abonnement (userId), **pas de PHI** | UE/US, DPC Stripe | `api/stripe-webhook.ts`, `api/create-checkout-session.ts` |
@@ -185,14 +187,15 @@ L'application utilise **deux fournisseurs IA en production** (+ un dormant) :
   contiennent en principe pas de données nominatives. *Écart résiduel* : un
   transfert hors UE, même de données pseudonymisées de santé, appelle un
   encadrement (chap. V) — options en §14 (D2).
-- **Audio → Azure OpenAI (`api/transcribe.ts`) — UE-capable, à confirmer.** La
+- **Audio → Azure OpenAI (`api/transcribe.ts`) — région UE confirmée.** La
   transcription envoie l'**audio brut** de la séance (donnée la **moins** minimisée
   du pipeline : elle peut contenir le nom prononcé) à la ressource Azure
-  `physio-app-bilan`. Azure OpenAI permet une **résidence des données en UE**, mais
-  la **région réelle de la ressource n'est pas lisible dans le code** (le hostname
-  `*.openai.azure.com` ne l'encode pas) : **à confirmer dans le portail Azure** que
-  la ressource est dans une région UE, et à couvrir par le **DPA Microsoft / les
-  Clauses Contractuelles Types**.
+  `physio-app-bilan`, **configurée en région UE** (confirmé par l'exploitant). La
+  région n'étant pas lisible dans le code (le hostname `*.openai.azure.com` ne
+  l'encode pas), **archiver une preuve** : capture du portail Azure montrant la
+  région de la ressource + **DPA Microsoft / CCT**. Sous réserve de cette preuve,
+  le flux audio (le plus identifiant) **reste dans l'UE** → écart hors-UE **fermé**
+  pour l'audio.
 - **Gemini / Vertex AI (`api/gemini.ts`) — dormant.** Plus aucun appel runtime (le
   client a migré vers Claude ; `callGemini` n'est qu'un alias rétro-compatible de
   `callClaude`). La fonction serverless et le **compte de service GCP** restent
@@ -308,7 +311,7 @@ purgés ou neutralisés.
 | # | Décision | Impact | Options |
 |---|---|---|---|
 | D1 | **Hébergeur HDS** cible (France) | Bloquant lancement FR | OVHcloud HDS · Scaleway · AWS HDS · Azure HDS · (pilote CH d'abord) |
-| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : confirmer la région UE de la ressource `physio-app-bilan` + DPA Microsoft · **Gemini** : supprimer la fonction dormante ou la documenter |
+| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : région UE **confirmée** par l'exploitant — archiver preuve portail + DPA Microsoft · **Gemini** : supprimer la fonction dormante ou la documenter |
 | D3 | **Base légale** du traitement principal | Régime des droits | Mission de soin · Consentement |
 | D4 | **Durées de conservation** | art. 5.1.e | Confirmer 20 ans FR/CH ou ajuster |
 | D5 | **Mode d'effacement** (erasure-1) | art. 17 | Suppression cascade auto · suppression sur demande tracée |
@@ -321,7 +324,7 @@ purgés ou neutralisés.
 ## 15. Plan d'action priorisé (proposition)
 
 1. **Bloquants lancement FR** — D1 (hébergeur HDS) + D2 (région UE pour l'IA :
-   **confirmer/forcer la région UE d'Azure** pour l'audio — gain rapide — et
+   région UE d'Azure **confirmée** pour l'audio — archiver la preuve — reste à
    encadrer le flux texte Claude US ; supprimer la fonction Gemini dormante). Sans
    eux : lancer en **pilote CH** ou sans données réelles.
 2. **Droits & preuve** — migration DB pour D5 (effacement en cascade) et le
