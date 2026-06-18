@@ -12,8 +12,9 @@
 > mesure, base légale retenue) relèvent du conseil ; ce document fournit les
 > faits, pas les conclusions de droit.
 >
-> **Version** — v1 · 18 juin 2026 · à mettre à jour à chaque évolution des
-> traitements.
+> **Version** — v1.1 · 18 juin 2026 · cartographie IA corrigée (deux fournisseurs
+> en production : **Azure OpenAI** pour l'audio + **Anthropic Claude** pour le texte ;
+> **Gemini/Vertex dormant**). À mettre à jour à chaque évolution des traitements.
 
 ---
 
@@ -28,12 +29,12 @@ dossier). Le moteur d'inférence clinique (diagnostic, probabilités, pronostic)
 
 | Domaine | Statut |
 |---|---|
-| Minimisation / pseudonymisation avant envoi IA | ✅ en place (4 mécanismes) |
+| Minimisation / pseudonymisation avant envoi IA | ✅ flux **texte** (4 mécanismes) · ⚠️ **audio brut** envoyé à Azure (non scrubbable) |
 | Sécurité applicative (RLS, purge locale, API) | ✅ en place |
 | Statut dispositif médical (re-cadrage hors-DM) | ✅ en place |
 | Consentement verbal documenté | ✅ en place |
 | **Hébergement certifié HDS (France)** | ❌ **écart bloquant** (Supabase non HDS) |
-| **Transfert IA hors UE (Anthropic US)** | ❌ **écart** (pas de région UE) |
+| **Transfert IA hors UE** | ⚠️ **écart partiel** : texte → Anthropic **US** (pseudonymisé) · audio → **Azure UE-capable** (région à confirmer) |
 | **Droit à l'effacement effectif en cloud** | ⚠️ **partiel** (soft-delete only) |
 | Conservation / archivage | ⚠️ politique écrite mais non appliquée |
 | Chiffrement au repos local (IndexedDB) | ❌ absent |
@@ -108,12 +109,20 @@ Preuves dans le code :
 
 ## 5. Minimisation et pseudonymisation (RGPD art. 5.1.c et art. 25)
 
-Quatre mécanismes limitent les données identifiantes transmises au sous-traitant
-IA. **Aucune donnée nominative n'est censée parvenir à Anthropic.**
+Quatre mécanismes limitent les données identifiantes transmises à l'IA **pour les
+flux texte**. **Aucune donnée nominative n'est censée parvenir à Anthropic (Claude,
+texte).**
+
+> ⚠️ **Réserve audio (importante)** : la transcription envoie l'**audio brut** de la
+> séance — la donnée la **moins** minimisée du pipeline, car elle peut contenir le
+> nom du patient prononcé à voix haute — à **Azure OpenAI** (`api/transcribe.ts`).
+> Le scrubbing (#1) s'applique au **texte retourné** par Azure, **avant** envoi à
+> Claude ; il ne masque **pas** l'audio lui-même. La maîtrise de ce flux repose donc
+> sur la **région UE d'Azure** (§7.2) et le DPA Microsoft, pas sur la pseudonymisation.
 
 | # | Mécanisme | Fichier | Ce qu'il fait |
 |---|---|---|---|
-| 1 | Scrubbing de transcription | `src/utils/transcriptionScrub.ts:70-96` | Masque, avant envoi audio→IA : nom/prénom (depuis le contexte patient) → `[PATIENT]`, téléphone FR → `[TELEPHONE]`, e-mail → `[EMAIL]`, NIR → `[NIR]`, adresse → `[ADRESSE]`, code postal+ville → `[VILLE]` |
+| 1 | Scrubbing de transcription | `src/utils/transcriptionScrub.ts:70-96` (appelé `voiceBilanClient.ts:122,419,454`) | Masque, sur le **texte de transcription retourné par Azure** (avant transmission à Claude) : nom/prénom (depuis le contexte patient) → `[PATIENT]`, téléphone FR → `[TELEPHONE]`, e-mail → `[EMAIL]`, NIR → `[NIR]`, adresse → `[ADRESSE]`, code postal+ville → `[VILLE]` |
 | 2 | Pseudonymisation des courriers | `src/utils/pseudonymize.ts:36-85` | Remplace nom/prénom/destinataire par des placeholders et la date de naissance par l'âge ; l'IA ne voit que le formulaire pseudonymisé ; réinjection des vraies valeurs **côté client** après génération |
 | 3 | Scanner PII pré-envoi | `src/utils/piiScanner.ts:102-157` | Détecte 13 catégories de PII dans les champs libres avant envoi, avec liste blanche de ~80 acronymes cliniques (EVN, EVA, IRM, KOOS…) pour éviter les faux positifs ; alerte le praticien |
 | 4 | Masquage de documents | `src/components/DocumentMasker.tsx:18-162` | Outil de caviardage des zones sensibles (nom, DDN, n° sécu, signature) sur les documents joints avant analyse IA ; confirmation forcée |
@@ -155,7 +164,9 @@ de remplacements de scrubbing), sans réintroduire les données nominatives.
 | Sous-traitant | Rôle | Données reçues | Localisation | Référence code |
 |---|---|---|---|---|
 | **Supabase** | Base de données, auth, stockage documents | Toutes les données patient (synchronisées) | ❌ **non certifié HDS** (voir §8) | `src/lib/supabase.ts` |
-| **Anthropic (Claude)** | IA (transcription, courriers, synthèse) | Prompts **pseudonymisés** + documents masqués | ⚠️ **endpoint US par défaut** | `api/claude.ts`, `src/utils/claudeSecure.ts` |
+| **Anthropic (Claude)** | IA **texte** : chat assistant, courriers, synthèses, fiches exercices | Prompts **pseudonymisés** (§5) + documents masqués | ⚠️ **endpoint US par défaut** (aucun épinglage UE) | `api/claude.ts`, `src/utils/claudeClient.ts` |
+| **Azure OpenAI** | IA **audio→texte** : transcription des dictées et séances | **Audio brut** de la séance (non scrubbé — voir §5) | ⚠️ **région à confirmer** dans le portail Azure (ressource `physio-app-bilan` ; UE-capable, ex. France Central) | `api/transcribe.ts` |
+| **Google Cloud (Vertex AI / Gemini)** | IA texte (ancien moteur, remplacé par Claude) | — | 🟡 **dormant** : `GCP_REGION=europe-west9` (Paris) mais **aucun appel runtime** ; fonction + compte de service GCP encore provisionnés (repli endpoint `global` non épinglé) | `api/gemini.ts` |
 | **Vercel** | Hébergement front + fonctions serverless | Trafic applicatif, logs | UE/US selon config | `/api/*` |
 | **Stripe** | Paiement abonnement praticien | Métadonnées d'abonnement (userId), **pas de PHI** | UE/US, DPC Stripe | `api/stripe-webhook.ts`, `api/create-checkout-session.ts` |
 | **PostHog** | Mesure d'audience | Événements d'usage, **pas de PHI** | ✅ **hôte UE** (`eu.i.posthog.com`), enregistrement de session **désactivé** | `src/lib/posthog.ts:4,16-20` |
@@ -163,14 +174,31 @@ de remplacements de scrubbing), sans réintroduire les données nominatives.
 > **Action** : constituer/centraliser les **DPA** (accords de sous-traitance
 > art. 28) pour chaque sous-traitant et tenir le registre des sous-traitants.
 
-### 7.2 Transfert hors UE vers Anthropic (écart hds-2)
+### 7.2 Transferts IA hors UE — cartographie réelle (écart hds-2)
 
-- `api/claude.ts` initialise le client Anthropic sans épinglage de région ; les
-  appels partent vers l'infrastructure **US** par défaut.
-- Atténuation déjà en place : **pseudonymisation** systématique (§5) → les
-  prompts ne contiennent en principe pas de données nominatives.
-- **Écart résiduel** : un transfert hors UE même de données pseudonymisées de
-  santé appelle un encadrement (chap. V). Options en §14.
+L'application utilise **deux fournisseurs IA en production** (+ un dormant) :
+
+- **Texte → Anthropic Claude (`api/claude.ts`) — hors UE (US).** Le client
+  Anthropic est initialisé sans épinglage de région ; les appels (chat assistant,
+  courriers, synthèses, fiches exercices) partent vers l'infrastructure **US** par
+  défaut. *Atténuation* : **pseudonymisation** systématique (§5) → les prompts ne
+  contiennent en principe pas de données nominatives. *Écart résiduel* : un
+  transfert hors UE, même de données pseudonymisées de santé, appelle un
+  encadrement (chap. V) — options en §14 (D2).
+- **Audio → Azure OpenAI (`api/transcribe.ts`) — UE-capable, à confirmer.** La
+  transcription envoie l'**audio brut** de la séance (donnée la **moins** minimisée
+  du pipeline : elle peut contenir le nom prononcé) à la ressource Azure
+  `physio-app-bilan`. Azure OpenAI permet une **résidence des données en UE**, mais
+  la **région réelle de la ressource n'est pas lisible dans le code** (le hostname
+  `*.openai.azure.com` ne l'encode pas) : **à confirmer dans le portail Azure** que
+  la ressource est dans une région UE, et à couvrir par le **DPA Microsoft / les
+  Clauses Contractuelles Types**.
+- **Gemini / Vertex AI (`api/gemini.ts`) — dormant.** Plus aucun appel runtime (le
+  client a migré vers Claude ; `callGemini` n'est qu'un alias rétro-compatible de
+  `callClaude`). La fonction serverless et le **compte de service GCP** restent
+  toutefois provisionnés (`GCP_REGION=europe-west9`, avec un repli endpoint `global`
+  non épinglé). *Action* : supprimer la fonction et révoquer le compte de service,
+  ou la documenter comme sous-traitant actif.
 
 ---
 
@@ -280,7 +308,7 @@ purgés ou neutralisés.
 | # | Décision | Impact | Options |
 |---|---|---|---|
 | D1 | **Hébergeur HDS** cible (France) | Bloquant lancement FR | OVHcloud HDS · Scaleway · AWS HDS · Azure HDS · (pilote CH d'abord) |
-| D2 | **Encadrement transfert IA hors UE** | Conformité chap. V | Anthropic via **AWS Bedrock région UE** (eu-west / eu-central) + DPA · ou clauses + AIPD documentant la pseudonymisation |
+| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : confirmer la région UE de la ressource `physio-app-bilan` + DPA Microsoft · **Gemini** : supprimer la fonction dormante ou la documenter |
 | D3 | **Base légale** du traitement principal | Régime des droits | Mission de soin · Consentement |
 | D4 | **Durées de conservation** | art. 5.1.e | Confirmer 20 ans FR/CH ou ajuster |
 | D5 | **Mode d'effacement** (erasure-1) | art. 17 | Suppression cascade auto · suppression sur demande tracée |
@@ -292,8 +320,10 @@ purgés ou neutralisés.
 
 ## 15. Plan d'action priorisé (proposition)
 
-1. **Bloquants lancement FR** — D1 (hébergeur HDS) + D2 (région UE pour l'IA).
-   Sans eux : lancer en **pilote CH** ou sans données réelles.
+1. **Bloquants lancement FR** — D1 (hébergeur HDS) + D2 (région UE pour l'IA :
+   **confirmer/forcer la région UE d'Azure** pour l'audio — gain rapide — et
+   encadrer le flux texte Claude US ; supprimer la fonction Gemini dormante). Sans
+   eux : lancer en **pilote CH** ou sans données réelles.
 2. **Droits & preuve** — migration DB pour D5 (effacement en cascade) et le
    renforcement de la persistance du consentement (§10).
 3. **DM** — D7 (validation avocat) + **purge des contenus historiques** (§11,
