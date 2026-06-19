@@ -204,10 +204,11 @@ L'application utilise **deux fournisseurs IA en production** :
   région de la ressource + **DPA Microsoft / CCT**. Sous réserve de cette preuve,
   le flux audio (le plus identifiant) **reste dans l'UE** → écart hors-UE **fermé**
   pour l'audio.
-- **Gemini / Vertex AI — supprimé (19/06/2026).** La fonction serverless
-  `api/gemini.ts` et le proxy de développement ont été **retirés du code** (le client
-  texte utilise exclusivement Claude). *Action résiduelle* : déprovisionner le
-  **compte de service GCP** et le projet Vertex côté console Google Cloud (hors code).
+- **Gemini / Vertex AI — supprimé et déprovisionné (19/06/2026).** La fonction
+  serverless `api/gemini.ts` et le proxy de développement ont été **retirés du code**
+  (le client texte utilise exclusivement Claude). Le **compte de service GCP**, le
+  projet Vertex et les **variables d'environnement** (`.env.local` + Vercel) ont été
+  **supprimés** (déclaré par l'exploitant). → sous-traitant **clos**.
 
 **Autres transferts hors UE (non-IA)** — au-delà des deux flux IA ci-dessus,
 l'inventaire (§7.1) recense deux autres destinations hors UE **actives** (Sentry,
@@ -336,7 +337,7 @@ purgés ou neutralisés.
 | # | Décision | Impact | Options |
 |---|---|---|---|
 | D1 | **Hébergeur HDS** cible (France) | Bloquant lancement FR | OVHcloud HDS · Scaleway · AWS HDS · Azure HDS · (pilote CH d'abord) |
-| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : région UE **confirmée** par l'exploitant — archiver preuve portail + DPA Microsoft · **Gemini** : ✅ fonction dormante supprimée (19/06/2026) — déprovisionner le compte de service GCP |
+| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : région UE **confirmée** par l'exploitant — archiver preuve portail + DPA Microsoft · **Gemini** : ✅ supprimé et déprovisionné (code + compte de service GCP + variables d'env, 19/06/2026) |
 | D3 | **Base légale** du traitement principal | Régime des droits | Mission de soin · Consentement |
 | D4 | **Durées de conservation** | art. 5.1.e | Confirmer 20 ans FR/CH ou ajuster |
 | D5 | **Mode d'effacement** (erasure-1) | art. 17 | Suppression cascade auto · suppression sur demande tracée |
