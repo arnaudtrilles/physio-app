@@ -130,7 +130,7 @@ async function callTranscribe(
 // ── Parser : flat (mode solo) vs segmenté (mode session/diarize) ──
 // Le format diarize d'Azure renvoie un JSON enrichi avec `segments` (liste
 // d'objets {text, speaker, start, end}). On le restitue en texte structuré
-// que le LLM downstream (Claude/Gemini) parsera proprement :
+// que le LLM downstream (Claude) parsera proprement :
 //
 //   [Patient] J'ai mal au dos depuis trois semaines.
 //   [Kiné]   D'accord, montrez-moi où exactement…

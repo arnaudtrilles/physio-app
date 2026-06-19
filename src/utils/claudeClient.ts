@@ -26,8 +26,7 @@ export interface ClaudeUsage {
  * La clé API reste côté serveur (env var ANTHROPIC_API_KEY).
  *
  * Le premier paramètre `_apiKey` est conservé dans la signature pour
- * rétro-compatibilité avec l'ancien `callGemini` (et avec callClaudeSecure).
- * Il n'est pas utilisé côté client.
+ * rétro-compatibilité avec callClaudeSecure. Il n'est pas utilisé côté client.
  */
 export async function callClaude(
   _apiKey: string,

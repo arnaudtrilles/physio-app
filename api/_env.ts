@@ -4,7 +4,6 @@
 const REQUIRED: Record<string, string[]> = {
   claude: ['ANTHROPIC_API_KEY'],
   transcribe: ['AZURE_OPENAI_ENDPOINT', 'AZURE_OPENAI_KEY', 'AZURE_OPENAI_SOLO_DEPLOYMENT'],
-  gemini: ['GCP_PROJECT_ID'],
   stripe: ['STRIPE_SECRET_KEY'],
   webhook: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'VITE_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'],
 }

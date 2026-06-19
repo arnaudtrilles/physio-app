@@ -428,7 +428,7 @@ export function LetterGenerator(props: LetterGeneratorProps) {
     }
     if (nav.canShare && nav.canShare({ files: [file] }) && nav.share) {
       try {
-        await nav.share({ files: [file], title: meta.label, text: `Courrier concernant ${form.prenomPatient} ${form.nomPatient}` })
+        await nav.share({ files: [file], title: meta.label, text: meta.label })
         return
       } catch {
         // Utilisateur a annulé ou erreur — fallback ci-dessous
@@ -447,7 +447,9 @@ export function LetterGenerator(props: LetterGeneratorProps) {
       showToast(`Erreur PDF : ${(e as Error).message}`, 'error')
       return
     }
-    const text = encodeURIComponent(`${meta.label} — ${form.prenomPatient} ${form.nomPatient}`)
+    // Pas d'identité patient dans l'URL wa.me (transite par les serveurs Meta) —
+    // le PDF, joint manuellement, porte déjà les informations nominatives.
+    const text = encodeURIComponent(meta.label)
     window.open(`https://wa.me/?text=${text}`, '_blank')
     showToast('PDF téléchargé. Attachez-le dans WhatsApp.', 'info')
   }

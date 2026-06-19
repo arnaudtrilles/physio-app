@@ -12,11 +12,12 @@
 > mesure, base légale retenue) relèvent du conseil ; ce document fournit les
 > faits, pas les conclusions de droit.
 >
-> **Version** — v1.2 · 18 juin 2026 · inventaire des sous-traitants complété (ajout
-> **Sentry, Upstash, WhatsApp/Meta, jsDelivr** au §7.1, via audit exhaustif des flux
-> sortants) ; cartographie IA : **Azure OpenAI** (audio, région UE) + **Anthropic
-> Claude** (texte, US) ; **Gemini/Vertex dormant**. À mettre à jour à chaque
-> évolution des traitements.
+> **Version** — v1.3 · 19 juin 2026 · remédiations code : **worker PDF.js
+> auto-hébergé** (jsDelivr retiré comme sous-traitant), **identité patient retirée de
+> l'URL `wa.me`** (partage WhatsApp), **fonction Gemini/Vertex dormante supprimée**.
+> Cartographie IA : **Azure OpenAI** (audio, région UE) + **Anthropic Claude** (texte,
+> US). v1.2 (18 juin) : inventaire des sous-traitants complété via audit des flux
+> sortants. À mettre à jour à chaque évolution des traitements.
 
 ---
 
@@ -170,14 +171,12 @@ de remplacements de scrubbing), sans réintroduire les données nominatives.
 | **Supabase** | Base de données, auth, stockage documents | Toutes les données patient (synchronisées) | ❌ **non certifié HDS** (voir §8) | `src/lib/supabase.ts` |
 | **Anthropic (Claude)** | IA **texte** : chat assistant, courriers, synthèses, fiches exercices | Prompts **pseudonymisés** (§5) + documents masqués | ⚠️ **endpoint US par défaut** (aucun épinglage UE) | `api/claude.ts`, `src/utils/claudeClient.ts` |
 | **Azure OpenAI** | IA **audio→texte** : transcription des dictées et séances | **Audio brut** de la séance (non scrubbé — voir §5) | ✅ **région UE** (confirmée par l'exploitant ; archiver preuve portail + DPA Microsoft) | `api/transcribe.ts` |
-| **Google Cloud (Vertex AI / Gemini)** | IA texte (ancien moteur, remplacé par Claude) | — | 🟡 **dormant** : `GCP_REGION=europe-west9` (Paris) mais **aucun appel runtime** ; fonction + compte de service GCP encore provisionnés (repli endpoint `global` non épinglé) | `api/gemini.ts` |
 | **Vercel** | Hébergement front + fonctions serverless | Trafic applicatif, logs | UE/US selon config | `/api/*` |
 | **Stripe** | Paiement abonnement praticien | Métadonnées d'abonnement (userId), **pas de PHI** | UE/US, DPC Stripe | `api/stripe-webhook.ts`, `api/create-checkout-session.ts` |
 | **PostHog** | Mesure d'audience | Événements d'usage, **pas de PHI** | ✅ **hôte UE** (`eu.i.posthog.com`), enregistrement de session **désactivé** | `src/lib/posthog.ts:4,16-20` |
 | **Sentry** | Suivi d'erreurs / monitoring (frontend + dashboard admin) | Erreurs, stack traces, contexte d'exécution ; **replays de session sur erreur** (`maskAllText` + `blockAllMedia` ; session replay off, erreur 100 %) — pas de PHI en principe, replay à qualifier | ⚠️ **câblé, actif uniquement si `VITE_SENTRY_DSN` est défini** (prod — vide en local) ; **sentry.io US par défaut** (région EU non épinglée) → transfert hors UE (§7.2) | `src/main.tsx:9-23`, `vite.config.ts:398-401`, `api/admin-stats.ts:153-179` |
 | **Upstash Redis** | Rate-limiting (quotas par utilisateur/IP) | Clés `physio:<endpoint>:user:<userId>` / `:ip:<ip>` + compteurs = **identifiants** (userId, IP) ; **pas de PHI clinique** | ⚠️ **câblé, actif si `UPSTASH_REDIS_REST_URL/TOKEN` définis** (repli mémoire sinon) ; région managée à confirmer (UE vs US) ; DPA à obtenir | `api/_ratelimit.ts:24-52` |
-| **WhatsApp / Meta** (`wa.me`) | Partage de courriers (déclenché par le praticien) | **Nom + prénom patient** dans le paramètre d'URL `wa.me?text=` ; le PDF (nom + données cliniques) est téléchargé localement puis **attaché manuellement** par le praticien | ⚠️ infrastructure Meta (hors UE) — canal grand public, **pas de DPA / pas HDS** | `src/components/letters/LetterGenerator.tsx:402-451` |
-| **jsDelivr** (CDN) | Distribution du worker PDF.js (rendu PDF côté client) | **Aucune donnée patient** ; seulement **IP + User-Agent** du praticien au chargement du script | ⚠️ CDN tiers (global, hors UE possible) — alternative : self-hosting du worker | `src/utils/pdfToImages.ts:6` |
+| **WhatsApp / Meta** (`wa.me`) | Partage de courriers (déclenché par le praticien) | **Aucune identité patient dans l'URL** depuis le 19/06/2026 (seul le **type de courrier** transite dans `wa.me?text=`) ; le PDF nominatif est téléchargé localement puis **attaché manuellement** par le praticien, hors application | ⚠️ infrastructure Meta (hors UE) — canal grand public, **pas de DPA / pas HDS** ; usage sous la responsabilité du praticien | `src/components/letters/LetterGenerator.tsx:402-455` |
 
 > **Action** : constituer/centraliser les **DPA** (accords de sous-traitance
 > art. 28) pour chaque sous-traitant et tenir le registre des sous-traitants. DPA
@@ -187,7 +186,7 @@ de remplacements de scrubbing), sans réintroduire les données nominatives.
 
 ### 7.2 Transferts IA hors UE — cartographie réelle (écart hds-2)
 
-L'application utilise **deux fournisseurs IA en production** (+ un dormant) :
+L'application utilise **deux fournisseurs IA en production** :
 
 - **Texte → Anthropic Claude (`api/claude.ts`) — hors UE (US).** Le client
   Anthropic est initialisé sans épinglage de région ; les appels (chat assistant,
@@ -205,31 +204,29 @@ L'application utilise **deux fournisseurs IA en production** (+ un dormant) :
   région de la ressource + **DPA Microsoft / CCT**. Sous réserve de cette preuve,
   le flux audio (le plus identifiant) **reste dans l'UE** → écart hors-UE **fermé**
   pour l'audio.
-- **Gemini / Vertex AI (`api/gemini.ts`) — dormant.** Plus aucun appel runtime (le
-  client a migré vers Claude ; `callGemini` n'est qu'un alias rétro-compatible de
-  `callClaude`). La fonction serverless et le **compte de service GCP** restent
-  toutefois provisionnés (`GCP_REGION=europe-west9`, avec un repli endpoint `global`
-  non épinglé). *Action* : supprimer la fonction et révoquer le compte de service,
-  ou la documenter comme sous-traitant actif.
+- **Gemini / Vertex AI — supprimé (19/06/2026).** La fonction serverless
+  `api/gemini.ts` et le proxy de développement ont été **retirés du code** (le client
+  texte utilise exclusivement Claude). *Action résiduelle* : déprovisionner le
+  **compte de service GCP** et le projet Vertex côté console Google Cloud (hors code).
 
-**Autres transferts hors UE (non-IA)** — au-delà des trois flux IA ci-dessus,
-l'inventaire des sous-traitants (§7.1) recense trois autres destinations hors UE
-possibles :
+**Autres transferts hors UE (non-IA)** — au-delà des deux flux IA ci-dessus,
+l'inventaire (§7.1) recense deux autres destinations hors UE **actives** (Sentry,
+WhatsApp/Meta) ; une troisième (jsDelivr) a été **supprimée** :
 
 - **Sentry (suivi d'erreurs)** — s'il est activé en prod (`VITE_SENTRY_DSN`
   défini), il appelle le **même encadrement chap. V que Claude** (sentry.io US par
   défaut). Atténuation : `maskAllText` + `blockAllMedia`, replay **sur erreur
   seulement** ; le risque résiduel (replay déclenché sur une page affichant un
   dossier patient) reste à qualifier. Option : projet Sentry en **région UE**.
-- **WhatsApp / Meta** — le partage de courrier place **nom + prénom patient** dans
-  l'URL `wa.me` (le PDF clinique étant ensuite attaché manuellement). Canal grand
-  public **sans DPA ni garantie HDS**. *Recommandation* : retirer l'identité patient
-  de l'URL et/ou retirer ce canal pour les documents de santé, ou l'encadrer
-  explicitement comme une action du praticien sous sa responsabilité.
-- **jsDelivr (CDN)** — ne transmet **aucune donnée patient**, mais l'**IP** du
-  praticien (cf. jurisprudence « Google Fonts »). *Recommandation* : self-héberger
-  le worker PDF.js (déjà présent dans `node_modules/pdfjs-dist`) pour supprimer ce
-  sous-traitant.
+- **WhatsApp / Meta — résolu côté code (19/06/2026).** L'URL `wa.me` ne contient
+  plus que le **type de courrier** (aucun nom ni prénom patient) ; le PDF nominatif
+  reste téléchargé localement puis **attaché manuellement** par le praticien, hors
+  application. Le canal demeure grand public **sans DPA ni garantie HDS** : son usage
+  pour des documents de santé relève de la responsabilité du praticien.
+- **jsDelivr (CDN) — supprimé (19/06/2026).** Le worker PDF.js est désormais
+  **auto-hébergé** (bundlé par Vite via `?url`, servi en même origine et précaché par
+  le PWA). Plus aucun chargement de script depuis un CDN tiers → ce sous-traitant est
+  retiré de l'inventaire (§7.1).
 
 ---
 
@@ -339,7 +336,7 @@ purgés ou neutralisés.
 | # | Décision | Impact | Options |
 |---|---|---|---|
 | D1 | **Hébergeur HDS** cible (France) | Bloquant lancement FR | OVHcloud HDS · Scaleway · AWS HDS · Azure HDS · (pilote CH d'abord) |
-| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : région UE **confirmée** par l'exploitant — archiver preuve portail + DPA Microsoft · **Gemini** : supprimer la fonction dormante ou la documenter |
+| D2 | **Encadrement transferts IA hors UE** | Conformité chap. V | **Texte (Claude)** : Anthropic via **AWS Bedrock** / **GCP Vertex** région UE + DPA, ou CCT + AIPD documentant la pseudonymisation · **Audio (Azure)** : région UE **confirmée** par l'exploitant — archiver preuve portail + DPA Microsoft · **Gemini** : ✅ fonction dormante supprimée (19/06/2026) — déprovisionner le compte de service GCP |
 | D3 | **Base légale** du traitement principal | Régime des droits | Mission de soin · Consentement |
 | D4 | **Durées de conservation** | art. 5.1.e | Confirmer 20 ans FR/CH ou ajuster |
 | D5 | **Mode d'effacement** (erasure-1) | art. 17 | Suppression cascade auto · suppression sur demande tracée |
@@ -353,7 +350,7 @@ purgés ou neutralisés.
 
 1. **Bloquants lancement FR** — D1 (hébergeur HDS) + D2 (région UE pour l'IA :
    région UE d'Azure **confirmée** pour l'audio — archiver la preuve — reste à
-   encadrer le flux texte Claude US ; supprimer la fonction Gemini dormante). Sans
+   encadrer le flux texte Claude US ; fonction Gemini dormante **supprimée**). Sans
    eux : lancer en **pilote CH** ou sans données réelles.
 2. **Droits & preuve** — migration DB pour D5 (effacement en cascade) et le
    renforcement de la persistance du consentement (§10).

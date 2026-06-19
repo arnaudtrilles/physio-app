@@ -1,9 +1,11 @@
 // Build legacy : évite l'usage de Map.prototype.getOrInsertComputed
 // (proposition TC39 non supportée par tous les navigateurs stables)
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
+// Worker auto-hébergé : bundlé par Vite (?url) depuis le paquet installé.
+// Aucune dépendance CDN externe — la version suit automatiquement pdfjs-dist.
+import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
-// Worker chargé depuis CDN — version synchronisée avec le paquet installé
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/legacy/build/pdf.worker.min.mjs`
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 // Convertit un PDF en dataURLs PNG (une par page)
 export async function pdfToImages(dataUrl: string): Promise<string[]> {
