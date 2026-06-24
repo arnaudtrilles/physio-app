@@ -130,7 +130,7 @@ vérifier le statut transferts hors-UE. À consigner dans `registre-traitements.
 |---|---|---|---|
 | **Vercel** | Hébergement front + serverless | À signer (self-service) | US → DPF/SCC |
 | **Supabase** | Base de données + Storage + Auth | À signer | UE (vérifier région du projet) |
-| **Anthropic** | IA texte (Claude) | **À signer** | US → DPF/SCC (cf. D2) |
+| **Anthropic** | IA texte (Claude) | ✅ Auto-incorporé aux *Commercial Terms* (DPA + CCT) — voir note ↓ | US → CCT incluses (cf. D2) |
 | **Microsoft Azure** | IA audio (Whisper) | À signer | **UE** ✅ |
 | **Stripe** (si paiement activé) | Paiement | À signer | US → DPF/SCC |
 | **Upstash** (si rate-limit actif) | Rate-limiting | À vérifier/ signer | vérifier région |
@@ -138,6 +138,25 @@ vérifier le statut transferts hors-UE. À consigner dans `registre-traitements.
 
 > Google Cloud / Gemini : **retiré du dossier** (code + compte de service GCP + variables d'env
 > supprimés) — plus aucun DPA à signer de ce côté.
+
+> **Comment fonctionne un DPA en pratique (important).** Pour la plupart de ces prestataires, on
+> ne « signe » pas un contrat à la main : le DPA (avec les **CCT** = Clauses Contractuelles Types,
+> le mécanisme légal qui couvre le transfert UE→US) est **automatiquement inclus dès qu'on accepte
+> les conditions commerciales** du service. Ton action concrète se résume donc à 3 gestes :
+> 1. **Vérifier qu'on est sur l'offre *commerciale/pro*** du service (pas l'offre gratuit/consumer).
+> 2. **Télécharger le PDF du DPA** et l'archiver dans le dossier (preuve pour un auditeur/avocat).
+> 3. **Le référencer** dans `registre-traitements.md` §III.2 et `dpa-praticien.md` Annexe 1.
+>
+> **Cas Anthropic (confirmé par toi le 2026-06-19).** L'app appelle l'**API Claude en direct** (clé
+> `ANTHROPIC_API_KEY`, pas via une plateforme tierce) → ce sont bien les *Commercial Terms* d'Anthropic
+> qui s'appliquent, DPA + CCT inclus automatiquement. **Donc rien à signer.** Il te reste à :
+> - [ ] confirmer que ton compte API est bien sous **Commercial Terms of Service** (l'usage API = commercial par défaut) ;
+> - [ ] **télécharger le PDF du DPA/CCT** depuis le lien Anthropic et l'archiver ;
+> - [ ] **envisager d'activer le « Zero Data Retention »** auprès d'Anthropic (l'API ne sert déjà pas
+>       à entraîner les modèles ; le ZDR supprime aussi la rétention temporaire — pertinent pour des
+>       données de santé). À demander via leur support / formulaire entreprise.
+>
+> Combiné à la **pseudonymisation** (le correctif scrub, cf. §H), ce volet couvre l'essentiel de **D2**.
 
 ---
 
