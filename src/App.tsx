@@ -60,6 +60,8 @@ import { parseFrDate } from './utils/parseFrDate'
 import { buildImprovementEntries, improvDelta } from './utils/improvement'
 import { PDF_BILAN_SYSTEM_PROMPT, PDF_SORTIE_SYSTEM_PROMPT, PDF_ANALYSE_SYSTEM_PROMPT } from './lib/pdfReportPrompts'
 import { pk, renamePatientInCloud } from './lib/syncEngine'
+import { patientKeyToScrubHint, type ScrubPatientHint } from './utils/transcriptionScrub'
+import { VoicePatientProvider } from './utils/voicePatientContext'
 import {
   getClosureTimes as getClosureTimesPure,
   isTreatmentClosed as isTreatmentClosedPure,
@@ -153,6 +155,7 @@ function App() {
   const [analyticsEnabled, setAnalyticsEnabled] = useState(() => phIsOptedIn())
 
   const appContainerRef = useRef<HTMLDivElement | null>(null)
+  const voicePatientRef = useRef<ScrubPatientHint | undefined>(undefined)
   const [showSplash, setShowSplash] = useState(() => {
     const last = sessionStorage.getItem('splash_ts')
     return !last || Date.now() - parseInt(last) > 60000
@@ -1754,7 +1757,13 @@ Règles :
     )
   }
 
+  // Patient courant pour l'anonymisation vocale. Contexte à identité stable (ref
+  // mise à jour à chaque rendu, lue paresseusement lors de la reformulation) →
+  // pas de re-rendu en cascade des champs dictables quand on saisit le nom.
+  voicePatientRef.current = patientKeyToScrubHint(pk(formData.nom || 'Anonyme', formData.prenom))
+
   return (
+    <VoicePatientProvider value={voicePatientRef}>
     <div className="app-container" ref={appContainerRef}>
       {showSplash && <SplashScreen onDone={() => { sessionStorage.setItem('splash_ts', Date.now().toString()); setShowSplash(false) }} />}
       {tutorialActive && !showSplash && (
@@ -3584,6 +3593,7 @@ Règles :
         )
       })()}
     </div>
+    </VoicePatientProvider>
   )
 }
 

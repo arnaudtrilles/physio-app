@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { BilanType } from '../types'
 import { transcribeAudio, extractBilanFromTranscription } from '../utils/voiceBilanClient'
+import { useVoicePatientHint } from '../utils/voicePatientContext'
 
 type Status = 'idle' | 'recording' | 'transcribing' | 'review' | 'extracting' | 'error'
 
@@ -29,6 +30,7 @@ function saveCache(text: string, bilanType: string) {
 }
 
 export function VoiceDictation({ bilanType, onFill }: Props) {
+  const getPatientHint = useVoicePatientHint()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -188,7 +190,7 @@ export function VoiceDictation({ bilanType, onFill }: Props) {
     setStatus('extracting')
     setErrorMsg('')
     try {
-      const partial = await extractBilanFromTranscription(transcription, bilanType)
+      const partial = await extractBilanFromTranscription(transcription, bilanType, getPatientHint())
       onFill(partial)
       setStatus('idle')
       setOpen(false)

@@ -6,8 +6,36 @@ import {
   METHODES_NOMS_PROPRES,
   TESTS_PAR_ZONE,
 } from './clinicalLexicon'
-import { scrubTranscription, type ScrubPatientHint } from './transcriptionScrub'
+import {
+  scrubTranscription,
+  scrubTranscriptionReversible,
+  stripPiiTokens,
+  type ScrubPatientHint,
+} from './transcriptionScrub'
 import type { BilanType, NarrativeSection } from '../types'
+
+/**
+ * Nettoie récursivement les jetons PII résiduels d'une structure JSON renvoyée
+ * par l'IA (cas extraction / narratif, stockée telle quelle). Immuable : renvoie
+ * une nouvelle structure sans muter l'entrée. Ne réinjecte jamais le vrai nom.
+ */
+function deepStripPiiTokens<T>(value: T): T {
+  if (typeof value === 'string') return stripPiiTokens(value) as unknown as T
+  if (Array.isArray(value)) return value.map(v => deepStripPiiTokens(v)) as unknown as T
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = deepStripPiiTokens(v)
+    }
+    return out as unknown as T
+  }
+  return value
+}
+
+// Détecte un placeholder réversible ayant survécu à la restauration (IA l'a trop
+// altéré, ex. numéro d'index halluciné) → on retombe alors sur la dictée brute
+// pour ne JAMAIS afficher de jeton. Large à dessein : tout `__…PATIENT…__`.
+const LEFTOVER_REV_PLACEHOLDER = /__\s*PATIENT[\s_]*\w*\s*__/i
 
 // Erreurs transitoires côté infra (Vercel down, OpenAI down, réseau jitter…).
 // Le client peut les retenter en toute sécurité.
@@ -119,7 +147,7 @@ export async function reformulateTranscription(
   fieldHint: string,
   patient?: ScrubPatientHint,
 ): Promise<string> {
-  const { text: scrubbedText } = scrubTranscription(rawText, patient)
+  const { text: scrubbedText, restore } = scrubTranscriptionReversible(rawText, patient)
   const systemPrompt = `Tu es un assistant de rédaction pour un kinésithérapeute / physiothérapeute francophone.
 Tu reçois une transcription orale brute et le contexte du champ à remplir.
 Ta tâche : reformuler le texte pour qu'il soit clair, concis et professionnel.
@@ -131,6 +159,7 @@ RÈGLES GÉNÉRALES :
 - Ne rajoute AUCUNE information qui n'était pas dans la dictée
 - Si la dictée est déjà bien formulée, renvoie-la telle quelle
 - Renvoie UNIQUEMENT le texte reformulé, rien d'autre (pas de guillemets, pas de préfixe)
+- Si le texte contient des marqueurs de confidentialité de la forme \`__PATIENT_0__\`, \`__PATIENT_1__\`, etc. (un numéro encadré par des underscores), RECOPIE-les EXACTEMENT tels quels — sans changer le numéro, l'ordre ni la casse, sans les fusionner, sans les traduire et sans les supprimer ; ils seront remplacés automatiquement ensuite
 
 STANDARDISATION DES VALEURS :
 - Échelles de douleur : « EVA 6/10 », « EVN 4/10 » — pas « EVA 6 sur 10 » en toutes lettres
@@ -170,7 +199,12 @@ ${scrubbedText}
 """`
 
   const result = await callClaude('', systemPrompt, userPrompt, 4096, false, CLAUDE_MODELS.VOICE_REFORMULATION)
-  return result.trim()
+  // Réinjecte le vrai nom/prénom (le placeholder ne doit JAMAIS être affiché).
+  const restored = restore(result.trim())
+  // Filet de sécurité : si un placeholder a survécu (IA l'a trop altéré), on
+  // affiche la dictée brute (nom réel, aucun jeton) plutôt qu'un marqueur visible.
+  if (LEFTOVER_REV_PLACEHOLDER.test(restored)) return rawText.trim()
+  return restored
 }
 
 // ─── Schéma d'extraction par type de bilan ─────────────────────────────────
@@ -435,7 +469,8 @@ export async function extractBilanFromTranscription(
     throw new Error(`Réponse IA non-JSON : ${(e as Error).message.slice(0, 200)}`)
   }
 
-  return parsed
+  // Défense en profondeur : aucun jeton PII résiduel ne doit polluer les champs stockés.
+  return deepStripPiiTokens(parsed)
 }
 
 /**
@@ -539,5 +574,6 @@ ${scrubbedTranscription}
     throw new Error(`Réponse Claude invalide : ${(e as Error).message.slice(0, 200)}`)
   }
 
-  return parsed
+  // Défense en profondeur : aucun jeton PII résiduel dans les sections stockées.
+  return deepStripPiiTokens(parsed)
 }

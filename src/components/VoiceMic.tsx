@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import { transcribeAudio, reformulateTranscription, TranscriptionTransientError } from '../utils/voiceBilanClient'
+import { useVoicePatientHint } from '../utils/voicePatientContext'
 
 type VoiceMicState = 'idle' | 'recording' | 'transcribing' | 'reformulating' | 'error'
 
@@ -141,6 +142,11 @@ export function useVoiceRecorder(onResult: (text: string) => void, fieldHint: st
   onResultRef.current = onResult
   const fieldHintRef = useRef(fieldHint)
   fieldHintRef.current = fieldHint
+  // Patient courant (via contexte) → anonymisation nom/prénom avant l'IA.
+  // Lu paresseusement au moment de la reformulation ; undefined sans provider.
+  const getPatientHint = useVoicePatientHint()
+  const getPatientHintRef = useRef(getPatientHint)
+  getPatientHintRef.current = getPatientHint
 
   const stopAll = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
@@ -203,7 +209,7 @@ export function useVoiceRecorder(onResult: (text: string) => void, fieldHint: st
           setState('reformulating')
           let finalText: string
           try {
-            finalText = await reformulateTranscription(rawText, fieldHintRef.current)
+            finalText = await reformulateTranscription(rawText, fieldHintRef.current, getPatientHintRef.current())
             console.log(`[VoiceMic] Reformulated: "${finalText.slice(0, 120)}"`)
           } catch (err) {
             console.warn('[VoiceMic] Reformulation failed, using raw text:', err)
