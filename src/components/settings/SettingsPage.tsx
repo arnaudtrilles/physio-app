@@ -27,6 +27,12 @@ type SettingsPageProps = {
   onSignOut: () => void
   analyticsEnabled: boolean
   onToggleAnalytics: (enabled: boolean) => void
+  /** Verrou applicatif (D6) activé pour ce compte. */
+  appLockEnabled: boolean
+  /** Active le verrou : enrôle mot de passe (+ biométrie si dispo). */
+  onEnableAppLock: (password: string) => Promise<{ biometricEnrolled: boolean }>
+  /** Désactive le verrou : efface l'enrôlement local. */
+  onDisableAppLock: () => Promise<void>
 }
 
 const SYNC_STATUS_CONFIG: Record<SyncStatus, { color: string; bg: string; label: string }> = {
@@ -56,8 +62,52 @@ export function SettingsPage({
   cloudDocsPending, onRepairDocuments, onDeleteLostDocuments,
   onBack, onProfile, onPricing, onRelaunchTutorial, onSignOut,
   analyticsEnabled, onToggleAnalytics,
+  appLockEnabled, onEnableAppLock, onDisableAppLock,
 }: SettingsPageProps) {
   const syncConfig = SYNC_STATUS_CONFIG[syncStatus]
+
+  // ── Verrou de l'application (D6) ──
+  const [lockEnrolling, setLockEnrolling] = useState(false)
+  const [lockPwd, setLockPwd] = useState('')
+  const [lockPwd2, setLockPwd2] = useState('')
+  const [lockBusy, setLockBusy] = useState(false)
+  const [lockError, setLockError] = useState<string | null>(null)
+  const [lockInfo, setLockInfo] = useState<string | null>(null)
+  const handleLockToggle = async () => {
+    setLockError(null)
+    if (appLockEnabled) {
+      setLockBusy(true)
+      try {
+        await onDisableAppLock()
+        setLockInfo(null)
+      } catch {
+        setLockError('Impossible de désactiver le verrou.')
+      } finally {
+        setLockBusy(false)
+      }
+      return
+    }
+    setLockEnrolling((v) => !v)
+  }
+  const submitLockEnroll = async () => {
+    setLockError(null)
+    if (lockPwd.length < 6) { setLockError('Le mot de passe doit contenir au moins 6 caractères.'); return }
+    if (lockPwd !== lockPwd2) { setLockError('Les deux mots de passe ne correspondent pas.'); return }
+    setLockBusy(true)
+    try {
+      const { biometricEnrolled } = await onEnableAppLock(lockPwd)
+      setLockEnrolling(false)
+      setLockPwd('')
+      setLockPwd2('')
+      setLockInfo(biometricEnrolled
+        ? 'Verrou activé — Face ID / Touch ID configuré.'
+        : 'Verrou activé — déverrouillage par mot de passe (biométrie indisponible sur cet appareil).')
+    } catch {
+      setLockError("Impossible d'activer le verrou sur cet appareil.")
+    } finally {
+      setLockBusy(false)
+    }
+  }
 
   const [repairing, setRepairing] = useState(false)
   const [repairResult, setRepairResult] = useState<DocReconcileResult | null>(null)
@@ -346,6 +396,78 @@ export function SettingsPage({
                 </div>
               )}
             </div>
+          </div>
+
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.75rem' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'color-mix(in srgb, var(--primary) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--primary-dark)', fontSize: '0.9rem' }}>Verrou de l'application</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Face ID / Touch ID ou mot de passe au démarrage</div>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--secondary)', borderRadius: 'var(--radius-md)' }}>
+              Protégez l'accès à l'application par <strong>Face ID / Touch ID</strong> (ou un mot de passe de repli) à chaque démarrage. Une sécurité <strong>en plus</strong> de votre connexion, utile en cas de perte de l'appareil. Vérification <strong>100 % locale</strong>&nbsp;: fonctionne hors-ligne.
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  {appLockEnabled ? 'Verrou activé' : 'Verrou désactivé'}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                  {appLockEnabled ? 'Déverrouillage requis au démarrage' : 'Aucun verrou au démarrage'}
+                </div>
+              </div>
+              <button
+                onClick={() => { void handleLockToggle() }}
+                disabled={lockBusy}
+                style={{
+                  width: 48, height: 28, borderRadius: 14, border: 'none',
+                  cursor: lockBusy ? 'default' : 'pointer',
+                  background: appLockEnabled ? 'var(--primary)' : 'var(--border-color)',
+                  position: 'relative', flexShrink: 0,
+                  transition: 'background 0.2s', opacity: lockBusy ? 0.6 : 1,
+                }}
+              >
+                <span style={{
+                  position: 'absolute', top: 3,
+                  left: appLockEnabled ? 23 : 3,
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  transition: 'left 0.2s',
+                }} />
+              </button>
+            </div>
+            {!appLockEnabled && lockEnrolling && (
+              <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <input
+                  type="password" value={lockPwd} onChange={(e) => setLockPwd(e.target.value)}
+                  placeholder="Mot de passe de déverrouillage (min. 6 caractères)" autoComplete="new-password"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', outline: 'none' }}
+                />
+                <input
+                  type="password" value={lockPwd2} onChange={(e) => setLockPwd2(e.target.value)}
+                  placeholder="Confirmer le mot de passe" autoComplete="new-password"
+                  onKeyDown={(e) => { if (e.key === 'Enter') void submitLockEnroll() }}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.75rem', fontSize: '0.85rem', color: 'var(--text-main)', background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', outline: 'none' }}
+                />
+                <button
+                  onClick={() => { void submitLockEnroll() }}
+                  disabled={lockBusy}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 600, fontSize: '0.85rem', cursor: lockBusy ? 'default' : 'pointer', opacity: lockBusy ? 0.7 : 1 }}
+                >
+                  {lockBusy ? 'Activation…' : 'Activer le verrou'}
+                </button>
+              </div>
+            )}
+            {lockError && (
+              <div style={{ marginTop: '0.7rem', fontSize: '0.78rem', color: '#dc2626', fontWeight: 600 }}>{lockError}</div>
+            )}
+            {lockInfo && appLockEnabled && (
+              <div style={{ marginTop: '0.7rem', fontSize: '0.78rem', color: '#16a34a' }}>{lockInfo}</div>
+            )}
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>

@@ -75,6 +75,8 @@ import { usePlanSync } from './hooks/usePlanSync'
 import { canAccess } from './utils/planGating'
 import { AuthScreen } from './components/AuthScreen'
 import { OnboardingScreen } from './components/OnboardingScreen'
+import { LockScreen } from './components/LockScreen'
+import { enrollAppLock, disableAppLock } from './lib/appLock'
 import { Tutorial, type TutorialStep } from './components/Tutorial'
 import { SplashScreen } from './components/SplashScreen'
 // ── Design system + patient command center ────────────────────────────────
@@ -153,6 +155,24 @@ function App() {
   const [language, setLanguage] = useLocalStorage<'fr' | 'de' | 'en'>('physio_lang', 'fr')
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage<boolean>('physio_notif', true)
   const [analyticsEnabled, setAnalyticsEnabled] = useState(() => phIsOptedIn())
+
+  // Verrou applicatif (D6). Le flag est persistant (opt-in, défaut désactivé →
+  // zéro régression pour l'existant). « Déverrouillé » est un useState volatil :
+  // il se réinitialise à chaque démarrage à froid → le verrou se ré-arme au
+  // redémarrage de l'app uniquement (choix produit), pas sur simple inactivité.
+  const [appLockEnabled, setAppLockEnabled] = useLocalStorage<boolean>('physio_app_lock_enabled', false)
+  const [appLockUnlocked, setAppLockUnlocked] = useState(false)
+  const handleEnableAppLock = useCallback(async (password: string) => {
+    if (!user) throw new Error('Utilisateur non connecté')
+    const result = await enrollAppLock(user.id, user.email ?? '', password)
+    setAppLockEnabled(true)
+    setAppLockUnlocked(true) // déjà déverrouillé pour la session courante après activation
+    return result
+  }, [user, setAppLockEnabled])
+  const handleDisableAppLock = useCallback(async () => {
+    if (user) await disableAppLock(user.id)
+    setAppLockEnabled(false)
+  }, [user, setAppLockEnabled])
 
   const appContainerRef = useRef<HTMLDivElement | null>(null)
   const voicePatientRef = useRef<ScrubPatientHint | undefined>(undefined)
@@ -1757,6 +1777,20 @@ Règles :
     )
   }
 
+  // Verrou applicatif (D6) : après auth + onboarding, avant l'accès aux données.
+  // No-op si désactivé (cas par défaut) ou déjà déverrouillé pour cette session.
+  if (supabaseConfigured && user && appLockEnabled && !appLockUnlocked) {
+    return (
+      <LockScreen
+        userId={user.id}
+        userEmail={user.email ?? ''}
+        onUnlocked={() => setAppLockUnlocked(true)}
+        onForgot={() => { void signOut() }}
+        onConfigMissing={() => { setAppLockEnabled(false); setAppLockUnlocked(true) }}
+      />
+    )
+  }
+
   // Patient courant pour l'anonymisation vocale. Contexte à identité stable (ref
   // mise à jour à chaque rendu, lue paresseusement lors de la reformulation) →
   // pas de re-rendu en cascade des champs dictables quand on saisit le nom.
@@ -2087,6 +2121,9 @@ Règles :
             if (v) { phOptIn(); } else { phOptOut(); }
             setAnalyticsEnabled(v)
           }}
+          appLockEnabled={appLockEnabled}
+          onEnableAppLock={handleEnableAppLock}
+          onDisableAppLock={handleDisableAppLock}
         />
       )}
 
